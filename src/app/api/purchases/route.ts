@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { getResolvedUser } from '@/lib/sync-auth';
 
 export async function GET() {
   try {
@@ -20,13 +19,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as { id?: string })?.id;
-    const userName = session?.user?.name || 'Purchasing Staff';
-
-    if (!session || !userId) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-    }
+    const { userId, userName, userRole } = await getResolvedUser();
 
     const body = await request.json();
     const {
@@ -36,6 +29,8 @@ export async function POST(request: Request) {
       items,
       seedBorrowed,
       seedDeduction,
+      premiumDescription,
+      additionalPremium,
       signatureFarmer,
       signatureStaff,
       specsRecordId,
@@ -45,6 +40,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Family code, farmer name, and items are required.' }, { status: 400 });
     }
 
+    const normCode = familyCode.toUpperCase().trim();
+    const normVillage = (village || '').trim();
+
     const totalWeight = items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
     const grossPayment = items.reduce((sum, item) => sum + (parseFloat(item.totalValue) || 0), 0);
 
@@ -53,22 +51,38 @@ export async function POST(request: Request) {
     const sRepayment = sBorrowed * 1.1; // 10% seed interest
     const netPayment = Math.max(0, grossPayment - sDeduction);
 
+    const addPremium = parseFloat(additionalPremium) || 0;
+
+    // Resolve specs record by ID or composite key (familyCode + village)
+    let linkedSpecsId = specsRecordId || null;
+    if (!linkedSpecsId) {
+      const foundSpecs = await db.specsRecord.findFirst({
+        where: { familyCode: normCode, village: normVillage },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (foundSpecs) {
+        linkedSpecsId = foundSpecs.id;
+      }
+    }
+
     const purchase = await db.purchaseRecord.create({
       data: {
-        familyCode: familyCode.toUpperCase().trim(),
+        familyCode: normCode,
         farmerName: farmerName.trim(),
-        village: village || '',
+        village: normVillage,
         totalWeight,
         totalPayment: grossPayment,
         seedBorrowed: sBorrowed,
         seedRepayment: sRepayment,
         seedDeduction: sDeduction,
+        premiumDescription: premiumDescription || null,
+        additionalPremium: addPremium,
         netPayment,
         signatureFarmer: signatureFarmer || null,
         signatureStaff: signatureStaff || null,
         purchasingStaffId: userId,
         purchasingStaffName: userName,
-        specsRecordId: specsRecordId || null,
+        specsRecordId: linkedSpecsId,
         status: 'PENDING',
         createdBy: userId,
         items: {
@@ -95,12 +109,13 @@ export async function POST(request: Request) {
       data: {
         userId,
         userName,
-        userRole: (session.user as { role: 'FIELD' | 'WAREHOUSE' | 'FINANCE' | 'ADMIN' }).role || 'FIELD',
+        userRole,
         action: 'CREATE',
         entityType: 'PurchaseRecord',
         entityId: purchase.id,
         details: JSON.stringify({
-          familyCode,
+          familyCode: normCode,
+          village: normVillage,
           farmerName,
           totalWeight,
           totalPayment: grossPayment,
@@ -109,7 +124,7 @@ export async function POST(request: Request) {
           sackCount: items[0]?.sacks || 0,
           hasFarmerSignature: Boolean(signatureFarmer),
           hasStaffSignature: Boolean(signatureStaff),
-          linkedSpecsId: specsRecordId || 'None',
+          linkedSpecsId: linkedSpecsId || 'None',
         }),
       },
     });

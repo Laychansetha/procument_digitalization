@@ -3,8 +3,6 @@ import 'package:uuid/uuid.dart';
 import '../../config/theme.dart';
 import '../../database/app_database.dart';
 import '../../models/specs_record.dart';
-import '../../models/farmer_profile.dart';
-import '../../models/purchase_record.dart';
 
 class SpecsFormScreen extends StatefulWidget {
   const SpecsFormScreen({Key? key}) : super(key: key);
@@ -386,42 +384,88 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.analytics, color: AppTheme.emeraldPrimary, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            _editingId != null ? 'Edit Quality Specs Record' : 'Quality Specs Inspection Entry',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _searchAndLoadFarmerInfo,
-                            icon: const Icon(Icons.person_search, size: 14, color: Colors.white),
-                            label: const Text('Load Farmer Info', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.emeraldPrimary,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  OrientationBuilder(
+                    builder: (context, orientation) {
+                      bool isLandscape = orientation == Orientation.landscape;
+
+                      if (isLandscape) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.analytics, color: AppTheme.emeraldPrimary, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _editingId != null ? 'Edit Quality Specs Record' : 'Quality Specs Inspection Entry',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                ),
+                              ],
                             ),
-                          ),
-                          if (_editingId != null) ...[
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              onPressed: _resetForm,
-                              icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
-                              label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                            Row(
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _searchAndLoadFarmerInfo,
+                                  icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
+                                  label: const Text('Load Farmer Info', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.emeraldPrimary,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  ),
+                                ),
+                                if (_editingId != null) ...[
+                                  const SizedBox(width: 8),
+                                  TextButton.icon(
+                                    onPressed: _resetForm,
+                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
-                        ],
-                      ),
-                    ],
+                        );
+                      } else {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.analytics, color: AppTheme.emeraldPrimary, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _editingId != null ? 'Edit Quality Specs Record' : 'Quality Specs Inspection Entry',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                    ),
+                                  ],
+                                ),
+                                if (_editingId != null)
+                                  TextButton.icon(
+                                    onPressed: _resetForm,
+                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: _searchAndLoadFarmerInfo,
+                              icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
+                              label: const Text('Load Farmer Info', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.emeraldPrimary,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                    },
                   ),
                   const SizedBox(height: 20),
 

@@ -15,6 +15,12 @@ class ConfigDao {
   List<String> _paddyCategories = ['Phka Rumduol', 'Red Jasmine', 'Sen Kra Ob'];
   List<String> _grades = ['A1', 'Super A1', 'A2', 'B1'];
 
+  List<Map<String, dynamic>> _paddySpecs = [
+    {'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1750.0, 'organicBonus': 100.0},
+    {'variety': 'Red Jasmine', 'grade': 'A1', 'basePrice': 1650.0, 'organicBonus': 100.0},
+    {'variety': 'Sen Kra Ob', 'grade': 'A1', 'basePrice': 1600.0, 'organicBonus': 100.0},
+  ];
+
   List<String> _buyingStations = [
     'Chhaeb Buying Station',
     'Mlu Prey Collection Point',
@@ -43,6 +49,7 @@ class ConfigDao {
   List<String> get banks => List.unmodifiable(_banks);
   List<String> get paddyCategories => List.unmodifiable(_paddyCategories);
   List<String> get grades => List.unmodifiable(_grades);
+  List<Map<String, dynamic>> get paddySpecs => List.unmodifiable(_paddySpecs);
   List<String> get buyingStations => List.unmodifiable(_buyingStations);
   List<String> get destinationWarehouses => List.unmodifiable(_destinationWarehouses);
 
@@ -73,6 +80,10 @@ class ConfigDao {
 
         if (data['banks'] != null && data['banks'] is List && (data['banks'] as List).isNotEmpty) {
           _banks = (data['banks'] as List).map((e) => e.toString()).toList();
+        }
+
+        if (data['paddySpecs'] != null && data['paddySpecs'] is List && (data['paddySpecs'] as List).isNotEmpty) {
+          _paddySpecs = (data['paddySpecs'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
         }
 
         if (data['locations'] != null && data['locations'] is List) {

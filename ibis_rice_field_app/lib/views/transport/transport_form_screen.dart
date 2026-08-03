@@ -37,6 +37,12 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     _loadAvailablePurchases();
     _loadHistory();
     ConfigDao.instance.fetchRemoteConfig();
+    
+    // Auto-select defaults
+    final stations = ConfigDao.instance.buyingStations;
+    final warehouses = ConfigDao.instance.destinationWarehouses;
+    if (stations.isNotEmpty) _loadingLocation = stations.first;
+    if (warehouses.isNotEmpty) _destinationWarehouse = warehouses.first;
   }
 
   @override
@@ -68,10 +74,13 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     _plateNumberController.clear();
     _mobileNumberController.clear();
     _notesController.clear();
+    final stations = ConfigDao.instance.buyingStations;
+    final warehouses = ConfigDao.instance.destinationWarehouses;
+
     setState(() {
       _editingId = null;
-      _loadingLocation = null;
-      _destinationWarehouse = null;
+      _loadingLocation = stations.isNotEmpty ? stations.first : null;
+      _destinationWarehouse = warehouses.isNotEmpty ? warehouses.first : null;
       _truckCleaned = false;
       _selectedPurchases = [];
     });
@@ -257,61 +266,226 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
   }
 
   Future<void> _saveTransport() async {
-    if (!_formKey.currentState!.validate()) return;
+    final driver = _driverNameController.text.trim();
+    final plate = _plateNumberController.text.trim();
 
-    if (_loadingLocation == null || _destinationWarehouse == null) {
+    if (driver.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select Loading Location and Destination Warehouse.'), backgroundColor: AppTheme.errorRed),
+        const SnackBar(content: Text('⚠️ Driver Name is required! Please scroll up to enter Driver Name.'), backgroundColor: AppTheme.amberGold, duration: Duration(seconds: 3)),
       );
       return;
     }
+
+    if (plate.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ Truck Plate Number is required!'), backgroundColor: AppTheme.amberGold, duration: Duration(seconds: 3)),
+      );
+      return;
+    }
+
+    final stations = ConfigDao.instance.buyingStations;
+    final warehouses = ConfigDao.instance.destinationWarehouses;
+    _loadingLocation ??= stations.isNotEmpty ? stations.first : 'Chhaeb Buying Station';
+    _destinationWarehouse ??= warehouses.isNotEmpty ? warehouses.first : 'Central Mill Warehouse, Preah Vihear';
 
     if (_selectedPurchases.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please tap "Load Purchase Invoices" to select cargo for this truck.'), backgroundColor: AppTheme.errorRed),
+        const SnackBar(content: Text('⚠️ Please tap "Load Purchase Invoices" to select cargo for this truck.'), backgroundColor: AppTheme.amberGold, duration: Duration(seconds: 3)),
       );
       return;
     }
 
-    final totalFieldWeight = _selectedPurchases.fold(0.0, (sum, p) => sum + p.totalWeight);
-    final totalSacks = _selectedPurchases.fold(0, (sum, p) => sum + p.sackWeights.length);
+    try {
+      final totalFieldWeight = _selectedPurchases.fold(0.0, (sum, p) => sum + p.totalWeight);
+      final totalSacks = _selectedPurchases.fold(0, (sum, p) => sum + p.sackWeights.length);
 
-    final record = TransportRecord(
-      id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
-      driverName: _driverNameController.text.trim(),
-      plateNumber: _plateNumberController.text.trim(),
-      mobileNumber: _mobileNumberController.text.trim(),
-      truckCleaned: _truckCleaned,
-      loadingLocation: _loadingLocation,
-      destinationWarehouse: _destinationWarehouse,
-      notes: _notesController.text.trim(),
-      totalSacks: totalSacks,
-      totalFieldWeight: totalFieldWeight,
-      purchaseIds: _selectedPurchases.map((p) => p.id).toList(),
-      createdAt: DateTime.now(),
-      isSynced: false,
-    );
-
-    await AppDatabase.instance.insertTransport(record);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_editingId != null ? '✅ Transport Dispatch Manifest updated!' : '✅ Transport Dispatch Manifest saved locally!'),
-          backgroundColor: AppTheme.emeraldPrimary,
-          duration: const Duration(seconds: 2),
-        ),
+      final record = TransportRecord(
+        id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
+        driverName: driver,
+        plateNumber: plate,
+        mobileNumber: _mobileNumberController.text.trim(),
+        truckCleaned: _truckCleaned,
+        loadingLocation: _loadingLocation!,
+        destinationWarehouse: _destinationWarehouse!,
+        notes: _notesController.text.trim(),
+        totalSacks: totalSacks,
+        totalFieldWeight: totalFieldWeight,
+        selectedPurchaseIds: _selectedPurchases.map((p) => p.id).toList(),
+        createdAt: DateTime.now(),
+        isSynced: false,
       );
+
+      await AppDatabase.instance.insertTransport(record);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_editingId != null ? '✅ Transport Dispatch Manifest updated!' : '✅ Transport Dispatch Manifest saved locally!'),
+            backgroundColor: AppTheme.emeraldPrimary,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      _resetForm();
+      await _loadHistory();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error saving manifest: $e'), backgroundColor: AppTheme.errorRed),
+        );
+      }
+    }
+  }
+
+  void _editRecord(TransportRecord item) {
+    if (item.isSynced) {
+      _showAlertDialog('Locked Manifest', 'This dispatch manifest has already been synchronized with the central PostgreSQL server and cannot be edited locally.');
+      return;
     }
 
-    _resetForm();
-    await _loadHistory();
+    setState(() {
+      _editingId = item.id;
+      _driverNameController.text = item.driverName;
+      _plateNumberController.text = item.plateNumber;
+      _mobileNumberController.text = item.mobileNumber ?? '';
+      _notesController.text = item.notes ?? '';
+      _loadingLocation = item.loadingLocation;
+      _destinationWarehouse = item.destinationWarehouse;
+      _truckCleaned = item.truckCleaned;
+      _selectedPurchases = _availablePurchases.where((p) => item.selectedPurchaseIds.contains(p.id)).toList();
+    });
+  }
+
+  Future<void> _deleteRecord(TransportRecord item) async {
+    if (item.isSynced) {
+      _showAlertDialog('Locked Manifest', 'Synchronized transport manifests cannot be deleted locally.');
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBackground,
+        title: const Text('Delete Manifest', style: TextStyle(color: AppTheme.textWhite)),
+        content: Text('Are you sure you want to delete transport manifest for Truck ${item.plateNumber} (${item.driverName})?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await AppDatabase.instance.deleteTransport(item.id);
+      await _loadHistory();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transport manifest deleted.')));
+      }
+    }
+  }
+
+  void _showManifestDetailsModal(TransportRecord item) {
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBackground,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Truck: ${item.plateNumber}', style: const TextStyle(color: AppTheme.skyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
+              ),
+              child: Text(
+                item.isSynced ? '✓ Synced' : '⏳ Pending',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Driver Name: ${item.driverName}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('Driver Mobile: ${item.mobileNumber ?? 'N/A'}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              Text('From: ${item.loadingLocation}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('To: ${item.destinationWarehouse}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('Dispatched: $dateStr', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              const Divider(color: Colors.white24, height: 16),
+
+              Text('Certified Clean: ${item.truckCleaned ? '✅ Cleaned & Inspected' : '⚠️ Not Cleaned'}', style: TextStyle(color: item.truckCleaned ? AppTheme.emeraldLight : AppTheme.amberGold, fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text('Loaded Cargo Weight: ${item.totalFieldWeight} kg (${item.totalSacks} Bags)', style: const TextStyle(color: AppTheme.emeraldLight, fontSize: 13, fontWeight: FontWeight.bold)),
+              Text('Purchase Invoices: ${item.selectedPurchaseIds.length} Records', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            ],
+          ),
+        ),
+        actions: [
+          if (!item.isSynced)
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _editRecord(item);
+              },
+              icon: const Icon(Icons.edit, size: 16, color: AppTheme.skyBlue),
+              label: const Text('Edit', style: TextStyle(color: AppTheme.skyBlue)),
+            ),
+          if (!item.isSynced)
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _deleteRecord(item);
+              },
+              icon: const Icon(Icons.delete, size: 16, color: AppTheme.errorRed),
+              label: const Text('Delete', style: TextStyle(color: AppTheme.errorRed)),
+            ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.emeraldPrimary),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: Color(0xFF0B0F19), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAlertDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBackground,
+        title: Text(title, style: const TextStyle(color: AppTheme.amberGold, fontWeight: FontWeight.bold)),
+        content: Text(message, style: const TextStyle(color: AppTheme.textWhite)),
+        actions: [ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final buyingStations = ConfigDao.instance.buyingStations;
     final destinationWarehouses = ConfigDao.instance.destinationWarehouses;
+
+    if (_loadingLocation == null && buyingStations.isNotEmpty) {
+      _loadingLocation = buyingStations.first;
+    }
+    if (_destinationWarehouse == null && destinationWarehouses.isNotEmpty) {
+      _destinationWarehouse = destinationWarehouses.first;
+    }
 
     final totalCargoWeight = _selectedPurchases.fold(0.0, (sum, p) => sum + p.totalWeight);
     final totalSacksCount = _selectedPurchases.fold(0, (sum, p) => sum + p.sackWeights.length);
@@ -345,7 +519,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                           const SizedBox(width: 8),
                           Text(
                             _editingId != null ? 'Edit Truck Transport Dispatch' : 'Transport Truck Dispatch & Loading',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
                           ),
                         ],
                       ),
@@ -429,7 +603,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                                   child: TextFormField(
                                     controller: _driverNameController,
                                     decoration: const InputDecoration(labelText: 'DRIVER NAME *', hintText: 'e.g. Heng Sok'),
-                                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter Driver Name' : null,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -437,7 +611,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                                   child: TextFormField(
                                     controller: _plateNumberController,
                                     decoration: const InputDecoration(labelText: 'TRUCK PLATE NUMBER *', hintText: 'e.g. 3A-1234'),
-                                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter Plate Number' : null,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -454,13 +628,13 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                                 TextFormField(
                                   controller: _driverNameController,
                                   decoration: const InputDecoration(labelText: 'DRIVER NAME *', hintText: 'e.g. Heng Sok'),
-                                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                  validator: (v) => v == null || v.trim().isEmpty ? 'Enter Driver Name' : null,
                                 ),
                                 const SizedBox(height: 12),
                                 TextFormField(
                                   controller: _plateNumberController,
                                   decoration: const InputDecoration(labelText: 'TRUCK PLATE NUMBER *', hintText: 'e.g. 3A-1234'),
-                                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                  validator: (v) => v == null || v.trim().isEmpty ? 'Enter Plate Number' : null,
                                 ),
                                 const SizedBox(height: 12),
                                 TextFormField(
@@ -483,7 +657,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Modal Purchase Picker Button Area
+                  // Modal Purchase Picker Button Area (Responsive Wrap to Prevent Overflow)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -494,8 +668,11 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
                           children: [
                             const Text('LOAD PURCHASE RECORDS ONTO TRUCK', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
                             ElevatedButton.icon(
@@ -518,10 +695,13 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                         if (_selectedPurchases.isEmpty)
                           const Text('No purchase records selected yet. Tap the button above to search and select loaded cargo.', style: TextStyle(fontSize: 11, color: AppTheme.textMuted))
                         else ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 12,
+                            runSpacing: 4,
                             children: [
-                              Text('Loaded Farmers: ${_selectedPurchases.length} Records (${totalSacksCount} Bags)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
+                              Text('Loaded Farmers: ${_selectedPurchases.length} Records ($totalSacksCount Bags)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
                               Text('Total Field Cargo: ${totalCargoWeight.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
                             ],
                           ),
@@ -596,8 +776,30 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                         color: AppTheme.cardBackground,
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
-                          title: Text('Truck: ${item.plateNumber} · Driver: ${item.driverName}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.skyBlue, fontSize: 13)),
-                          subtitle: Text('From: ${item.loadingLocation ?? 'N/A'} → To: ${item.destinationWarehouse ?? 'N/A'}\nCargo: ${item.totalFieldWeight} kg (${item.totalSacks} Bags)', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          onTap: () => _showManifestDetailsModal(item),
+                          title: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Truck: ${item.plateNumber} · Driver: ${item.driverName}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.skyBlue, fontSize: 13)),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
+                                ),
+                                child: Text(
+                                  item.isSynced ? '✓ Synced' : '⏳ Pending',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text('From: ${item.loadingLocation} → To: ${item.destinationWarehouse}\nCargo: ${item.totalFieldWeight} kg (${item.totalSacks} Bags)', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                           trailing: Icon(
                             item.isSynced ? Icons.lock_outline : Icons.chevron_right,
                             color: item.isSynced ? AppTheme.textMuted : AppTheme.skyBlue,

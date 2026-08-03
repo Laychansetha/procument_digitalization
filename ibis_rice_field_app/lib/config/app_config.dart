@@ -1,8 +1,43 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 /// App Config for IBIS RICE Field Operations Mobile App
 class AppConfig {
-  /// Default Server Base URL (Change to IP address of your desktop test machine or Lightsail server)
-  /// Note: Use 10.0.2.2 for Android Emulator connecting to Desktop localhost, or 192.168.x.x for real devices.
-  static String baseUrl = 'http://localhost:3000';
+  static const String _keyBaseUrl = 'server_base_url';
+  
+  /// Default Server Base URL
+  static String baseUrl = 'http://192.168.1.100:3000';
+
+  /// Load persisted server URL from SharedPreferences
+  static Future<void> loadBaseUrl() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUrl = prefs.getString(_keyBaseUrl);
+      if (savedUrl != null && savedUrl.isNotEmpty) {
+        baseUrl = savedUrl;
+      }
+    } catch (e) {
+      // Use default fallback if storage error
+    }
+  }
+
+  /// Update and persist new server URL
+  static Future<void> saveBaseUrl(String newUrl) async {
+    String formatted = newUrl.trim();
+    if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+      formatted = 'http://$formatted';
+    }
+    if (formatted.endsWith('/')) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
+    
+    baseUrl = formatted;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyBaseUrl, formatted);
+    } catch (e) {
+      // Storage save error ignored
+    }
+  }
 
   // API Route Paths
   static const String specsEndpoint = '/api/specs';

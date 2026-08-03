@@ -6,8 +6,6 @@ import 'package:uuid/uuid.dart';
 import '../../config/theme.dart';
 import '../../database/app_database.dart';
 import '../../models/farmer_profile.dart';
-import '../../models/specs_record.dart';
-import '../../models/purchase_record.dart';
 
 class FarmerFormScreen extends StatefulWidget {
   const FarmerFormScreen({Key? key}) : super(key: key);
@@ -304,19 +302,56 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
-        title: Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(color: AppTheme.skyBlue, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Phone: ${item.phone ?? 'N/A'}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Bank: ${item.bankName} (${item.paymentMethod})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Account #: ${item.accountNumber ?? 'N/A'} (${item.accountHolder})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Relationship: ${item.relationship}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            const SizedBox(height: 8),
-            Text('Status: ${item.isSynced ? '🟢 Synced with Server' : '⏳ Pending Local Sync'}', style: TextStyle(color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(color: AppTheme.skyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
+              ),
+              child: Text(
+                item.isSynced ? '✓ Synced' : '⏳ Pending',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold),
+              ),
+            ),
           ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('Phone: ${item.phone ?? 'N/A'}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('Bank: ${item.bankName} (${item.paymentMethod})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('Account #: ${item.accountNumber ?? 'N/A'} (${item.accountHolder})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('Relationship: ${item.relationship}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              
+              if (item.bankDocumentUrl != null && item.bankDocumentUrl!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('Bank Passbook Attachment:', style: TextStyle(fontSize: 11, color: AppTheme.textMuted, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 150,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppTheme.inputBackground,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.skyBlue.withOpacity(0.4)),
+                    ),
+                    child: _buildPassbookThumbnail(item.bankDocumentUrl!, 150),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         actions: [
           if (!item.isSynced)
@@ -405,42 +440,88 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.account_balance_wallet, color: AppTheme.skyBlue, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            _editingId != null ? 'Edit Farmer Payment Profile' : 'Farmer Payment Info Entry',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _searchAndLoadFarmerInfo,
-                            icon: const Icon(Icons.person_search, size: 14, color: Colors.white),
-                            label: const Text('Load Farmer Info', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.skyBlue,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  OrientationBuilder(
+                    builder: (context, orientation) {
+                      bool isLandscape = orientation == Orientation.landscape;
+
+                      if (isLandscape) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.account_balance_wallet, color: AppTheme.skyBlue, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _editingId != null ? 'Edit Farmer Payment Profile' : 'Farmer Payment Info Entry',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                ),
+                              ],
                             ),
-                          ),
-                          if (_editingId != null) ...[
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              onPressed: _resetForm,
-                              icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
-                              label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                            Row(
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _searchAndLoadFarmerInfo,
+                                  icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
+                                  label: const Text('Load Farmer Info', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.skyBlue,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  ),
+                                ),
+                                if (_editingId != null) ...[
+                                  const SizedBox(width: 8),
+                                  TextButton.icon(
+                                    onPressed: _resetForm,
+                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
-                        ],
-                      ),
-                    ],
+                        );
+                      } else {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.account_balance_wallet, color: AppTheme.skyBlue, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _editingId != null ? 'Edit Farmer Payment Profile' : 'Farmer Payment Info Entry',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                    ),
+                                  ],
+                                ),
+                                if (_editingId != null)
+                                  TextButton.icon(
+                                    onPressed: _resetForm,
+                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: _searchAndLoadFarmerInfo,
+                              icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
+                              label: const Text('Load Farmer Info', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.skyBlue,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                    },
                   ),
                   const SizedBox(height: 20),
 
@@ -643,7 +724,28 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                                   child: _buildPassbookThumbnail(item.bankDocumentUrl!, 40),
                                 )
                               : const Icon(Icons.account_balance, color: AppTheme.skyBlue),
-                          title: Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.skyBlue)),
+                          title: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.skyBlue, fontSize: 13)),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
+                                ),
+                                child: Text(
+                                  item.isSynced ? '✓ Synced' : '⏳ Pending',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           subtitle: Text('${item.village} · ${item.bankName}\nAcc: ${item.accountNumber ?? 'N/A'} (${item.relationship})', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                           trailing: Icon(
                             item.isSynced ? Icons.lock_outline : Icons.chevron_right,

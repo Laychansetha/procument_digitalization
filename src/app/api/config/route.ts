@@ -30,7 +30,7 @@ export async function GET() {
 
     // 2. Fetch Paddy Price Specs
     let paddySpecs = await prisma.paddyPriceSpec.findMany({
-      where: { status: 'ACTIVE' },
+      orderBy: [{ variety: 'asc' }, { grade: 'asc' }],
     });
 
     if (paddySpecs.length === 0) {
@@ -42,40 +42,38 @@ export async function GET() {
     }
 
     // 3. Fetch Villages
-    let villages = await prisma.village.findMany({
-      where: { status: 'ACTIVE' },
-      select: { name: true, code: true, province: true },
+    let rawVillages = await prisma.village.findMany({
+      orderBy: { name: 'asc' },
     });
 
-    if (villages.length === 0) {
-      villages = [
-        { name: 'Bra', code: 'BRA', province: 'Preah Vihear' },
-        { name: 'Chhaeb Kraom', code: 'CHK', province: 'Preah Vihear' },
-        { name: 'Chhaeb Leu', code: 'CHL', province: 'Preah Vihear' },
-        { name: 'Mlu Prey', code: 'MLP', province: 'Preah Vihear' },
-        { name: 'Sangkae', code: 'SKE', province: 'Preah Vihear' },
-      ];
+    if (rawVillages.length === 0) {
+      rawVillages = [
+        { id: 'v_1', name: 'Bra', code: 'BRA', district: 'Chhaeb', province: 'Preah Vihear', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'v_2', name: 'Chhaeb Kraom', code: 'CHK', district: 'Chhaeb', province: 'Preah Vihear', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'v_3', name: 'Chhaeb Leu', code: 'CHL', district: 'Chhaeb', province: 'Preah Vihear', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'v_4', name: 'Mlu Prey', code: 'MLP', district: 'Chhaeb', province: 'Preah Vihear', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'v_5', name: 'Sangkae', code: 'SKE', district: 'Chhaeb', province: 'Preah Vihear', status: 'ACTIVE', createdAt: new Date() },
+      ] as any;
     }
 
     // 4. Fetch Commercial Banks
-    let banks = await prisma.bank.findMany({
-      where: { status: 'ACTIVE' },
-      select: { name: true, code: true },
+    let rawBanks = await prisma.bank.findMany({
+      orderBy: { name: 'asc' },
     });
 
-    if (banks.length === 0) {
-      banks = [
-        { name: 'ABA Bank', code: 'ABA' },
-        { name: 'ACLEDA Bank', code: 'ACL' },
-        { name: 'Wing Bank', code: 'WING' },
-        { name: 'Canadia Bank', code: 'CND' },
-        { name: 'AMK Microfinance', code: 'AMK' },
-      ];
+    if (rawBanks.length === 0) {
+      rawBanks = [
+        { id: 'b_1', name: 'ABA Bank', code: 'ABA', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'b_2', name: 'ACLEDA Bank', code: 'ACL', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'b_3', name: 'Wing Bank', code: 'WING', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'b_4', name: 'Canadia Bank', code: 'CND', status: 'ACTIVE', createdAt: new Date() },
+        { id: 'b_5', name: 'AMK Microfinance', code: 'AMK', status: 'ACTIVE', createdAt: new Date() },
+      ] as any;
     }
 
     // 5. Fetch Location Registries (Buying Stations & Warehouses)
     let locations = await prisma.locationRegistry.findMany({
-      where: { status: 'ACTIVE' },
+      orderBy: [{ type: 'asc' }, { name: 'asc' }],
     });
 
     if (locations.length === 0) {
@@ -96,8 +94,10 @@ export async function GET() {
     return NextResponse.json({
       settings: settingsMap,
       paddySpecs,
-      villages: villages.map((v) => v.name),
-      banks: banks.map((b) => b.name),
+      rawVillages,
+      rawBanks,
+      villages: rawVillages.map((v) => v.name),
+      banks: rawBanks.map((b) => b.name),
       locations,
       fleet,
     });
@@ -107,11 +107,13 @@ export async function GET() {
       {
         settings: DEFAULT_SETTINGS,
         paddySpecs: [],
+        rawVillages: [],
+        rawBanks: [],
         villages: ['Bra', 'Chhaeb Kraom', 'Chhaeb Leu', 'Mlu Prey', 'Sangkae'],
         banks: ['ABA Bank', 'ACLEDA Bank', 'Wing Bank', 'Canadia Bank', 'AMK Microfinance'],
         locations: [
-          { name: 'Chhaeb Buying Station', type: 'BUYING_STATION' },
-          { name: 'Central Mill Warehouse, Preah Vihear', type: 'WAREHOUSE' },
+          { id: 'loc_1', name: 'Chhaeb Buying Station', type: 'BUYING_STATION' },
+          { id: 'loc_2', name: 'Central Mill Warehouse, Preah Vihear', type: 'WAREHOUSE' },
         ],
         fleet: [],
       },

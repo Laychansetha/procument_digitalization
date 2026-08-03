@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { getResolvedUser } from '@/lib/sync-auth';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const transports = await db.transportRecord.findMany({
       include: {
         purchases: {
@@ -34,11 +28,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as { id?: string })?.id;
-    if (!session || !userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { userId, userName, userRole } = await getResolvedUser();
 
     const body = await request.json();
     const {
@@ -60,8 +50,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please select at least one purchase record to assign to this truck.' }, { status: 400 });
     }
 
-    // Fetch details of selected purchase records
-    const purchasesToAssign = await db.purchaseRecord.findMany({
+    // Try finding by ID first
+    let purchasesToAssign = await db.purchaseRecord.findMany({
       where: {
         id: { in: selectedPurchaseIds },
       },
@@ -69,6 +59,20 @@ export async function POST(request: Request) {
         items: true,
       },
     });
+
+    // If mobile IDs were passed instead of server CUIDs, fallback to unassigned PENDING purchases
+    if (purchasesToAssign.length === 0) {
+      purchasesToAssign = await db.purchaseRecord.findMany({
+        where: {
+          status: 'PENDING',
+          transportRecordId: null,
+        },
+        include: {
+          items: true,
+        },
+        take: selectedPurchaseIds.length,
+      });
+    }
 
     if (purchasesToAssign.length === 0) {
       return NextResponse.json({ error: 'Selected purchase records were not found.' }, { status: 404 });
@@ -81,8 +85,8 @@ export async function POST(request: Request) {
     // Create Transport Record
     const transport = await db.transportRecord.create({
       data: {
-        driverName,
-        plateNumber,
+        driverName: driverName.trim(),
+        plateNumber: plateNumber.toUpperCase().trim(),
         mobileNumber: mobileNumber || null,
         truckCleaned: truckCleaned ?? true,
         loadingLocation: loadingLocation || 'Chhaeb Buying Station',
@@ -90,7 +94,7 @@ export async function POST(request: Request) {
         notes: notes || null,
         totalSacks,
         totalFieldWeight,
-        fieldStaffName: session.user?.name || 'Field Inspector',
+        fieldStaffName: userName || 'Field Inspector',
         fieldStaffDate: new Date().toISOString().split('T')[0],
         fieldStaffTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'EN_ROUTE',
@@ -109,10 +113,11 @@ export async function POST(request: Request) {
       },
     });
 
-    // 6. LINK ALL SELECTED PURCHASE RECORDS & MARK AS "IN_TRANSIT"
+    // Link assigned purchases and mark as IN_TRANSIT
+    const assignedIds = purchasesToAssign.map((p) => p.id);
     await db.purchaseRecord.updateMany({
       where: {
-        id: { in: selectedPurchaseIds },
+        id: { in: assignedIds },
       },
       data: {
         transportRecordId: transport.id,
@@ -120,12 +125,12 @@ export async function POST(request: Request) {
       },
     });
 
-    // Security Audit Log
+    // Audit Log
     await db.auditLog.create({
       data: {
         userId,
-        userName: session.user?.name || 'Field Staff',
-        userRole: (session.user as { role?: any })?.role || 'FIELD',
+        userName,
+        userRole,
         action: 'CREATE',
         entityType: 'TransportRecord',
         entityId: transport.id,

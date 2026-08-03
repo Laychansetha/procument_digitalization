@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { getResolvedUser } from '@/lib/sync-auth';
 
 export async function GET() {
   try {
@@ -17,12 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as { id?: string })?.id;
-
-    if (!session || !userId) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-    }
+    const { userId, userName, userRole } = await getResolvedUser();
 
     const body = await request.json();
     const {
@@ -44,40 +38,67 @@ export async function POST(request: Request) {
     }
 
     const normCode = familyCode.toUpperCase().trim();
+    const normVillage = (village || '').trim();
 
-    const profile = await db.farmerProfile.create({
-      data: {
+    // Check if profile exists for composite key (Family Code + Village)
+    const existing = await db.farmerProfile.findFirst({
+      where: {
         familyCode: normCode,
-        farmerName: farmerName.trim(),
-        village: village || '',
-        phone: phone || '',
-        paymentMethod: paymentMethod || 'Bank Transfer',
-        bankName: paymentMethod === 'Bank Transfer' ? bankName : (paymentMethod === 'Cash' ? 'Cash' : bankName),
-        accountNumber: paymentMethod === 'Bank Transfer' ? (accountNumber || '—') : '—',
-        accountHolder: paymentMethod === 'Bank Transfer' ? (accountHolder || farmerName) : farmerName,
-        relationship: relationship || 'Self',
-        bankDocumentUrl: bankDocumentUrl || null,
-        notes: notes || '',
-        createdBy: userId,
+        village: normVillage,
       },
     });
+
+    let profile;
+    if (existing) {
+      profile = await db.farmerProfile.update({
+        where: { id: existing.id },
+        data: {
+          farmerName: farmerName.trim(),
+          phone: phone || existing.phone,
+          paymentMethod: paymentMethod || existing.paymentMethod,
+          bankName: paymentMethod === 'Bank Transfer' ? (bankName || existing.bankName) : (paymentMethod === 'Cash' ? 'Cash' : bankName),
+          accountNumber: paymentMethod === 'Bank Transfer' ? (accountNumber || existing.accountNumber) : '—',
+          accountHolder: paymentMethod === 'Bank Transfer' ? (accountHolder || farmerName) : farmerName,
+          relationship: relationship || existing.relationship,
+          bankDocumentUrl: bankDocumentUrl || existing.bankDocumentUrl,
+          notes: notes || existing.notes,
+        },
+      });
+    } else {
+      profile = await db.farmerProfile.create({
+        data: {
+          familyCode: normCode,
+          farmerName: farmerName.trim(),
+          village: normVillage,
+          phone: phone || '',
+          paymentMethod: paymentMethod || 'Bank Transfer',
+          bankName: paymentMethod === 'Bank Transfer' ? bankName : (paymentMethod === 'Cash' ? 'Cash' : bankName),
+          accountNumber: paymentMethod === 'Bank Transfer' ? (accountNumber || '—') : '—',
+          accountHolder: paymentMethod === 'Bank Transfer' ? (accountHolder || farmerName) : farmerName,
+          relationship: relationship || 'Self',
+          bankDocumentUrl: bankDocumentUrl || null,
+          notes: notes || '',
+          createdBy: userId,
+        },
+      });
+    }
 
     // Audit Log
     await db.auditLog.create({
       data: {
         userId,
-        userName: session.user?.name || 'Unknown User',
-        userRole: (session.user as { role: 'FIELD' | 'WAREHOUSE' | 'FINANCE' | 'ADMIN' }).role || 'FIELD',
-        action: 'CREATE',
+        userName,
+        userRole,
+        action: existing ? 'UPDATE' : 'CREATE',
         entityType: 'FarmerProfile',
         entityId: profile.id,
-        details: JSON.stringify({ familyCode: normCode, farmerName, bankName, accountNumber, hasBankPhoto: Boolean(bankDocumentUrl) }),
+        details: JSON.stringify({ familyCode: normCode, village: normVillage, farmerName, bankName, accountNumber, hasBankPhoto: Boolean(bankDocumentUrl) }),
       },
     });
 
-    return NextResponse.json(profile, { status: 201 });
+    return NextResponse.json(profile, { status: existing ? 200 : 201 });
   } catch (error) {
-    console.error('Error creating farmer profile:', error);
+    console.error('Error saving farmer profile:', error);
     return NextResponse.json({ error: 'Failed to save farmer payment profile.' }, { status: 500 });
   }
 }

@@ -31,7 +31,7 @@ class SyncService {
     final unsyncedSpecs = specsList.where((s) => !s.isSynced).toList();
 
     for (var spec in unsyncedSpecs) {
-      if (onProgress != null) onProgress('Syncing Specs for ${spec.familyCode}...');
+      if (onProgress != null) onProgress('Syncing Specs for ${spec.familyCode} (${spec.village})...');
       try {
         final res = await _apiService.postData('/api/specs', spec.toPostJson());
         if (res.statusCode == 200 || res.statusCode == 201) {
@@ -71,7 +71,7 @@ class SyncService {
     final unsyncedFarmers = farmersList.where((f) => !f.isSynced).toList();
 
     for (var farmer in unsyncedFarmers) {
-      if (onProgress != null) onProgress('Syncing Farmer Profile for ${farmer.familyCode}...');
+      if (onProgress != null) onProgress('Syncing Farmer Profile for ${farmer.familyCode} (${farmer.village})...');
       try {
         String? remotePhotoUrl;
         if (!kIsWeb && farmer.bankDocumentUrl != null && File(farmer.bankDocumentUrl!).existsSync()) {
@@ -116,7 +116,7 @@ class SyncService {
     final unsyncedPurchases = purchasesList.where((p) => !p.isSynced).toList();
 
     for (var purchase in unsyncedPurchases) {
-      if (onProgress != null) onProgress('Syncing Purchase Invoice for ${purchase.familyCode}...');
+      if (onProgress != null) onProgress('Syncing Purchase Invoice for ${purchase.familyCode} (${purchase.village})...');
       try {
         final res = await _apiService.postData('/api/purchases', purchase.toPostJson());
         if (res.statusCode == 200 || res.statusCode == 201) {
@@ -138,6 +138,8 @@ class SyncService {
             seedBorrowed: purchase.seedBorrowed,
             seedRepayment: purchase.seedRepayment,
             seedDeduction: purchase.seedDeduction,
+            premiumDescription: purchase.premiumDescription,
+            additionalPremium: purchase.additionalPremium,
             netPayment: purchase.netPayment,
             signatureFarmer: purchase.signatureFarmer,
             signatureStaff: purchase.signatureStaff,

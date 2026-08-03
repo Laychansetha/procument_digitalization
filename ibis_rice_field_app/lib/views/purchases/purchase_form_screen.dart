@@ -1,8 +1,8 @@
-import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:signature/signature.dart';
-import 'package:uuid/uuid.dart';
+
 import '../../config/theme.dart';
 import '../../database/app_database.dart';
 import '../../database/config_dao.dart';
@@ -20,44 +20,58 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _familyCodeController = TextEditingController();
   final _farmerNameController = TextEditingController();
-  final _sackWeightsInputController = TextEditingController();
+  final _sacksInputController = TextEditingController();
   final _seedBorrowedController = TextEditingController();
-  final _premiumAmountController = TextEditingController(); // Represents KHR/KG
+  final _premiumAmountController = TextEditingController();
   final _searchController = TextEditingController();
+  final _modalSearchController = TextEditingController();
 
-  final FocusNode _familyCodeFocusNode = FocusNode();
-
-  String? _editingId;
-  String? _village;
-  String? _variety;
-  String? _grade;
-  double _standardPrice = 1750.0;
-  List<double> _sackWeights = [];
-  String _searchQuery = '';
-  SpecsRecord? _selectedLoadedSpecs;
-
-  final SignatureController _sigController = SignatureController(
+  final SignatureController _farmerSignatureController = SignatureController(
     penStrokeWidth: 3,
     penColor: Colors.white,
     exportBackgroundColor: Colors.transparent,
   );
 
+  String? _editingId;
+  String _selectedVillage = 'Bra';
+  String _selectedVariety = 'Phka Rumduol';
+  String _selectedGrade = 'A1';
+  double _standardPrice = 1750.0;
+
+  List<double> _sackWeights = [];
   List<PurchaseRecord> _localHistory = [];
+  List<SpecsRecord> _availableSpecs = [];
+  SpecsRecord? _selectedLoadedSpecs;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _seedBorrowedController.text = '0';
+    _premiumAmountController.text = '0';
+    _loadAvailableSpecs();
     _loadHistory();
     ConfigDao.instance.fetchRemoteConfig();
   }
 
   @override
   void dispose() {
-    _familyCodeFocusNode.dispose();
-    _searchController.dispose();
-    _sigController.dispose();
+    _familyCodeController.dispose();
+    _farmerNameController.dispose();
+    _sacksInputController.dispose();
+    _seedBorrowedController.dispose();
     _premiumAmountController.dispose();
+    _searchController.dispose();
+    _modalSearchController.dispose();
+    _farmerSignatureController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAvailableSpecs() async {
+    final list = await AppDatabase.instance.getAllSpecs();
+    setState(() {
+      _availableSpecs = list;
+    });
   }
 
   Future<void> _loadHistory() async {
@@ -70,208 +84,244 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   void _resetForm() {
     _familyCodeController.clear();
     _farmerNameController.clear();
-    _sackWeightsInputController.clear();
-    _seedBorrowedController.clear();
-    _premiumAmountController.clear();
-    _sigController.clear();
+    _sacksInputController.clear();
+    _seedBorrowedController.text = '0';
+    _premiumAmountController.text = '0';
+    _farmerSignatureController.clear();
     setState(() {
       _editingId = null;
-      _village = null;
-      _variety = null;
-      _grade = null;
-      _selectedLoadedSpecs = null;
       _sackWeights = [];
+      _selectedLoadedSpecs = null;
       _standardPrice = 1750.0;
     });
-    _familyCodeFocusNode.requestFocus();
+  }
+
+  void _parseSackWeights(String input) {
+    if (input.trim().isEmpty) {
+      setState(() {
+        _sackWeights = [];
+      });
+      return;
+    }
+
+    final tokens = input.replaceAll(',', ' ').split(RegExp(r'\s+'));
+    final List<double> weights = [];
+    for (var t in tokens) {
+      final parsed = double.tryParse(t);
+      if (parsed != null && parsed > 0) {
+        weights.add(parsed);
+      }
+    }
+
+    setState(() {
+      _sackWeights = weights;
+    });
+  }
+
+  void _updatePaddyPrice() {
+    final paddySpecs = ConfigDao.instance.paddySpecs;
+    final found = paddySpecs.firstWhere(
+      (ps) => ps['variety'] == _selectedVariety && ps['grade'] == _selectedGrade,
+      orElse: () => {'basePrice': 1750.0, 'organicBonus': 100.0},
+    );
+
+    double base = (found['basePrice'] as num?)?.toDouble() ?? 1750.0;
+    double bonus = (found['organicBonus'] as num?)?.toDouble() ?? 100.0;
+
+    setState(() {
+      _standardPrice = base + bonus;
+    });
   }
 
   Future<void> _searchAndLoadSpecs() async {
-    final queryCode = _familyCodeController.text.trim().toLowerCase();
-    final queryName = _farmerNameController.text.trim().toLowerCase();
-    final currentVillage = _village?.toLowerCase();
-
-    if (queryCode.isEmpty && queryName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a Family Code or Farmer Name to search Quality Specs / Farmer Info.'), backgroundColor: AppTheme.amberGold),
-      );
+    final code = _familyCodeController.text.trim();
+    if (code.isEmpty) {
+      _openSpecsSelectionModal();
       return;
     }
 
-    final allSpecs = await AppDatabase.instance.getAllSpecs();
-    final matches = allSpecs.where((s) {
-      final codeMatch = queryCode.isNotEmpty && s.familyCode.toLowerCase() == queryCode;
-      final nameMatch = queryName.isNotEmpty && s.farmerName.toLowerCase().contains(queryName);
-      final villageMatch = currentVillage == null || currentVillage.isEmpty || s.village.toLowerCase() == currentVillage;
-      return (codeMatch || nameMatch) && villageMatch;
+    final matches = _availableSpecs.where((s) {
+      return s.familyCode.toUpperCase() == code.toUpperCase() &&
+          s.village.toLowerCase() == _selectedVillage.toLowerCase();
     }).toList();
 
     if (matches.isNotEmpty) {
-      if (matches.length == 1) {
-        _applySelectedSpecs(matches.first);
-      } else {
-        _showSpecsSelectionDialog(matches);
-      }
-      return;
-    }
-
-    final farmers = await AppDatabase.instance.getAllFarmers();
-    final matchingFarmers = farmers.where((f) {
-      final codeMatch = queryCode.isNotEmpty && f.familyCode.toLowerCase() == queryCode;
-      final nameMatch = queryName.isNotEmpty && f.farmerName.toLowerCase().contains(queryName);
-      final villageMatch = currentVillage == null || currentVillage.isEmpty || f.village.toLowerCase() == currentVillage;
-      return (codeMatch || nameMatch) && villageMatch;
-    }).toList();
-
-    if (matchingFarmers.isNotEmpty) {
-      final f = matchingFarmers.first;
+      final bestMatch = matches.first;
       setState(() {
-        _familyCodeController.text = f.familyCode;
-        _farmerNameController.text = f.farmerName;
-        _village = f.village;
+        _selectedLoadedSpecs = bestMatch;
+        _farmerNameController.text = bestMatch.farmerName;
+        _selectedVillage = bestMatch.village;
+        _selectedVariety = bestMatch.paddyType;
+        _selectedGrade = bestMatch.selectedGrade;
+        _standardPrice = bestMatch.finalPrice;
       });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('⚡ Auto-loaded Farmer Info (${f.familyCode} · ${f.farmerName} in ${f.village})'),
+          content: Text('✅ Loaded Quality Specs for ${bestMatch.familyCode} (${bestMatch.village})!'),
           backgroundColor: AppTheme.emeraldPrimary,
         ),
       );
-      return;
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No Quality Specs or Farmer Profile found for Family Code + Village combination.'), backgroundColor: AppTheme.skyBlue),
-      );
+    } else {
+      _openSpecsSelectionModal(initialQuery: code);
     }
   }
 
-  void _applySelectedSpecs(SpecsRecord specs) {
-    setState(() {
-      _selectedLoadedSpecs = specs;
-      _familyCodeController.text = specs.familyCode;
-      _farmerNameController.text = specs.farmerName;
-      _village = specs.village;
-      _variety = specs.paddyType;
-      _grade = specs.selectedGrade;
-      _standardPrice = specs.finalPrice;
-    });
+  void _openSpecsSelectionModal({String initialQuery = ''}) {
+    _modalSearchController.text = initialQuery;
+    String modalQuery = initialQuery.trim();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('⚡ Auto-loaded Specs: ${specs.familyCode} (${specs.paddyType} ${specs.selectedGrade} · Base: ${specs.finalPrice.toInt()} KHR/kg)'),
-        backgroundColor: AppTheme.emeraldPrimary,
-      ),
-    );
-  }
-
-  void _showSpecsSelectionDialog(List<SpecsRecord> matches) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBackground,
-        title: Row(
-          children: const [
-            Icon(Icons.inventory_2, color: AppTheme.amberGold, size: 20),
-            SizedBox(width: 8),
-            Text('Select Quality Specs Record', style: TextStyle(color: AppTheme.textWhite, fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Multiple inspection records found. Please choose the correct record (matching Family Code & Village):', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-              const SizedBox(height: 12),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: matches.length,
-                  itemBuilder: (context, index) {
-                    final item = matches[index];
-                    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
-                    return Card(
-                      color: AppTheme.inputBackground,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _applySelectedSpecs(item);
-                        },
-                        title: Text('${item.familyCode} · ${item.farmerName} (${item.village})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.emeraldLight)),
-                        subtitle: Text('Date: $dateStr\n${item.paddyType} (${item.selectedGrade}) · Base Price: ${item.finalPrice.toInt()} KHR/kg\nMoisture: ${item.moisture}% · Foreign: ${item.foreignMatter}% · Whole: ${item.wholeGrain}%', style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
-                        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.amberGold),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = _availableSpecs.where((s) {
+              if (modalQuery.isEmpty) return true;
+              final q = modalQuery.toLowerCase();
+              return s.familyCode.toLowerCase().contains(q) ||
+                  s.farmerName.toLowerCase().contains(q) ||
+                  s.village.toLowerCase().contains(q);
+            }).toList();
+
+            return Dialog(
+              backgroundColor: AppTheme.cardBackground,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: Container(
+                width: double.maxFinite,
+                constraints: const BoxConstraints(maxHeight: 600),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.analytics, color: AppTheme.skyBlue, size: 22),
+                            SizedBox(width: 8),
+                            Text(
+                              'Select Quality Specs Record',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: AppTheme.textMuted),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: _modalSearchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search by Family Code, Farmer Name, Village...',
+                        prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+                        suffixIcon: modalQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
+                                onPressed: () {
+                                  _modalSearchController.clear();
+                                  setModalState(() => modalQuery = '');
+                                },
+                              )
+                            : null,
                       ),
-                    );
-                  },
+                      onChanged: (val) {
+                        setModalState(() => modalQuery = val.trim());
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const Center(
+                              child: Text('No Quality Specs records found.', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                            )
+                          : ListView.builder(
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) {
+                                final s = filtered[index];
+                                return Card(
+                                  color: AppTheme.inputBackground,
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  child: ListTile(
+                                    title: Text(
+                                      '${s.familyCode} · ${s.farmerName} (${s.village})',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.skyBlue),
+                                    ),
+                                    subtitle: Text(
+                                      'Variety: ${s.paddyType} (${s.selectedGrade}) · Moisture: ${s.moisture}%\nBase Price: ${s.finalPrice.toInt()} KHR/kg',
+                                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                    ),
+                                    trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.emeraldPrimary),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedLoadedSpecs = s;
+                                        _familyCodeController.text = s.familyCode;
+                                        _farmerNameController.text = s.farmerName;
+                                        _selectedVillage = s.village;
+                                        _selectedVariety = s.paddyType;
+                                        _selectedGrade = s.selectedGrade;
+                                        _standardPrice = s.finalPrice;
+                                      });
+                                      Navigator.pop(ctx);
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted))),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
-  void _parseSackWeights(String text) {
-    final parts = text.replaceAll(',', ' ').split(' ');
-    final parsed = <double>[];
-    for (var p in parts) {
-      final clean = p.trim();
-      if (clean.isNotEmpty) {
-        final val = double.tryParse(clean);
-        if (val != null && val > 0) {
-          parsed.add(val);
-        }
-      }
-    }
-    setState(() {
-      _sackWeights = parsed;
-    });
-  }
-
-  Future<void> _savePurchase() async {
+  Future<void> _savePurchaseRecord() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (_village == null || _variety == null || _grade == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select Village, Paddy Category, and Grade.'), backgroundColor: AppTheme.errorRed),
-      );
-      return;
-    }
 
     if (_sackWeights.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter individual sack weights (e.g. 100 102 98.5)'), backgroundColor: AppTheme.errorRed),
+        const SnackBar(content: Text('Please enter individual sack weights (kg).'), backgroundColor: AppTheme.errorRed),
       );
       return;
     }
 
+    final code = _familyCodeController.text.trim().toUpperCase();
+    final name = _farmerNameController.text.trim();
     final addPremiumPerKg = double.tryParse(_premiumAmountController.text) ?? 0.0;
     final finalPricePerKg = _standardPrice + addPremiumPerKg;
-    final totalWeight = _sackWeights.reduce((a, b) => a + b);
+    final totalWeight = _sackWeights.fold(0.0, (a, b) => a + b);
     final grossValue = totalWeight * finalPricePerKg;
     final seedBorrowedKg = double.tryParse(_seedBorrowedController.text) ?? 0.0;
-    final returnedSeedKg = seedBorrowedKg * ConfigDao.instance.seedInterestRate; // Configurable interest rate
+    final returnedSeedKg = seedBorrowedKg * ConfigDao.instance.seedInterestRate;
     final seedDeduction = returnedSeedKg * finalPricePerKg;
     final netPayment = (grossValue - seedDeduction).clamp(0.0, double.infinity);
 
-    Uint8List? sigBytes;
-    if (_sigController.isNotEmpty) {
-      sigBytes = await _sigController.toPngBytes();
+    String? farmerSigBase64;
+    if (_farmerSignatureController.isNotEmpty) {
+      final sigBytes = await _farmerSignatureController.toPngBytes();
+      if (sigBytes != null) {
+        farmerSigBase64 = base64Encode(sigBytes);
+      }
     }
 
     final record = PurchaseRecord(
-      id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
-      familyCode: _familyCodeController.text.trim(),
-      farmerName: _farmerNameController.text.trim(),
-      village: _village!,
-      variety: _variety!,
-      grade: _grade!,
+      id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${code}',
+      familyCode: code,
+      farmerName: name,
+      village: _selectedVillage,
+      variety: _selectedVariety,
+      grade: _selectedGrade,
       standardPrice: _standardPrice,
       additionalPrice: 0.0,
       finalPrice: finalPricePerKg,
@@ -281,10 +331,11 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       seedBorrowed: seedBorrowedKg,
       seedRepayment: returnedSeedKg,
       seedDeduction: seedDeduction,
-      premiumDescription: addPremiumPerKg > 0 ? 'Additional Premium (KHR/kg)' : null,
+      premiumDescription: addPremiumPerKg > 0 ? 'Distance Premium (+${addPremiumPerKg.toInt()} KHR)' : null,
       additionalPremium: addPremiumPerKg,
       netPayment: netPayment,
-      signatureFarmer: sigBytes != null ? 'data:image/png;base64,${sigBytes.toString()}' : null,
+      signatureFarmer: farmerSigBase64,
+      specsRecordId: _selectedLoadedSpecs?.id,
       createdAt: DateTime.now(),
       isSynced: false,
     );
@@ -294,9 +345,8 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_editingId != null ? '✅ Purchase Record updated!' : '✅ Purchase Record saved locally! Form cleared for next farmer.'),
+          content: Text(_editingId != null ? '✅ Purchase Invoice updated!' : '✅ Purchase Receipt saved locally!'),
           backgroundColor: AppTheme.emeraldPrimary,
-          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -315,17 +365,15 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       _editingId = item.id;
       _familyCodeController.text = item.familyCode;
       _farmerNameController.text = item.farmerName;
-      _village = item.village;
-      _variety = item.variety;
-      _grade = item.grade;
+      _selectedVillage = item.village;
+      _selectedVariety = item.variety;
+      _selectedGrade = item.grade;
       _standardPrice = item.standardPrice;
-      _sackWeightsInputController.text = item.sackWeights.join(' ');
       _sackWeights = List.from(item.sackWeights);
-      _seedBorrowedController.text = item.seedBorrowed == 0 ? '' : item.seedBorrowed.toString();
-      _premiumAmountController.text = item.additionalPremium == 0 ? '' : item.additionalPremium.toString();
+      _sacksInputController.text = item.sackWeights.join(' ');
+      _seedBorrowedController.text = (item.seedBorrowed / ConfigDao.instance.seedInterestRate).toStringAsFixed(1);
+      _premiumAmountController.text = item.additionalPremium.toInt().toString();
     });
-
-    _familyCodeFocusNode.requestFocus();
   }
 
   Future<void> _deleteRecord(PurchaseRecord item) async {
@@ -339,7 +387,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
         title: const Text('Delete Purchase Record', style: TextStyle(color: AppTheme.textWhite)),
-        content: Text('Are you sure you want to delete purchase record for ${item.familyCode} (${item.farmerName}) in ${item.village}?'),
+        content: Text('Are you sure you want to delete purchase record for ${item.familyCode} (${item.farmerName})?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted))),
           ElevatedButton(
@@ -360,27 +408,83 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     }
   }
 
-  void _showRecordOptionsDialog(PurchaseRecord item) {
+  void _showRecordDetailsModal(PurchaseRecord item) {
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
-        title: Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(color: AppTheme.amberGold, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Variety: ${item.variety} (${item.grade})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Final Unit Price: ${item.finalPrice.toInt()} KHR/kg', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Total Weight: ${item.totalWeight} kg (${item.sackWeights.length} Bags)', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Gross Value: ${item.totalPayment.toInt()} KHR', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            if (item.seedDeduction > 0)
-              Text('Seed Deduction (${item.seedRepayment.toStringAsFixed(1)} kg): -${item.seedDeduction.toInt()} KHR', style: const TextStyle(color: AppTheme.errorRed, fontSize: 12)),
-            Text('Net Payment: ${item.netPayment.toInt()} KHR', style: const TextStyle(color: AppTheme.emeraldLight, fontSize: 13, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('Status: ${item.isSynced ? '🟢 Synced with Server' : '⏳ Pending Local Sync'}', style: TextStyle(color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(color: AppTheme.emeraldLight, fontWeight: FontWeight.bold, fontSize: 16)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
+              ),
+              child: Text(
+                item.isSynced ? '✓ Synced' : '⏳ Pending',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold),
+              ),
+            ),
           ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('Category: ${item.variety} (${item.grade})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              Text('Date & Time: $dateStr', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              const Divider(color: Colors.white24, height: 16),
+
+              Text('Sacks Count: ${item.sackWeights.length} Bags', style: const TextStyle(color: AppTheme.skyBlue, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('Sack Weights: [ ${item.sackWeights.join(', ')} ] kg', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              Text('Total Weight: ${item.totalWeight} kg', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+
+              Text('Base Price: ${item.standardPrice.toInt()} KHR/kg' + (item.additionalPremium > 0 ? ' (+${item.additionalPremium.toInt()} Premium)' : ''), style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+              Text('Final Price: ${item.finalPrice.toInt()} KHR/kg', style: const TextStyle(color: AppTheme.skyBlue, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('Gross Value: ${item.totalPayment.toInt()} KHR', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+              if (item.seedDeduction > 0)
+                Text('Seed Deduction: -${item.seedDeduction.toInt()} KHR (${item.seedRepayment.toStringAsFixed(1)} kg)', style: const TextStyle(color: AppTheme.errorRed, fontSize: 12)),
+              const SizedBox(height: 8),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.emeraldPrimary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('NET PAYMENT:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
+                    Text('${item.netPayment.toInt()} KHR', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
+                  ],
+                ),
+              ),
+
+              if (item.signatureFarmer != null && item.signatureFarmer!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('Farmer Signature:', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                const SizedBox(height: 4),
+                Container(
+                  height: 60,
+                  width: double.infinity,
+                  decoration: BoxDecoration(color: AppTheme.inputBackground, borderRadius: BorderRadius.circular(8)),
+                  child: Image.memory(base64Decode(item.signatureFarmer!), fit: BoxFit.contain),
+                ),
+              ],
+            ],
+          ),
         ),
         actions: [
           if (!item.isSynced)
@@ -425,12 +529,18 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final villages = ConfigDao.instance.villages;
+    final paddySpecs = ConfigDao.instance.paddySpecs;
+    final varieties = paddySpecs.map((ps) => ps['variety'] as String).toSet().toList();
+    if (varieties.isEmpty) varieties.addAll(['Phka Rumduol', 'Red Jasmine', 'Sen Kra Ob']);
+    final grades = ['A1', 'B1', 'C1'];
+
     final addPremiumPerKg = double.tryParse(_premiumAmountController.text) ?? 0.0;
     final finalPricePerKg = _standardPrice + addPremiumPerKg;
     final totalWeight = _sackWeights.isEmpty ? 0.0 : _sackWeights.fold(0.0, (a, b) => a + b);
     final grossValue = totalWeight * finalPricePerKg;
     final seedBorrowedKg = double.tryParse(_seedBorrowedController.text) ?? 0.0;
-    final returnedSeedKg = seedBorrowedKg * ConfigDao.instance.seedInterestRate; // Dynamic interest rate
+    final returnedSeedKg = seedBorrowedKg * ConfigDao.instance.seedInterestRate;
     final seedDeduction = returnedSeedKg * finalPricePerKg;
     final netPayment = (grossValue - seedDeduction).clamp(0.0, double.infinity);
 
@@ -462,44 +572,90 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.scale, color: AppTheme.amberGold, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            _editingId != null ? 'Edit Paddy Purchase Record' : 'Paddy Purchase Invoice & Weighing',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _searchAndLoadSpecs,
-                            icon: const Icon(Icons.flash_on, size: 14, color: Color(0xFF0B0F19)),
-                            label: const Text('Load Quality Specs', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.amberGold,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  OrientationBuilder(
+                    builder: (context, orientation) {
+                      bool isLandscape = orientation == Orientation.landscape;
+
+                      if (isLandscape) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.scale, color: AppTheme.amberGold, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _editingId != null ? 'Edit Paddy Purchase Record' : 'Paddy Purchase Invoice & Weighing',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                ),
+                              ],
                             ),
-                          ),
-                          if (_editingId != null) ...[
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              onPressed: _resetForm,
-                              icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
-                              label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                            Row(
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _searchAndLoadSpecs,
+                                  icon: const Icon(Icons.flash_on, size: 16, color: Color(0xFF0B0F19)),
+                                  label: const Text('Load Quality Specs', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.amberGold,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  ),
+                                ),
+                                if (_editingId != null) ...[
+                                  const SizedBox(width: 8),
+                                  TextButton.icon(
+                                    onPressed: _resetForm,
+                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
-                        ],
-                      ),
-                    ],
+                        );
+                      } else {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.scale, color: AppTheme.amberGold, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _editingId != null ? 'Edit Paddy Purchase Record' : 'Paddy Purchase Invoice & Weighing',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                    ),
+                                  ],
+                                ),
+                                if (_editingId != null)
+                                  TextButton.icon(
+                                    onPressed: _resetForm,
+                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: _searchAndLoadSpecs,
+                              icon: const Icon(Icons.flash_on, size: 16, color: Color(0xFF0B0F19)),
+                              label: const Text('Load Quality Specs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.amberGold,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                    },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   if (_selectedLoadedSpecs != null)
                     Container(
@@ -524,66 +680,157 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                       ),
                     ),
 
-                  // Row 1: Family Code, Farmer Name, Village
+                  // Inputs: Family Code & Farmer Name
                   LayoutBuilder(
                     builder: (context, constraints) {
                       bool isDesktop = constraints.maxWidth > 600;
                       return isDesktop
                           ? Row(
                               children: [
-                                Expanded(child: _buildFamilyCodeInput()),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _familyCodeController,
+                                    decoration: const InputDecoration(labelText: 'FAMILY CODE *', hintText: 'e.g. FC001'),
+                                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                  ),
+                                ),
                                 const SizedBox(width: 12),
-                                Expanded(child: _buildFarmerNameInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildVillageDropdown()),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _farmerNameController,
+                                    decoration: const InputDecoration(labelText: 'FARMER NAME *', hintText: 'e.g. Heng Sok'),
+                                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                  ),
+                                ),
                               ],
                             )
                           : Column(
                               children: [
-                                _buildFamilyCodeInput(),
+                                TextFormField(
+                                  controller: _familyCodeController,
+                                  decoration: const InputDecoration(labelText: 'FAMILY CODE *', hintText: 'e.g. FC001'),
+                                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                ),
                                 const SizedBox(height: 12),
-                                _buildFarmerNameInput(),
-                                const SizedBox(height: 12),
-                                _buildVillageDropdown(),
+                                TextFormField(
+                                  controller: _farmerNameController,
+                                  decoration: const InputDecoration(labelText: 'FARMER NAME *', hintText: 'e.g. Heng Sok'),
+                                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                                ),
                               ],
                             );
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
-                  // Row 2: Paddy Variety, Grade
+                  // Dropdowns: Village, Paddy Variety, Grade
                   LayoutBuilder(
                     builder: (context, constraints) {
                       bool isDesktop = constraints.maxWidth > 600;
                       return isDesktop
                           ? Row(
                               children: [
-                                Expanded(child: _buildPaddyCategoryDropdown()),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedVillage,
+                                    decoration: const InputDecoration(labelText: 'VILLAGE *'),
+                                    items: villages
+                                        .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      if (val != null) setState(() => _selectedVillage = val);
+                                    },
+                                  ),
+                                ),
                                 const SizedBox(width: 12),
-                                Expanded(child: _buildGradeDropdown()),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedVariety,
+                                    decoration: const InputDecoration(labelText: 'PADDY CATEGORY *'),
+                                    items: varieties
+                                        .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() => _selectedVariety = val);
+                                        _updatePaddyPrice();
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedGrade,
+                                    decoration: const InputDecoration(labelText: 'GRADE *'),
+                                    items: grades
+                                        .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12))))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() => _selectedGrade = val);
+                                        _updatePaddyPrice();
+                                      }
+                                    },
+                                  ),
+                                ),
                               ],
                             )
                           : Column(
                               children: [
-                                _buildPaddyCategoryDropdown(),
+                                DropdownButtonFormField<String>(
+                                  value: _selectedVillage,
+                                  decoration: const InputDecoration(labelText: 'VILLAGE *'),
+                                  items: villages
+                                      .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) setState(() => _selectedVillage = val);
+                                  },
+                                ),
                                 const SizedBox(height: 12),
-                                _buildGradeDropdown(),
+                                DropdownButtonFormField<String>(
+                                  value: _selectedVariety,
+                                  decoration: const InputDecoration(labelText: 'PADDY CATEGORY *'),
+                                  items: varieties
+                                      .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() => _selectedVariety = val);
+                                      _updatePaddyPrice();
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<String>(
+                                  value: _selectedGrade,
+                                  decoration: const InputDecoration(labelText: 'GRADE *'),
+                                  items: grades
+                                      .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12))))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() => _selectedGrade = val);
+                                      _updatePaddyPrice();
+                                    }
+                                  },
+                                ),
                               ],
                             );
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // Row 3: Sack Weights Array Input
                   TextFormField(
-                    controller: _sackWeightsInputController,
+                    controller: _sacksInputController,
                     decoration: const InputDecoration(labelText: 'INDIVIDUAL SACK WEIGHTS (KG) *', hintText: 'e.g. 100 102 98.5 101.5'),
                     onChanged: _parseSackWeights,
                     validator: (v) => _sackWeights.isEmpty ? 'Enter sack weights separated by spaces' : null,
                   ),
                   const SizedBox(height: 12),
 
-                  // Weighing Summary Banner
+                  // Summary Banner
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -600,7 +847,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Row 4: Seed Borrowed (Kg) + Additional Premium (KHR/KG) Inputs Side-by-Side
+                  // Seed Borrowed & Premium
                   LayoutBuilder(
                     builder: (context, constraints) {
                       bool isDesktop = constraints.maxWidth > 600;
@@ -647,7 +894,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Net Payment Calculation Card
+                  // Fully Responsive Net Payment Calculation Card (Fits Phones & Tablets without Overflow)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -656,54 +903,84 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                       border: Border.all(color: AppTheme.emeraldPrimary.withOpacity(0.4)),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          spacing: 12,
+                          runSpacing: 4,
                           children: [
                             Text(
                               'Base Price: ${_standardPrice.toInt()} KHR/kg' + (addPremiumPerKg > 0 ? ' + ${addPremiumPerKg.toInt()} Premium' : ''),
-                              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                             ),
-                            Text('Final Price: ${finalPricePerKg.toInt()} KHR/kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
+                            Text(
+                              'Final Price: ${finalPricePerKg.toInt()} KHR/kg',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          spacing: 12,
+                          runSpacing: 4,
                           children: [
-                            Text('Gross Value (${totalWeight.toStringAsFixed(1)} kg × ${finalPricePerKg.toInt()} KHR):', style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-                            Text('${grossValue.toInt()} KHR', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
+                            Text(
+                              'Gross Value (${totalWeight.toStringAsFixed(1)} kg × ${finalPricePerKg.toInt()} KHR):',
+                              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                            ),
+                            Text(
+                              '${grossValue.toInt()} KHR',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                            ),
                           ],
                         ),
                         if (seedBorrowedKg > 0) ...[
                           const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            spacing: 12,
+                            runSpacing: 4,
                             children: [
                               Text(
-                                'Seed Return Deduction (${returnedSeedKg.toStringAsFixed(1)} kg × ${finalPricePerKg.toInt()} KHR):',
-                                style: const TextStyle(fontSize: 12, color: AppTheme.errorRed),
+                                'Seed Deduction (${returnedSeedKg.toStringAsFixed(1)} kg × ${finalPricePerKg.toInt()} KHR):',
+                                style: const TextStyle(fontSize: 11, color: AppTheme.errorRed),
                               ),
-                              Text('-${seedDeduction.toInt()} KHR', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.errorRed)),
+                              Text(
+                                '-${seedDeduction.toInt()} KHR',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.errorRed),
+                              ),
                             ],
                           ),
                         ],
                         const Divider(color: Colors.white24, height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('NET PAYMENT TO FARMER:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
-                            Text('${netPayment.toInt()} KHR', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
-                          ],
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            children: [
+                              const Text('NET PAYMENT TO FARMER: ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
+                              Text('${netPayment.toInt()} KHR', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Electronic Touch Signature Pad
-                  const Text('✍️ Farmer Electronic Touch Signature', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textMuted)),
-                  const SizedBox(height: 6),
+                  // Signature Pad
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('✍️ Farmer Electronic Touch Signature', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textMuted)),
+                      TextButton(
+                        onPressed: () => _farmerSignatureController.clear(),
+                        child: const Text('Clear Signature', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                   Container(
                     height: 100,
                     decoration: BoxDecoration(
@@ -713,22 +990,20 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Signature(controller: _sigController, backgroundColor: AppTheme.inputBackground),
+                      child: Signature(
+                        controller: _farmerSignatureController,
+                        height: 100,
+                        backgroundColor: Colors.transparent,
+                      ),
                     ),
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => _sigController.clear(),
-                      child: const Text('Clear Signature', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
 
+                  // Save Button Always Fully Visible
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _savePurchase,
+                      onPressed: _savePurchaseRecord,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _editingId != null ? AppTheme.emeraldPrimary : AppTheme.amberGold,
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -745,33 +1020,13 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
             ),
             const SizedBox(height: 24),
 
-            // History Header & Search Box
+            // History Section
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Saved Purchase Receipts', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
-                Text('${filteredHistory.length} Receipts', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                Text('${_localHistory.length} Receipts', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
               ],
-            ),
-            const SizedBox(height: 10),
-
-            // Search Box
-            TextFormField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by Family Code, Farmer Name, or Village...',
-                prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-              ),
-              onChanged: (val) => setState(() => _searchQuery = val.trim()),
             ),
             const SizedBox(height: 12),
 
@@ -790,36 +1045,39 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                     itemCount: filteredHistory.length,
                     itemBuilder: (context, index) {
                       final item = filteredHistory[index];
+                      final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
+
                       return Card(
                         color: AppTheme.cardBackground,
                         margin: const EdgeInsets.only(bottom: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: AppTheme.borderLight),
-                        ),
                         child: ListTile(
-                          onTap: () => _showRecordOptionsDialog(item),
+                          onTap: () => _showRecordDetailsModal(item),
                           title: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.amberGold)),
+                              Text('${item.familyCode} · ${item.farmerName} (${item.village})', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.emeraldLight, fontSize: 13)),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.2) : AppTheme.amberGold.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(10),
+                                  color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
                                 ),
                                 child: Text(
-                                  item.isSynced ? '✓ Synced' : '⏳ Offline',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold),
+                                  item.isSynced ? '✓ Synced' : '⏳ Pending',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          subtitle: Text('${item.village} · ${item.totalWeight} kg\nNet: ${item.netPayment.toInt()} KHR', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          subtitle: Text('Weight: ${item.totalWeight} kg · Net Payment: ${item.netPayment.toInt()} KHR\nDate: $dateStr', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                           trailing: Icon(
                             item.isSynced ? Icons.lock_outline : Icons.chevron_right,
-                            color: item.isSynced ? AppTheme.textMuted : AppTheme.amberGold,
+                            color: item.isSynced ? AppTheme.textMuted : AppTheme.skyBlue,
                             size: 18,
                           ),
                         ),
@@ -829,85 +1087,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildFamilyCodeInput() {
-    return TextFormField(
-      controller: _familyCodeController,
-      focusNode: _familyCodeFocusNode,
-      decoration: InputDecoration(
-        labelText: 'FAMILY CODE *',
-        hintText: 'e.g. TB034',
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.search, color: AppTheme.amberGold, size: 20),
-          tooltip: 'Search Quality Specs / Farmer Info',
-          onPressed: _searchAndLoadSpecs,
-        ),
-      ),
-      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-    );
-  }
-
-  Widget _buildFarmerNameInput() {
-    return TextFormField(
-      controller: _farmerNameController,
-      decoration: InputDecoration(
-        labelText: 'FARMER NAME *',
-        hintText: 'e.g. Sok San',
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.search, color: AppTheme.amberGold, size: 20),
-          tooltip: 'Search Quality Specs / Farmer Info',
-          onPressed: _searchAndLoadSpecs,
-        ),
-      ),
-      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-    );
-  }
-
-  Widget _buildVillageDropdown() {
-    final villageList = ConfigDao.instance.villages;
-    return DropdownButtonFormField<String>(
-      value: _village,
-      decoration: const InputDecoration(labelText: 'VILLAGE *', hintText: 'Select Village'),
-      items: villageList
-          .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
-          .toList(),
-      validator: (v) => v == null ? 'Select Village' : null,
-      onChanged: (val) => setState(() => _village = val),
-    );
-  }
-
-  Widget _buildPaddyCategoryDropdown() {
-    final categories = ConfigDao.instance.paddyCategories;
-    return DropdownButtonFormField<String>(
-      value: _variety,
-      decoration: const InputDecoration(labelText: 'PADDY CATEGORY *', hintText: 'Select Category'),
-      items: categories
-          .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
-          .toList(),
-      validator: (v) => v == null ? 'Select Category' : null,
-      onChanged: (val) {
-        setState(() {
-          _variety = val;
-          if (val != null) {
-            _standardPrice = ConfigDao.instance.getBasePrice(val);
-          }
-        });
-      },
-    );
-  }
-
-  Widget _buildGradeDropdown() {
-    final gradeList = ConfigDao.instance.grades;
-    return DropdownButtonFormField<String>(
-      value: _grade,
-      decoration: const InputDecoration(labelText: 'GRADE *', hintText: 'Select Grade'),
-      items: gradeList
-          .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12))))
-          .toList(),
-      validator: (v) => v == null ? 'Select Grade' : null,
-      onChanged: (val) => setState(() => _grade = val),
     );
   }
 }

@@ -13,6 +13,21 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+subprojects {
+    def setNamespace = { proj ->
+        if (proj.hasProperty('android')) {
+            if (proj.android.namespace == null || proj.android.namespace.isEmpty()) {
+                proj.android.namespace = proj.group ?: "com.example.${proj.name.replaceAll('-', '_')}"
+            }
+        }
+    }
+    if (project.state.executed) {
+        setNamespace(project)
+    } else {
+        project.afterEvaluate { setNamespace(project) }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

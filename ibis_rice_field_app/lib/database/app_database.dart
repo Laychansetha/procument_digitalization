@@ -33,7 +33,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -46,6 +46,14 @@ class AppDatabase {
         await db.execute('ALTER TABLE purchase_records ADD COLUMN additionalPremium REAL DEFAULT 0.0');
       } catch (e) {
         debugPrint('Migration error or column exists: $e');
+      }
+    }
+    if (oldVersion < 3) {
+      try {
+        await db.execute('ALTER TABLE transport_records ADD COLUMN notes TEXT');
+        await db.execute('ALTER TABLE transport_records ADD COLUMN status TEXT DEFAULT "EN_ROUTE"');
+      } catch (e) {
+        debugPrint('Migration v3 error or column exists: $e');
       }
     }
   }
@@ -143,9 +151,11 @@ class AppDatabase {
         truckCleaned $intType,
         loadingLocation $textType,
         destinationWarehouse $textType,
+        notes $nullableText,
         totalSacks $intType,
         totalFieldWeight $realType,
         selectedPurchaseIdsJson $textType,
+        status $nullableText,
         createdAt $textType,
         isSynced $intType,
         syncError $nullableText

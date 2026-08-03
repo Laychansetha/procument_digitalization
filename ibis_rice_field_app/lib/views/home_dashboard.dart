@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import '../config/theme.dart';
 import '../database/app_database.dart';
 import '../services/sync_service.dart';
@@ -53,6 +56,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
       _syncStatusMessage = result.message;
     });
 
+    // Auto-dismiss sync status banner after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _syncStatusMessage == result.message) {
+        setState(() {
+          _syncStatusMessage = '';
+        });
+      }
+    });
+
     await _loadUnsyncedCount();
 
     if (mounted) {
@@ -63,6 +75,193 @@ class _HomeDashboardState extends State<HomeDashboard> {
         ),
       );
     }
+  }
+
+  void _openServerSettingsModal() {
+    final urlController = TextEditingController(text: AppConfig.baseUrl);
+    bool isTesting = false;
+    String testResult = '';
+    bool testSuccess = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Dialog(
+              backgroundColor: AppTheme.cardBackground,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                constraints: const BoxConstraints(maxWidth: 450),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.settings, color: AppTheme.skyBlue, size: 22),
+                            SizedBox(width: 8),
+                            Text(
+                              'Server IP & Connection',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: AppTheme.textMuted),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Enter your central desktop server LAN IP address or Cloud URL (e.g. http://192.168.1.13:3000):',
+                      style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                    ),
+                    const SizedBox(height: 14),
+
+                    TextFormField(
+                      controller: urlController,
+                      decoration: const InputDecoration(
+                        labelText: 'SERVER BASE URL',
+                        hintText: 'http://192.168.1.13:3000',
+                        prefixIcon: Icon(Icons.lan, color: AppTheme.skyBlue, size: 18),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    if (testResult.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: testSuccess ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.errorRed.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: testSuccess ? AppTheme.emeraldPrimary : AppTheme.errorRed),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              testSuccess ? Icons.check_circle : Icons.error_outline,
+                              color: testSuccess ? AppTheme.emeraldLight : AppTheme.errorRed,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                testResult,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: testSuccess ? AppTheme.emeraldLight : AppTheme.errorRed,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: isTesting
+                                ? null
+                                : () async {
+                                    setModalState(() {
+                                      isTesting = true;
+                                      testResult = 'Testing connection to server...';
+                                      testSuccess = false;
+                                    });
+
+                                    String inputUrl = urlController.text.trim();
+                                    if (!inputUrl.startsWith('http://') && !inputUrl.startsWith('https://')) {
+                                      inputUrl = 'http://$inputUrl';
+                                    }
+                                    if (inputUrl.endsWith('/')) {
+                                      inputUrl = inputUrl.substring(0, inputUrl.length - 1);
+                                    }
+
+                                    try {
+                                      final uri = Uri.parse('$inputUrl/api/config');
+                                      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+                                      if (res.statusCode == 200 || res.statusCode == 401) {
+                                        setModalState(() {
+                                          isTesting = false;
+                                          testSuccess = true;
+                                          testResult = '✅ Connected successfully to server at $inputUrl!';
+                                        });
+                                      } else {
+                                        setModalState(() {
+                                          isTesting = false;
+                                          testSuccess = false;
+                                          testResult = '❌ Server returned HTTP ${res.statusCode}. Check URL.';
+                                        });
+                                      }
+                                    } on SocketException catch (se) {
+                                      setModalState(() {
+                                        isTesting = false;
+                                        testSuccess = false;
+                                        testResult = '❌ Cannot reach $inputUrl. Check Wi-Fi & Windows Firewall on port 3000.';
+                                      });
+                                    } catch (e) {
+                                      setModalState(() {
+                                        isTesting = false;
+                                        testSuccess = false;
+                                        testResult = '❌ Connection failed ($e). Check server IP & Wi-Fi.';
+                                      });
+                                    }
+                                  },
+                            icon: isTesting
+                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.skyBlue))
+                                : const Icon(Icons.wifi_find, size: 16, color: AppTheme.skyBlue),
+                            label: const Text('Test Connection', style: TextStyle(fontSize: 11, color: AppTheme.skyBlue)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppTheme.skyBlue),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await AppConfig.saveBaseUrl(urlController.text.trim());
+                              if (mounted) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('✅ Server URL updated to: ${AppConfig.baseUrl}'),
+                                    backgroundColor: AppTheme.emeraldPrimary,
+                                  ),
+                                );
+                              }
+                              _triggerSync();
+                            },
+                            icon: const Icon(Icons.save, size: 16, color: Color(0xFF0B0F19)),
+                            label: const Text('Save & Sync', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19))),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.emeraldPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   final List<Widget> _tabs = [
@@ -78,16 +277,25 @@ class _HomeDashboardState extends State<HomeDashboard> {
       appBar: AppBar(
         title: Row(
           children: const [
-            Icon(Icons.grass, color: AppTheme.emeraldPrimary, size: 24),
-            SizedBox(width: 8),
-            Text(
-              'IBIS RICE FIELD OPERATIONS',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppTheme.textWhite),
+            Icon(Icons.grass, color: AppTheme.emeraldPrimary, size: 22),
+            SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'IBIS RICE FIELD OPERATIONS',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.textWhite),
+              ),
             ),
           ],
         ),
         actions: [
-          // Sync Drawer / Button
+          // Server Settings Icon (⚙️)
+          IconButton(
+            icon: const Icon(Icons.settings, color: AppTheme.skyBlue, size: 20),
+            onPressed: _openServerSettingsModal,
+            tooltip: 'Server Connection Settings',
+          ),
+          // Sync Badge & Button
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: InkWell(
@@ -137,7 +345,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
           if (_syncStatusMessage.isNotEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               color: AppTheme.skyBlue.withOpacity(0.15),
               child: Row(
                 children: [
@@ -147,6 +355,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     child: Text(
                       _syncStatusMessage,
                       style: const TextStyle(fontSize: 11, color: AppTheme.skyBlue, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _syncStatusMessage = ''),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4.0),
+                      child: Icon(Icons.close, size: 14, color: AppTheme.textMuted),
                     ),
                   ),
                 ],

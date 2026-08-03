@@ -27,6 +27,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const {
+      id,
       variety,
       grade,
       basePrice,
@@ -45,34 +46,53 @@ export async function POST(request: Request) {
     const trimmedVariety = variety.trim();
     const trimmedGrade = grade.trim();
 
-    const priceSpec = await db.paddyPriceSpec.upsert({
-      where: {
-        variety_grade: {
+    let priceSpec;
+
+    if (id) {
+      priceSpec = await db.paddyPriceSpec.update({
+        where: { id },
+        data: {
           variety: trimmedVariety,
           grade: trimmedGrade,
+          basePrice: parseFloat(basePrice),
+          organicBonus: parseFloat(organicBonus) || 0,
+          maxMoisture: parseFloat(maxMoisture) || 14.0,
+          maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
+          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
+          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
+          status: status || 'ACTIVE',
         },
-      },
-      update: {
-        basePrice: parseFloat(basePrice),
-        organicBonus: parseFloat(organicBonus) || 0,
-        maxMoisture: parseFloat(maxMoisture) || 14.0,
-        maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
-        minWholeGrain: minWholeGrain ? parseFloat(minWholeGrain) : null,
-        maxBrokenRice: maxBrokenRice ? parseFloat(maxBrokenRice) : null,
-        status: status || 'ACTIVE',
-      },
-      create: {
-        variety: trimmedVariety,
-        grade: trimmedGrade,
-        basePrice: parseFloat(basePrice),
-        organicBonus: parseFloat(organicBonus) || 0,
-        maxMoisture: parseFloat(maxMoisture) || 14.0,
-        maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
-        minWholeGrain: minWholeGrain ? parseFloat(minWholeGrain) : null,
-        maxBrokenRice: maxBrokenRice ? parseFloat(maxBrokenRice) : null,
-        status: status || 'ACTIVE',
-      },
-    });
+      });
+    } else {
+      priceSpec = await db.paddyPriceSpec.upsert({
+        where: {
+          variety_grade: {
+            variety: trimmedVariety,
+            grade: trimmedGrade,
+          },
+        },
+        update: {
+          basePrice: parseFloat(basePrice),
+          organicBonus: parseFloat(organicBonus) || 0,
+          maxMoisture: parseFloat(maxMoisture) || 14.0,
+          maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
+          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
+          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
+          status: status || 'ACTIVE',
+        },
+        create: {
+          variety: trimmedVariety,
+          grade: trimmedGrade,
+          basePrice: parseFloat(basePrice),
+          organicBonus: parseFloat(organicBonus) || 0,
+          maxMoisture: parseFloat(maxMoisture) || 14.0,
+          maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
+          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
+          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
+          status: status || 'ACTIVE',
+        },
+      });
+    }
 
     // Audit Log
     await db.auditLog.create({

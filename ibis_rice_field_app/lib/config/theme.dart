@@ -43,7 +43,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: inputBackground,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        floatingLabelBehavior: FloatingLabelBehavior.always, // Fixes label overlap with values!
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF334155)),
