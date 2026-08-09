@@ -1,81 +1,68 @@
-# IBIS RICE — Operations Portal (Field, Warehouse & Finance)
+# IBIS RICE — Integrated Field Operations, Warehouse Intake & Finance Portal
 
-A production-grade, offline-first digital payment and supply chain management web application built for **IBIS RICE CONSERVATION CO., LTD**.
+Official enterprise application suite built for **IBIS RICE CONSERVATION CO., LTD**.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ System Architecture Overview
 
-The system operates in a **dual-mode hybrid architecture**:
+The system consists of two tightly integrated components:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        IBIS RICE WEB APPLICATION                       │
+│                   IBIS RICE CENTRAL WEB APPLICATION                    │
+│                 (Next.js 16 + PostgreSQL + Prisma ORM)                 │
 └────────────────────────────────────────────────────────────────────────┘
                                     │
            ┌────────────────────────┴────────────────────────┐
            ▼                                                 ▼
 ┌──────────────────────────────┐          ┌──────────────────────────────┐
-│       FIELD OPERATIONS       │          │     WAREHOUSE & FINANCE      │
-│        (Offline-First)       │          │        (Online-Only)       │
+│  ANDROID TABLET FIELD APP    │          │  CENTRAL WEB ADMIN & INTAKE  │
+│  (Flutter Native + SQLite)   │          │        (Online-Only)         │
 ├──────────────────────────────┤          ├──────────────────────────────┤
-│ • Specs Record               │          │ • Warehouse Intake & Scale   │
-│ • Farmer Payment Info        │          │ • Finance Reconciliation     │
-│ • Purchase Record & Sacks    │          │ • Admin & Master Specs/Banks │
-│ • Transport Dispatch         │          │ • Audit Logs & System Config │
-├──────────────────────────────┤          ├──────────────────────────────┤
-│ 💾 Persistent IndexedDB      │          │ 🌐 Direct PostgreSQL API     │
-│ 📷 Base64 Photo Storage      │          │ 📊 Real-Time Server Queries  │
-│ ✍️ Electronic Signatures     │          │                             │
-│ 🖨️ Local Receipt Printing    │          │                             │
-│ ⚡ Auto & Manual Sync        │          │                             │
+│ • Quality Specs Inspection   │          │ • Warehouse Scale Intake     │
+│ • Farmer Profile & Passbook  │          │ • Scale Tolerance Audit      │
+│ • Paddy Purchase Receipts    │          │ • Finance Bank Disbursement  │
+│ • Transport Dispatch         │          │ • Admin & User Mgmt          │
+│ • Offline Auto-Sync Engine   │          │ • Master Varieties & Prices  │
 └──────────────────────────────┘          └──────────────────────────────┘
 ```
 
-1. **Field Operations (Offline-First Engine)**:
-   - Covers: Quality Specs, Farmer Payment Profiles, Purchase Invoices, and Truck Transport Dispatch.
-   - Saves all records immediately to browser IndexedDB (`ibis_rice_field_offline_v3`).
-   - Photos (bank document passbooks) and farmer signatures are preserved as Base64 strings. Unsynced records survive browser refreshes and computer restarts.
-   - Synchronizes with central PostgreSQL automatically when internet becomes available without duplicate creation.
-2. **Warehouse & Finance (Online-Only)**:
-   - Connects directly to central PostgreSQL server for real-time scale variance calculations, finance payment approvals, and audit logging.
+1. **Central Web Application & REST API Server** (Next.js 16 + PostgreSQL):
+   - Serves as the central administration portal, warehouse scale receiving terminal, finance payment reconciliation hub, and master configuration center.
+2. **Android Field Application** (Flutter Native + SQLite):
+   - Runs on physical Android tablets used by field inspectors in remote villages across 4 provinces (**Preah Vihear**, **Stung Treng**, **Ratanakiri**, **Mondulkiri**).
+   - Operates 100% offline without internet. Automatically synchronizes with the central server when connected to Wi-Fi.
 
 ---
 
-## 📁 Directory Structure
+## 📁 Clean Repository Structure
 
 ```text
 digitalization_payment_dev/
-├── prisma/
-│   ├── schema.prisma              # Active Prisma ORM database schema
-│   ├── schema.postgresql.prisma   # PostgreSQL production schema template
-│   └── seed.ts                    # Database initialization & seed script
-├── public/
-│   ├── logo.png                   # Official IBIS Rice logo
-│   ├── sw.js                      # PWA Service Worker offline caching script
-│   └── uploads/                   # Uploaded bank passbooks & scale photos
-├── src/
-│   ├── app/
-│   │   ├── api/                   # REST API routes (specs, farmers, purchases, transport, warehouse, finance, admin)
-│   │   ├── layout.tsx             # Root layout & PWA provider wrapper
-│   │   ├── page.tsx               # Main multi-role operations dashboard UI
-│   │   └── globals.css            # Tailored dark-mode UI design system
-│   ├── components/                # Modular UI modals & details components
-│   │   ├── OfflineQueueModal.tsx  # Header sync drawer modal
-│   │   ├── PrintReceiptModal.tsx  # Printable purchase receipt component
-│   │   ├── PrintManifestModal.tsx # Printable transport manifest component
-│   │   └── ...
-│   └── lib/
-│       ├── db.ts                  # Shared PrismaClient instance
-│       ├── offline-sync.ts        # IndexedDB offline store & background sync engine
-│       └── auth.ts                # NextAuth credential authentication options
-├── .env                           # Environment configuration file
-├── .env.example                   # Environment configuration template
-├── start-production-local.bat     # One-click Windows local production server launcher
-├── switch-to-postgresql.bat       # One-click script to configure PostgreSQL (ibis_db)
-├── start-production.sh            # Linux / AWS Lightsail production startup script
-├── package.json                   # Dependencies and npm scripts
-└── README.md                      # System documentation
+├── field_app/                    # Flutter Android Native Application
+│   ├── lib/                      # Flutter Dart source code (views, models, database, services)
+│   ├── android/                  # Android native project configuration
+│   └── pubspec.yaml              # Flutter dependencies manifest
+├── prisma/                       # Prisma ORM Database Schemas & Seed Data
+│   ├── schema.prisma             # Primary active database schema
+│   ├── schema.postgresql.prisma  # PostgreSQL schema template
+│   └── seed.ts                   # Master configuration & user account seed script
+├── public/                       # Static web assets & media uploads
+│   └── uploads/                  # Uploaded bank passbooks & scale photos
+├── src/                          # Next.js Web Application & REST APIs
+│   ├── app/                      # Next.js 16 App Router pages & API handlers
+│   ├── components/               # UI Modals, search selectors & print reports
+│   └── lib/                      # Database client, auth & server helpers
+├── .env.example                  # Environment variable configuration template
+├── DEPLOYMENT_GUIDE.md           # Step-by-step end-to-end deployment guide
+├── field_app.apk                 # Single Release APK for Android Tablets (22.4 MB)
+├── reset-fresh-postgresql.bat    # 1-Click clean database reset & seed script
+├── switch-to-postgresql.bat      # 1-Click PostgreSQL table creation & seed script
+├── start-production-local.bat    # 1-Click local production web server launcher
+├── build-android-apk.bat         # 1-Click Android Release APK build script
+├── create-zip-package.bat        # 1-Click deployment ZIP package creator
+└── package.json                  # Web application dependencies & scripts
 ```
 
 ---
@@ -84,65 +71,33 @@ digitalization_payment_dev/
 
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher
-- **PostgreSQL**: (Required for production desktop testing / AWS Lightsail deployment)
+- **PostgreSQL**: v14.0 or higher
+- **Flutter SDK**: (Optional, only needed if modifying mobile app source code)
 
-### 1. Installation
-Clone or extract the project directory and install node dependencies:
-```bash
-npm install
-```
-
----
-
-### 2. Running Locally (Development Mode — SQLite)
-For rapid local testing with built-in SQLite database:
-```bash
-npx prisma db push
-npx tsx prisma/seed.ts
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
----
-
-### 3. Deploying / Running on Target Desktop (PostgreSQL Production)
-
-To run as a full local production server connected to your PostgreSQL database (`ibis_db`):
-
-1. **One-Click Automated Setup (Windows)**:
-   Simply double-click:
+### 1. Database Setup & Seed
+1. Edit `.env` to configure your local PostgreSQL database connection string:
+   ```env
+   DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/ibis_db?schema=public"
+   ```
+2. Run the 1-Click clean reset script:
    ```cmd
-   switch-to-postgresql.bat
+   reset-fresh-postgresql.bat
    ```
-   *This automatically configures `.env` with your password (`PostgreSQLSetha*1789`), syncs the database tables, seeds default accounts, compiles the Webpack production bundle, and starts the server on `http://localhost:3000`!*
 
-2. **Manual Production Launch**:
-   ```cmd
-   start-production-local.bat
-   ```
+### 2. Launch Local Web Application
+Double-click **`start-production-local.bat`** (or run `npm run build && npm run start`).  
+Open [http://localhost:3000](http://localhost:3000) in your web browser.
+
+### 3. Install Mobile Application on Android Tablet
+Locate **`field_app.apk`** in the project folder and copy it to your Android tablet to install.
 
 ---
 
-## 🔐 Default Pre-Configured User Accounts
+## 🔐 Default Pre-Configured Accounts
 
-All default accounts are initialized with password **`Ibis2026!`**:
+Password for all pre-configured accounts: **`Ibis2026!`**
 
-| Role | Username | Permissions & Scope |
-|---|---|---|
-| **System Administrator** | `admin` | Full access across Field, Warehouse, Finance, User Mgmt & Price Specs |
-| **Field Inspector** | `field` | Field Operations (Specs, Farmer Profiles, Purchases, Transport Dispatch) |
-| **Warehouse Officer** | `warehouse` | Warehouse Receiving, Gross/Tare Scale Intake & Scale Variance Audit |
-| **Finance Officer** | `finance` | Finance Truck Verification, Bank Bulk Transfers & Disbursement |
-
----
-
-## ☁️ AWS Lightsail Deployment Ready
-
-This application is ready to deploy to AWS Lightsail or any Linux VPS:
-1. Copy this folder to your Linux server instance.
-2. Edit `.env` with your production `DATABASE_URL` and `NEXTAUTH_SECRET`.
-3. Make the launcher executable and run:
-   ```bash
-   chmod +x start-production.sh
-   ./start-production.sh
-   ```
+- **System Admin**: `admin@ibisrice.org`
+- **Field Inspector**: `field@ibisrice.org` (and `field1@ibisrice.org` to `field24@ibisrice.org`)
+- **Warehouse Operator**: `warehouse@ibisrice.org`
+- **Finance Officer**: `finance@ibisrice.org`

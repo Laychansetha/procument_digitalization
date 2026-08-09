@@ -56,7 +56,6 @@ export async function PUT(
         brokenRice: body.brokenRice !== undefined && body.brokenRice !== null ? parseFloat(body.brokenRice) : existing.brokenRice,
         isValid: body.isValid !== undefined ? Boolean(body.isValid) : existing.isValid,
         basePrice: body.basePrice !== undefined ? parseFloat(body.basePrice) : existing.basePrice,
-        organicBonus: body.organicBonus !== undefined ? parseFloat(body.organicBonus) : existing.organicBonus,
         finalPrice: body.finalPrice !== undefined ? parseFloat(body.finalPrice) : existing.finalPrice,
         bestQualifyingGrade: body.bestQualifyingGrade || body.selectedGrade || existing.bestQualifyingGrade,
       },

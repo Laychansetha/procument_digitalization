@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 
 export default function AdminConfigPage() {
-  const [activeTab, setActiveTab] = useState<'master' | 'locations' | 'banks' | 'system'>('master');
+  const [activeTab, setActiveTab] = useState<'master' | 'locations' | 'banks' | 'system' | 'users'>('master');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -21,6 +21,7 @@ export default function AdminConfigPage() {
   const [villages, setVillages] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   // Modal / Editing States
   const [showSpecModal, setShowSpecModal] = useState(false);
@@ -28,12 +29,11 @@ export default function AdminConfigPage() {
   const [specForm, setSpecForm] = useState({
     variety: 'Phka Rumduol',
     grade: 'A1',
-    basePrice: 1750,
-    organicBonus: 100,
+    basePrice: 1650,
     maxMoisture: 14.0,
     maxForeignMatter: 5.0,
-    minWholeGrain: 75.0,
-    maxBrokenRice: 25.0,
+    minWholeGrain: 70.0,
+    maxBrokenRice: 30.0,
     status: 'ACTIVE',
   });
 
@@ -55,6 +55,18 @@ export default function AdminConfigPage() {
   const [editingVillage, setEditingVillage] = useState<any | null>(null);
   const [villageForm, setVillageForm] = useState({ name: '', code: '', district: 'Chhaeb', province: 'Preah Vihear', status: 'ACTIVE' });
 
+  // User Management Form State
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [userForm, setUserForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'FIELD',
+    status: 'ACTIVE',
+    assignedProvinces: ['Preah Vihear'],
+  });
+
   // Delete Confirmation Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{
     show: boolean;
@@ -63,8 +75,11 @@ export default function AdminConfigPage() {
     onConfirm: () => void;
   }>({ show: false, title: '', description: '', onConfirm: () => {} });
 
+  const availableProvinces = ['Preah Vihear', 'Stung Treng', 'Ratanakiri', 'Mondulkiri'];
+
   useEffect(() => {
     fetchConfig();
+    fetchUsers();
   }, []);
 
   const fetchConfig = async () => {
@@ -82,7 +97,7 @@ export default function AdminConfigPage() {
           setOfflineSyncDays(data.settings.offlineSyncPeriodDays ?? 30);
         }
         if (data.paddySpecs) setPaddySpecs(data.paddySpecs);
-        if (data.rawVillages) setVillages(data.rawVillages);
+        if (data.rawVillages || data.allVillages) setVillages(data.allVillages || data.rawVillages);
         if (data.rawBanks) setBanks(data.rawBanks);
         if (data.locations) setLocations(data.locations);
       }
@@ -91,6 +106,18 @@ export default function AdminConfigPage() {
       showMessage('❌ Error loading configuration data from server.', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      }
+    } catch (e) {
+      console.error('Failed to load users:', e);
     }
   };
 
@@ -127,24 +154,22 @@ export default function AdminConfigPage() {
         variety: spec.variety,
         grade: spec.grade,
         basePrice: spec.basePrice,
-        organicBonus: spec.organicBonus,
         maxMoisture: spec.maxMoisture,
         maxForeignMatter: spec.maxForeignMatter,
-        minWholeGrain: spec.minWholeGrain ?? 75.0,
-        maxBrokenRice: spec.maxBrokenRice ?? 25.0,
+        minWholeGrain: spec.minWholeGrain ?? 70.0,
+        maxBrokenRice: spec.maxBrokenRice ?? 30.0,
         status: spec.status || 'ACTIVE',
       });
     } else {
       setEditingSpec(null);
       setSpecForm({
-        variety: '',
+        variety: 'Phka Rumduol',
         grade: 'A1',
-        basePrice: 1750,
-        organicBonus: 100,
+        basePrice: 1650,
         maxMoisture: 14.0,
         maxForeignMatter: 5.0,
-        minWholeGrain: 75.0,
-        maxBrokenRice: 25.0,
+        minWholeGrain: 70.0,
+        maxBrokenRice: 30.0,
         status: 'ACTIVE',
       });
     }
@@ -198,7 +223,7 @@ export default function AdminConfigPage() {
     });
   };
 
-  // --- CRUD: LOCATIONS & WAREHOUSES ---
+  // --- CRUD: LOCATIONS ---
   const handleOpenLocModal = (loc?: any) => {
     if (loc) {
       setEditingLoc(loc);
@@ -244,7 +269,7 @@ export default function AdminConfigPage() {
     setDeleteConfirm({
       show: true,
       title: 'Delete Location Registry',
-      description: `Are you sure you want to delete location "${loc.name}"?`,
+      description: `Are you sure you want to delete "${loc.name}"?`,
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/admin/locations?id=${loc.id}`, { method: 'DELETE' });
@@ -262,7 +287,7 @@ export default function AdminConfigPage() {
     });
   };
 
-  // --- CRUD: COMMERCIAL BANKS ---
+  // --- CRUD: BANKS ---
   const handleOpenBankModal = (bank?: any) => {
     if (bank) {
       setEditingBank(bank);
@@ -366,7 +391,7 @@ export default function AdminConfigPage() {
     setDeleteConfirm({
       show: true,
       title: 'Delete Registered Village',
-      description: `Are you sure you want to delete village "${village.name}"?`,
+      description: `Are you sure you want to delete village "${village.name}" (${village.province})?`,
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/admin/villages?id=${village.id}`, { method: 'DELETE' });
@@ -384,6 +409,96 @@ export default function AdminConfigPage() {
     });
   };
 
+  // --- CRUD: USERS & PROVINCE ASSIGNMENTS ---
+  const handleOpenUserModal = (user?: any) => {
+    if (user) {
+      setEditingUser(user);
+      const provs = user.assignedProvinces
+        ? user.assignedProvinces.split(',').map((p: string) => p.trim())
+        : ['Preah Vihear'];
+      setUserForm({
+        name: user.name,
+        email: user.email,
+        password: '',
+        role: user.role || 'FIELD',
+        status: user.status || 'ACTIVE',
+        assignedProvinces: provs,
+      });
+    } else {
+      setEditingUser(null);
+      setUserForm({
+        name: '',
+        email: '',
+        password: '',
+        role: 'FIELD',
+        status: 'ACTIVE',
+        assignedProvinces: ['Preah Vihear'],
+      });
+    }
+    setShowUserModal(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const url = editingUser ? `/api/admin/users/${editingUser.id}` : '/api/admin/users';
+      const method = editingUser ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userForm),
+      });
+
+      if (res.ok) {
+        showMessage(editingUser ? '✅ User updated & province assignment saved!' : '✅ New User created!', 'success');
+        setShowUserModal(false);
+        fetchUsers();
+      } else {
+        const err = await res.json();
+        showMessage(`❌ ${err.error || 'Failed to save user account.'}`, 'error');
+      }
+    } catch (e) {
+      showMessage('❌ Error saving user account.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = (user: any) => {
+    setDeleteConfirm({
+      show: true,
+      title: 'Delete User Account',
+      description: `Are you sure you want to delete user account "${user.name}" (${user.email})?`,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' });
+          if (res.ok) {
+            showMessage('✅ User account deleted.', 'success');
+            fetchUsers();
+          } else {
+            const err = await res.json();
+            showMessage(`❌ ${err.error || 'Failed to delete user.'}`, 'error');
+          }
+        } catch (e) {
+          showMessage('❌ Error deleting user.', 'error');
+        }
+        setDeleteConfirm((prev) => ({ ...prev, show: false }));
+      },
+    });
+  };
+
+  const toggleProvinceSelection = (prov: string) => {
+    setUserForm((prev) => {
+      const exists = prev.assignedProvinces.includes(prov);
+      if (exists) {
+        return { ...prev, assignedProvinces: prev.assignedProvinces.filter((p) => p !== prov) };
+      } else {
+        return { ...prev, assignedProvinces: [...prev.assignedProvinces, prov] };
+      }
+    });
+  };
+
   return (
     <div style={{ padding: '24px', backgroundColor: '#0F172A', color: '#F8FAFC', minHeight: '100vh', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: '1150px', margin: '0 auto' }}>
@@ -392,11 +507,14 @@ export default function AdminConfigPage() {
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#F59E0B', margin: 0 }}>⚙️ Administration & Master Configuration</h1>
             <p style={{ fontSize: '13px', color: '#94A3B8', marginTop: '4px' }}>
-              Central administration panel for purchasing prices, seed interest rates, locations, banking options, and villages.
+              Central administration panel for purchasing prices, user accounts, province assignments, locations, banking options, and villages.
             </p>
           </div>
           <button
-            onClick={fetchConfig}
+            onClick={() => {
+              fetchConfig();
+              fetchUsers();
+            }}
             style={{ padding: '10px 18px', backgroundColor: '#1E293B', color: '#38BDF8', border: '1px solid #334155', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
           >
             🔄 Refresh Settings
@@ -412,11 +530,12 @@ export default function AdminConfigPage() {
         )}
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #334155', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #334155', marginBottom: '20px', flexWrap: 'wrap' }}>
           {[
             { id: 'master', label: '🌾 Master Data & Thresholds' },
             { id: 'locations', label: '📍 Stations & Warehouses' },
             { id: 'banks', label: '💳 Commercial Banks & Villages' },
+            { id: 'users', label: '👥 User & Field Staff Management' },
             { id: 'system', label: '🏢 System Info & Currency' },
           ].map((tab) => (
             <button
@@ -448,293 +567,273 @@ export default function AdminConfigPage() {
                 {/* Seed & Scale Settings */}
                 <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
                   <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#10B981', marginBottom: '16px' }}>💰 Seed Return & Scale Tolerance Thresholds</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Seed Return Multiplier (Interest Rate)</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                    <div style={{ padding: '16px', backgroundColor: '#0F172A', borderRadius: '8px', border: '1px solid #334155' }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Seed Repayment Interest Multiplier</label>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <input
                           type="number"
                           step="0.01"
                           value={seedInterestRate}
                           onChange={(e) => setSeedInterestRate(parseFloat(e.target.value) || 1.10)}
-                          style={{ width: '100%', padding: '10px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                          style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1E293B', border: '1px solid #334155', color: '#FFF', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold' }}
                         />
                         <button
                           onClick={() => handleSaveSetting('seedInterestRate', seedInterestRate)}
-                          style={{ padding: '10px 18px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                          disabled={saving}
+                          style={{ padding: '8px 16px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                         >
                           Save
                         </button>
                       </div>
-                      <span style={{ fontSize: '11px', color: '#64748B', display: 'block', marginTop: '6px' }}>
-                        1.10 = 10% Interest Rate (e.g. 10 kg borrowed seed → 11 kg returned)
-                      </span>
+                      <p style={{ fontSize: '11px', color: '#64748B', marginTop: '6px' }}>Current: 1.10 = 10% Interest charged on seed repayment.</p>
                     </div>
 
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Max Scale Intake Variance Tolerance (%)</label>
+                    <div style={{ padding: '16px', backgroundColor: '#0F172A', borderRadius: '8px', border: '1px solid #334155' }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Scale Discrepancy Tolerance (%)</label>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <input
                           type="number"
                           step="0.1"
                           value={scaleTolerancePercent}
                           onChange={(e) => setScaleTolerancePercent(parseFloat(e.target.value) || 1.5)}
-                          style={{ width: '100%', padding: '10px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                          style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1E293B', border: '1px solid #334155', color: '#FFF', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold' }}
                         />
                         <button
                           onClick={() => handleSaveSetting('scaleTolerancePercent', scaleTolerancePercent)}
-                          style={{ padding: '10px 18px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                          disabled={saving}
+                          style={{ padding: '8px 16px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                         >
                           Save
                         </button>
                       </div>
-                      <span style={{ fontSize: '11px', color: '#64748B', display: 'block', marginTop: '6px' }}>
-                        Alerts warehouse if intake weight differs by more than {scaleTolerancePercent}% from field weight.
-                      </span>
+                      <p style={{ fontSize: '11px', color: '#64748B', marginTop: '6px' }}>Current: 1.5% max weight difference between field total and mill intake.</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Paddy Specs Table */}
+                {/* Paddy Price Specifications */}
                 <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#F59E0B', margin: 0 }}>🌾 Master Paddy Varieties & Quality Price Specifications</h3>
                     <button
                       onClick={() => handleOpenSpecModal()}
-                      style={{ padding: '8px 16px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                      style={{ padding: '8px 14px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
                     >
-                      + Add New Paddy Price Spec
+                      + Add New Price Spec
                     </button>
                   </div>
 
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', textAlign: 'left' }}>
-                        <th style={{ padding: '12px' }}>Variety</th>
-                        <th style={{ padding: '12px' }}>Grade</th>
-                        <th style={{ padding: '12px' }}>Base Price (KHR/kg)</th>
-                        <th style={{ padding: '12px' }}>Organic Bonus (KHR)</th>
-                        <th style={{ padding: '12px' }}>Max Moisture</th>
-                        <th style={{ padding: '12px' }}>Max Foreign Matter</th>
-                        <th style={{ padding: '12px' }}>Status</th>
-                        <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paddySpecs.map((item) => (
-                        <tr key={item.id} style={{ borderBottom: '1px solid #334155' }}>
-                          <td style={{ padding: '12px', fontWeight: 'bold', color: '#10B981' }}>{item.variety}</td>
-                          <td style={{ padding: '12px' }}>{item.grade}</td>
-                          <td style={{ padding: '12px', fontWeight: 'bold', color: '#38BDF8' }}>{item.basePrice} KHR</td>
-                          <td style={{ padding: '12px' }}>+{item.organicBonus} KHR</td>
-                          <td style={{ padding: '12px' }}>{item.maxMoisture}%</td>
-                          <td style={{ padding: '12px' }}>{item.maxForeignMatter}%</td>
-                          <td style={{ padding: '12px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: '4px', backgroundColor: item.status === 'ACTIVE' ? '#065F46' : '#7F1D1D', color: '#FFF', fontSize: '10px', fontWeight: 'bold' }}>
-                              {item.status || 'ACTIVE'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px', textAlign: 'right' }}>
-                            <button
-                              onClick={() => handleOpenSpecModal(item)}
-                              style={{ padding: '4px 10px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '6px', fontSize: '11px' }}
-                            >
-                              ✏️ Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSpec(item)}
-                              style={{ padding: '4px 10px', backgroundColor: '#7F1D1D', color: '#FFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
-                            >
-                              🗑️ Delete
-                            </button>
-                          </td>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                          <th style={{ padding: '10px' }}>Variety</th>
+                          <th style={{ padding: '10px' }}>Grade</th>
+                          <th style={{ padding: '10px' }}>Base Price (KHR/kg)</th>
+                          <th style={{ padding: '10px' }}>Max Moisture %</th>
+                          <th style={{ padding: '10px' }}>Max Foreign Matter %</th>
+                          <th style={{ padding: '10px' }}>Status</th>
+                          <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {paddySpecs.map((spec) => (
+                          <tr key={spec.id} style={{ borderBottom: '1px solid #334155' }}>
+                            <td style={{ padding: '10px', fontWeight: 'bold', color: '#FFF' }}>{spec.variety}</td>
+                            <td style={{ padding: '10px' }}><span style={{ padding: '2px 8px', backgroundColor: '#3B82F620', color: '#60A5FA', borderRadius: '4px', fontWeight: 'bold' }}>{spec.grade}</span></td>
+                            <td style={{ padding: '10px', fontWeight: 'bold', color: '#F59E0B' }}>{spec.basePrice?.toLocaleString()} KHR</td>
+                            <td style={{ padding: '10px' }}>{spec.maxMoisture}%</td>
+                            <td style={{ padding: '10px' }}>{spec.maxForeignMatter}%</td>
+                            <td style={{ padding: '10px' }}><span style={{ color: spec.status === 'ACTIVE' ? '#34D399' : '#F87171', fontWeight: 'bold' }}>{spec.status}</span></td>
+                            <td style={{ padding: '10px', textAlign: 'right' }}>
+                              <button onClick={() => handleOpenSpecModal(spec)} style={{ padding: '4px 10px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '6px' }}>Edit</button>
+                              <button onClick={() => handleDeleteSpec(spec)} style={{ padding: '4px 10px', backgroundColor: '#7F1D1D', color: '#F87171', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* TAB 2: LOCATIONS & WAREHOUSES */}
+            {/* TAB 2: STATIONS & WAREHOUSES */}
             {activeTab === 'locations' && (
               <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#38BDF8', margin: 0 }}>📍 Loading Stations & Destination Warehouses</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#38BDF8', margin: 0 }}>📍 Buying Stations & Destination Warehouses</h3>
                   <button
                     onClick={() => handleOpenLocModal()}
-                    style={{ padding: '8px 16px', backgroundColor: '#38BDF8', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                    style={{ padding: '8px 14px', backgroundColor: '#38BDF8', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
                   >
                     + Add New Location
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                  {/* Buying Stations */}
-                  <div>
-                    <h4 style={{ fontSize: '14px', color: '#F59E0B', marginBottom: '12px' }}>Buying Stations (Loading Points)</h4>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', textAlign: 'left' }}>
-                          <th style={{ padding: '8px' }}>Station Name</th>
-                          <th style={{ padding: '8px' }}>Code</th>
-                          <th style={{ padding: '8px', textAlign: 'right' }}>Actions</th>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                        <th style={{ padding: '10px' }}>Location Name</th>
+                        <th style={{ padding: '10px' }}>Type</th>
+                        <th style={{ padding: '10px' }}>Code</th>
+                        <th style={{ padding: '10px' }}>Status</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {locations.map((loc) => (
+                        <tr key={loc.id} style={{ borderBottom: '1px solid #334155' }}>
+                          <td style={{ padding: '10px', fontWeight: 'bold', color: '#FFF' }}>{loc.name}</td>
+                          <td style={{ padding: '10px' }}>
+                            <span style={{ padding: '2px 8px', backgroundColor: loc.type === 'WAREHOUSE' ? '#8B5CF620' : '#10B98120', color: loc.type === 'WAREHOUSE' ? '#C084FC' : '#34D399', borderRadius: '4px', fontWeight: 'bold' }}>
+                              {loc.type === 'WAREHOUSE' ? 'Central Warehouse' : 'Buying Station'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px', color: '#94A3B8' }}>{loc.code || '—'}</td>
+                          <td style={{ padding: '10px' }}><span style={{ color: loc.status === 'ACTIVE' ? '#34D399' : '#F87171', fontWeight: 'bold' }}>{loc.status}</span></td>
+                          <td style={{ padding: '10px', textAlign: 'right' }}>
+                            <button onClick={() => handleOpenLocModal(loc)} style={{ padding: '4px 10px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '6px' }}>Edit</button>
+                            <button onClick={() => handleDeleteLoc(loc)} style={{ padding: '4px 10px', backgroundColor: '#7F1D1D', color: '#F87171', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Delete</button>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {locations
-                          .filter((l) => l.type === 'BUYING_STATION')
-                          .map((loc) => (
-                            <tr key={loc.id} style={{ borderBottom: '1px solid #334155' }}>
-                              <td style={{ padding: '8px', fontWeight: 'bold' }}>🏢 {loc.name}</td>
-                              <td style={{ padding: '8px', color: '#94A3B8' }}>{loc.code || '-'}</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>
-                                <button
-                                  onClick={() => handleOpenLocModal(loc)}
-                                  style={{ padding: '2px 8px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', fontSize: '10px' }}
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteLoc(loc)}
-                                  style={{ padding: '2px 8px', backgroundColor: '#7F1D1D', color: '#FFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
-                                >
-                                  🗑️
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Warehouses */}
-                  <div>
-                    <h4 style={{ fontSize: '14px', color: '#10B981', marginBottom: '12px' }}>Destination Warehouses</h4>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', textAlign: 'left' }}>
-                          <th style={{ padding: '8px' }}>Warehouse Name</th>
-                          <th style={{ padding: '8px' }}>Code</th>
-                          <th style={{ padding: '8px', textAlign: 'right' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {locations
-                          .filter((l) => l.type === 'WAREHOUSE')
-                          .map((loc) => (
-                            <tr key={loc.id} style={{ borderBottom: '1px solid #334155' }}>
-                              <td style={{ padding: '8px', fontWeight: 'bold' }}>🏭 {loc.name}</td>
-                              <td style={{ padding: '8px', color: '#94A3B8' }}>{loc.code || '-'}</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>
-                                <button
-                                  onClick={() => handleOpenLocModal(loc)}
-                                  style={{ padding: '2px 8px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', fontSize: '10px' }}
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteLoc(loc)}
-                                  style={{ padding: '2px 8px', backgroundColor: '#7F1D1D', color: '#FFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
-                                >
-                                  🗑️
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
 
             {/* TAB 3: BANKS & VILLAGES */}
             {activeTab === 'banks' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                {/* Banks Section */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '24px' }}>
+                {/* Villages Card */}
                 <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#38BDF8', margin: 0 }}>💳 Commercial Banks</h3>
-                    <button
-                      onClick={() => handleOpenBankModal()}
-                      style={{ padding: '6px 14px', backgroundColor: '#38BDF8', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
-                    >
-                      + Add Bank
-                    </button>
-                  </div>
-
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', textAlign: 'left' }}>
-                        <th style={{ padding: '8px' }}>Bank Name</th>
-                        <th style={{ padding: '8px' }}>Code</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {banks.map((b) => (
-                        <tr key={b.id} style={{ borderBottom: '1px solid #334155' }}>
-                          <td style={{ padding: '8px', fontWeight: 'bold' }}>🏦 {b.name}</td>
-                          <td style={{ padding: '8px', color: '#94A3B8' }}>{b.code || '-'}</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>
-                            <button
-                              onClick={() => handleOpenBankModal(b)}
-                              style={{ padding: '2px 8px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', fontSize: '10px' }}
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => handleDeleteBank(b)}
-                              style={{ padding: '2px 8px', backgroundColor: '#7F1D1D', color: '#FFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
-                            >
-                              🗑️
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Villages Section */}
-                <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#10B981', margin: 0 }}>🏡 Target Villages</h3>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#10B981', margin: 0 }}>🏡 Registered Target Villages</h3>
                     <button
                       onClick={() => handleOpenVillageModal()}
-                      style={{ padding: '6px 14px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                      style={{ padding: '6px 12px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px', cursor: 'pointer' }}
                     >
                       + Add Village
                     </button>
                   </div>
 
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <div style={{ overflowY: 'auto', maxHeight: '400px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                          <th style={{ padding: '8px', textAlign: 'left' }}>Village Name</th>
+                          <th style={{ padding: '8px', textAlign: 'left' }}>Province</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {villages.map((v) => (
+                          <tr key={v.id} style={{ borderBottom: '1px solid #334155' }}>
+                            <td style={{ padding: '8px', color: '#FFF', fontWeight: 'bold' }}>{v.name}</td>
+                            <td style={{ padding: '8px', color: '#38BDF8' }}>{v.province || 'Preah Vihear'}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                              <button onClick={() => handleOpenVillageModal(v)} style={{ padding: '3px 8px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>Edit</button>
+                              <button onClick={() => handleDeleteVillage(v)} style={{ padding: '3px 8px', backgroundColor: '#7F1D1D', color: '#F87171', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Banks Card */}
+                <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#38BDF8', margin: 0 }}>💳 Commercial Banks</h3>
+                    <button
+                      onClick={() => handleOpenBankModal()}
+                      style={{ padding: '6px 12px', backgroundColor: '#38BDF8', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px', cursor: 'pointer' }}
+                    >
+                      + Add Bank
+                    </button>
+                  </div>
+
+                  <div style={{ overflowY: 'auto', maxHeight: '400px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                          <th style={{ padding: '8px', textAlign: 'left' }}>Bank Name</th>
+                          <th style={{ padding: '8px', textAlign: 'left' }}>Code</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {banks.map((b) => (
+                          <tr key={b.id} style={{ borderBottom: '1px solid #334155' }}>
+                            <td style={{ padding: '8px', color: '#FFF', fontWeight: 'bold' }}>{b.name}</td>
+                            <td style={{ padding: '8px', color: '#94A3B8' }}>{b.code || '—'}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                              <button onClick={() => handleOpenBankModal(b)} style={{ padding: '3px 8px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>Edit</button>
+                              <button onClick={() => handleDeleteBank(b)} style={{ padding: '3px 8px', backgroundColor: '#7F1D1D', color: '#F87171', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: USER & FIELD STAFF MANAGEMENT */}
+            {activeTab === 'users' && (
+              <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#F59E0B', margin: 0 }}>👥 User Accounts & Field Staff Province Assignments</h3>
+                    <p style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>Manage 24 field staff and assign specific provinces to restrict inspector village lists.</p>
+                  </div>
+                  <button
+                    onClick={() => handleOpenUserModal()}
+                    style={{ padding: '8px 14px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
+                  >
+                    + Add New User Account
+                  </button>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
                     <thead>
-                      <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', textAlign: 'left' }}>
-                        <th style={{ padding: '8px' }}>Village Name</th>
-                        <th style={{ padding: '8px' }}>District</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Actions</th>
+                      <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                        <th style={{ padding: '10px' }}>Full Name</th>
+                        <th style={{ padding: '10px' }}>Email / Username</th>
+                        <th style={{ padding: '10px' }}>Role</th>
+                        <th style={{ padding: '10px' }}>Assigned Provinces</th>
+                        <th style={{ padding: '10px' }}>Status</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {villages.map((v) => (
-                        <tr key={v.id} style={{ borderBottom: '1px solid #334155' }}>
-                          <td style={{ padding: '8px', fontWeight: 'bold', color: '#10B981' }}>📍 {v.name}</td>
-                          <td style={{ padding: '8px', color: '#94A3B8' }}>{v.district || 'Chhaeb'} ({v.province || 'PVH'})</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>
-                            <button
-                              onClick={() => handleOpenVillageModal(v)}
-                              style={{ padding: '2px 8px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', fontSize: '10px' }}
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => handleDeleteVillage(v)}
-                              style={{ padding: '2px 8px', backgroundColor: '#7F1D1D', color: '#FFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
-                            >
-                              🗑️
-                            </button>
+                      {users.map((u) => (
+                        <tr key={u.id} style={{ borderBottom: '1px solid #334155' }}>
+                          <td style={{ padding: '10px', fontWeight: 'bold', color: '#FFF' }}>{u.name}</td>
+                          <td style={{ padding: '10px', color: '#38BDF8' }}>{u.email}</td>
+                          <td style={{ padding: '10px' }}>
+                            <span style={{ padding: '2px 8px', backgroundColor: u.role === 'ADMIN' ? '#EF444420' : u.role === 'FIELD' ? '#10B98120' : '#F59E0B20', color: u.role === 'ADMIN' ? '#F87171' : u.role === 'FIELD' ? '#34D399' : '#FBBF24', borderRadius: '4px', fontWeight: 'bold' }}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px' }}>
+                            {u.assignedProvinces ? (
+                              <span style={{ color: '#C084FC', fontWeight: 'bold' }}>{u.assignedProvinces}</span>
+                            ) : (
+                              <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>All Provinces</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px' }}><span style={{ color: u.status === 'ACTIVE' ? '#34D399' : '#F87171', fontWeight: 'bold' }}>{u.status}</span></td>
+                          <td style={{ padding: '10px', textAlign: 'right' }}>
+                            <button onClick={() => handleOpenUserModal(u)} style={{ padding: '4px 10px', backgroundColor: '#334155', color: '#38BDF8', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '6px' }}>Edit / Reassign</button>
+                            <button onClick={() => handleDeleteUser(u)} style={{ padding: '4px 10px', backgroundColor: '#7F1D1D', color: '#F87171', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Delete</button>
                           </td>
                         </tr>
                       ))}
@@ -744,81 +843,22 @@ export default function AdminConfigPage() {
               </div>
             )}
 
-            {/* TAB 4: SYSTEM INFO & CURRENCY */}
+            {/* TAB 5: SYSTEM INFO & CURRENCY */}
             {activeTab === 'system' && (
               <div style={{ padding: '20px', backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #334155' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#F59E0B', marginBottom: '16px' }}>🏢 System Information & Currency Parameters</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Organization Name</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="text"
-                        value={orgName}
-                        onChange={(e) => setOrgName(e.target.value)}
-                        style={{ width: '100%', padding: '10px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                      />
-                      <button
-                        onClick={() => handleSaveSetting('orgName', orgName)}
-                        style={{ padding: '10px 16px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        Save
-                      </button>
-                    </div>
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#EC4899', marginBottom: '16px' }}>🏢 System Organization & Parameters</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                  <div style={{ padding: '16px', backgroundColor: '#0F172A', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Organization Name</label>
+                    <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: '#1E293B', border: '1px solid #334155', color: '#FFF', borderRadius: '6px', fontWeight: 'bold' }} />
                   </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Default Currency Symbol</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="text"
-                        value={defaultCurrency}
-                        onChange={(e) => setDefaultCurrency(e.target.value)}
-                        style={{ width: '100%', padding: '10px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                      />
-                      <button
-                        onClick={() => handleSaveSetting('defaultCurrency', defaultCurrency)}
-                        style={{ padding: '10px 16px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        Save
-                      </button>
-                    </div>
+                  <div style={{ padding: '16px', backgroundColor: '#0F172A', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Default Currency Symbol</label>
+                    <input type="text" value={defaultCurrency} readOnly style={{ width: '100%', padding: '8px', backgroundColor: '#1E293B', border: '1px solid #334155', color: '#F59E0B', borderRadius: '6px', fontWeight: 'bold' }} />
                   </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Measurement Unit</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="text"
-                        value={measurementUnit}
-                        onChange={(e) => setMeasurementUnit(e.target.value)}
-                        style={{ width: '100%', padding: '10px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                      />
-                      <button
-                        onClick={() => handleSaveSetting('measurementUnit', measurementUnit)}
-                        style={{ padding: '10px 16px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Offline Mobile Sync Retention (Days)</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="number"
-                        value={offlineSyncDays}
-                        onChange={(e) => setOfflineSyncDays(parseInt(e.target.value) || 30)}
-                        style={{ width: '100%', padding: '10px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                      />
-                      <button
-                        onClick={() => handleSaveSetting('offlineSyncPeriodDays', offlineSyncDays)}
-                        style={{ padding: '10px 16px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        Save
-                      </button>
-                    </div>
+                  <div style={{ padding: '16px', backgroundColor: '#0F172A', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Weight Unit</label>
+                    <input type="text" value={measurementUnit} readOnly style={{ width: '100%', padding: '8px', backgroundColor: '#1E293B', border: '1px solid #334155', color: '#10B981', borderRadius: '6px', fontWeight: 'bold' }} />
                   </div>
                 </div>
               </div>
@@ -826,38 +866,40 @@ export default function AdminConfigPage() {
           </div>
         )}
 
-        {/* MODAL 1: Paddy Price Spec Form */}
+        {/* MODAL 1: Price Spec Form */}
         {showSpecModal && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-            <div style={{ backgroundColor: '#1E293B', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '500px', border: '1px solid #334155' }}>
-              <h3 style={{ color: '#F59E0B', margin: '0 0 16px 0' }}>{editingSpec ? 'Edit Paddy Price Specification' : 'Add New Paddy Price Specification'}</h3>
+            <div style={{ backgroundColor: '#1E293B', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '450px', border: '1px solid #334155' }}>
+              <h3 style={{ color: '#F59E0B', margin: '0 0 16px 0' }}>{editingSpec ? 'Edit Paddy Price Spec' : 'Add New Paddy Price Spec'}</h3>
               <form onSubmit={handleSaveSpec}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Variety Name *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Phka Rumduol"
-                      value={specForm.variety}
-                      onChange={(e) => setSpecForm({ ...specForm, variety: e.target.value })}
-                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Grade *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. A1"
-                      value={specForm.grade}
-                      onChange={(e) => setSpecForm({ ...specForm, grade: e.target.value })}
-                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                    />
-                  </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Paddy Variety *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Phka Rumduol"
+                    value={specForm.variety}
+                    onChange={(e) => setSpecForm({ ...specForm, variety: e.target.value })}
+                    style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                  />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Grade *</label>
+                    <select
+                      value={specForm.grade}
+                      onChange={(e) => setSpecForm({ ...specForm, grade: e.target.value })}
+                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                    >
+                      <option value="A1">A1</option>
+                      <option value="A2">A2</option>
+                      <option value="B1">B1</option>
+                      <option value="B2">B2</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                    </select>
+                  </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Base Price (KHR/kg) *</label>
                     <input
@@ -865,38 +907,6 @@ export default function AdminConfigPage() {
                       required
                       value={specForm.basePrice}
                       onChange={(e) => setSpecForm({ ...specForm, basePrice: parseFloat(e.target.value) || 0 })}
-                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Organic Bonus (KHR)</label>
-                    <input
-                      type="number"
-                      value={specForm.organicBonus}
-                      onChange={(e) => setSpecForm({ ...specForm, organicBonus: parseFloat(e.target.value) || 0 })}
-                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Max Moisture (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={specForm.maxMoisture}
-                      onChange={(e) => setSpecForm({ ...specForm, maxMoisture: parseFloat(e.target.value) || 14.0 })}
-                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Max Foreign Matter (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={specForm.maxForeignMatter}
-                      onChange={(e) => setSpecForm({ ...specForm, maxForeignMatter: parseFloat(e.target.value) || 5.0 })}
                       style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
                     />
                   </div>
@@ -922,7 +932,7 @@ export default function AdminConfigPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Choam Ksant Station"
+                    placeholder="e.g. CACC (KPT)"
                     value={locForm.name}
                     onChange={(e) => setLocForm({ ...locForm, name: e.target.value })}
                     style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
@@ -939,17 +949,6 @@ export default function AdminConfigPage() {
                     <option value="BUYING_STATION">Buying Station (Field Loading)</option>
                     <option value="WAREHOUSE">Central Destination Warehouse</option>
                   </select>
-                </div>
-
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Location Code (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. STN-CKS"
-                    value={locForm.code}
-                    onChange={(e) => setLocForm({ ...locForm, code: e.target.value })}
-                    style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                  />
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -979,16 +978,6 @@ export default function AdminConfigPage() {
                   />
                 </div>
 
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Bank Short Code (e.g. ACL)</label>
-                  <input
-                    type="text"
-                    value={bankForm.code}
-                    onChange={(e) => setBankForm({ ...bankForm, code: e.target.value })}
-                    style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
-                  />
-                </div>
-
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                   <button type="button" onClick={() => setShowBankModal(false)} style={{ padding: '8px 16px', backgroundColor: '#334155', color: '#FFF', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancel</button>
                   <button type="submit" disabled={saving} style={{ padding: '8px 16px', backgroundColor: '#38BDF8', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Save Bank</button>
@@ -998,7 +987,7 @@ export default function AdminConfigPage() {
           </div>
         )}
 
-        {/* MODAL 4: Village Form */}
+        {/* MODAL 4: Village Form with Province Selection */}
         {showVillageModal && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
             <div style={{ backgroundColor: '#1E293B', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '400px', border: '1px solid #334155' }}>
@@ -1016,6 +1005,19 @@ export default function AdminConfigPage() {
                   />
                 </div>
 
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Province *</label>
+                  <select
+                    value={villageForm.province}
+                    onChange={(e) => setVillageForm({ ...villageForm, province: e.target.value })}
+                    style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                  >
+                    {availableProvinces.map((prov) => (
+                      <option key={prov} value={prov}>{prov}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>District</label>
                   <input
@@ -1029,6 +1031,108 @@ export default function AdminConfigPage() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                   <button type="button" onClick={() => setShowVillageModal(false)} style={{ padding: '8px 16px', backgroundColor: '#334155', color: '#FFF', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancel</button>
                   <button type="submit" disabled={saving} style={{ padding: '8px 16px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Save Village</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 5: User & Field Staff Province Assignment Form */}
+        {showUserModal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+            <div style={{ backgroundColor: '#1E293B', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '480px', border: '1px solid #334155' }}>
+              <h3 style={{ color: '#F59E0B', margin: '0 0 16px 0' }}>{editingUser ? 'Edit Staff Account & Provinces' : 'Add New Staff Account'}</h3>
+              <form onSubmit={handleSaveUser}>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sokha Inspector"
+                    value={userForm.name}
+                    onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+                    style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Username / Email *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="field1@ibisrice.org"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Password {editingUser ? '(Leave blank to keep)' : '*'}</label>
+                    <input
+                      type="password"
+                      required={!editingUser}
+                      placeholder={editingUser ? '••••••••' : 'Password'}
+                      value={userForm.password}
+                      onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Role *</label>
+                    <select
+                      value={userForm.role}
+                      onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                    >
+                      <option value="FIELD">FIELD (Inspector)</option>
+                      <option value="WAREHOUSE">WAREHOUSE (Scale Operator)</option>
+                      <option value="FINANCE">FINANCE (Treasury)</option>
+                      <option value="ADMIN">ADMIN (Full Access)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Account Status</label>
+                    <select
+                      value={userForm.status}
+                      onChange={(e) => setUserForm({ ...userForm, status: e.target.value })}
+                      style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                    >
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="INACTIVE">INACTIVE</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Assigned Provinces Section */}
+                <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#0F172A', borderRadius: '8px', border: '1px solid #334155' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#F59E0B', fontWeight: 'bold', marginBottom: '6px' }}>
+                    📍 Assigned Provinces for Inspector Village Filter:
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {availableProvinces.map((prov) => {
+                      const checked = userForm.assignedProvinces.includes(prov);
+                      return (
+                        <label key={prov} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#FFF', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProvinceSelection(prov)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span>{prov}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button type="button" onClick={() => setShowUserModal(false)} style={{ padding: '8px 16px', backgroundColor: '#334155', color: '#FFF', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancel</button>
+                  <button type="submit" disabled={saving} style={{ padding: '8px 16px', backgroundColor: '#F59E0B', color: '#0F172A', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Save User</button>
                 </div>
               </form>
             </div>

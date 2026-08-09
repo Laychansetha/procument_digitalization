@@ -8,6 +8,7 @@ interface PurchaseSelectorModalProps {
   onClose: () => void;
   onConfirm: (selectedPurchases: any[]) => void;
   alreadySelectedIds?: string[];
+  editingTransportId?: string;
 }
 
 export default function PurchaseSelectorModal({
@@ -15,6 +16,7 @@ export default function PurchaseSelectorModal({
   onClose,
   onConfirm,
   alreadySelectedIds = [],
+  editingTransportId,
 }: PurchaseSelectorModalProps) {
   const [unassignedList, setUnassignedList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,12 +28,15 @@ export default function PurchaseSelectorModal({
       fetchUnassigned();
       setSelectedIds(alreadySelectedIds);
     }
-  }, [isOpen]);
+  }, [isOpen, editingTransportId]);
 
   const fetchUnassigned = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/purchases/unassigned');
+      const url = editingTransportId
+        ? `/api/purchases/unassigned?editingTransportId=${editingTransportId}`
+        : '/api/purchases/unassigned';
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setUnassignedList(data);

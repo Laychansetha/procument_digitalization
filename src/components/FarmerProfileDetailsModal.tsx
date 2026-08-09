@@ -1,6 +1,7 @@
 'use client';
 
 import { X, Edit, CreditCard, UserCheck, Image } from 'lucide-react';
+import { formatImageSrc } from '@/lib/image-utils';
 
 interface FarmerProfileDetailsModalProps {
   isOpen: boolean;
@@ -101,15 +102,15 @@ export default function FarmerProfileDetailsModal({
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Image className="w-4 h-4" /> Bank Passbook / Paper Document Photo
             </div>
-            {profile.bankDocumentUrl ? (
+            {formatImageSrc(profile.bankDocumentUrl) ? (
               <div className="space-y-2">
                 <img
-                  src={profile.bankDocumentUrl}
+                  src={formatImageSrc(profile.bankDocumentUrl)}
                   alt="Bank Document"
                   className="w-full h-48 object-cover rounded-xl border border-white/20 shadow-md"
                 />
                 <a
-                  href={profile.bankDocumentUrl}
+                  href={formatImageSrc(profile.bankDocumentUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[11px] text-sky-400 hover:underline font-bold inline-block"

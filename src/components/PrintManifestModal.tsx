@@ -63,8 +63,8 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
                 <p><strong className="text-slate-600">{t.dateTime}</strong> {new Date(transport.createdAt).toLocaleString()}</p>
               </div>
               <div>
-                <p><strong className="text-slate-600">{t.loadingStation}</strong> {transport.loadingLocation || 'Chhaeb Buying Station'}</p>
-                <p><strong className="text-slate-600">{t.destinationWarehouse}</strong> {transport.destinationWarehouse || 'Central Mill Warehouse'}</p>
+                <p><strong className="text-slate-600">{t.loadingStation}</strong> {transport.loadingLocation || 'Preah Vihear'}</p>
+                <p><strong className="text-slate-600">{t.destinationWarehouse}</strong> {transport.destinationWarehouse || 'CACC (KPT)'}</p>
                 <p><strong className="text-slate-600">{t.sacks}:</strong> {transport.totalSacks} Sacks</p>
                 <p><strong className="text-slate-600">{t.totalFieldWeight}</strong> <span className="font-mono font-bold text-emerald-800">{transport.totalFieldWeight.toFixed(2)} kg</span></p>
               </div>

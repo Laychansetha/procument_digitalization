@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { formatImageSrc } from '@/lib/image-utils';
 import {
   Search,
   CreditCard,
@@ -2212,6 +2213,7 @@ export default function OperationsDashboard() {
           isOpen={isPurchaseSelectorOpen}
           onClose={() => setIsPurchaseSelectorOpen(false)}
           alreadySelectedIds={selectedPurchasesForTruck.map((p) => p.id)}
+          editingTransportId={editingTransportId || undefined}
           onConfirm={(selectedList) => setSelectedPurchasesForTruck(selectedList)}
         />
 
@@ -2327,7 +2329,7 @@ export default function OperationsDashboard() {
                 IBIS RICE CONSERVATION CO., LTD
               </h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                Integrated Paddy Operations · Role-Based Workflow Portal
+                Central Operations · Integrated Paddy Operations & Field Department Portal
               </p>
             </div>
           </div>
@@ -2838,9 +2840,9 @@ export default function OperationsDashboard() {
 
             {/* TAB 2: FARMER PAYMENT INFO */}
             {fieldTab === 'payment' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-stretch">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
                 {/* Left Column: Farmer Payment Profile Registration & Live Registry Metrics */}
-                <div className="lg:col-span-7 bg-[#141c2f] border border-white/10 rounded-2xl p-5 sm:p-6 flex flex-col justify-between h-full space-y-4">
+                <div className="lg:col-span-7 bg-[#141c2f] border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
                       <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -3145,8 +3147,8 @@ export default function OperationsDashboard() {
                 </div>
 
                 {/* Profiles Database Sidebar */}
-                <div className="lg:col-span-5 bg-[#141c2f] border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between h-full space-y-3">
-                  <div className="space-y-3 flex-1 flex flex-col min-h-0">
+                <div className="lg:col-span-5 bg-[#141c2f] border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3">
+                  <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-white/10 pb-3">
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-bold text-white">Registered Payment Profiles</h3>
@@ -3176,7 +3178,7 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 flex-1 h-0 min-h-0 overflow-y-auto pr-1">
+                    <div className="space-y-2 min-h-[320px] max-h-[460px] xl:max-h-[475px] overflow-y-auto pr-1">
                       {filteredFarmerProfiles.length === 0 ? (
                         <div className="text-center py-8 text-slate-500 text-xs">
                           {farmerProfileSearchQuery
@@ -3185,7 +3187,7 @@ export default function OperationsDashboard() {
                         </div>
                       ) : (
                         filteredFarmerProfiles.map((p) => (
-                          <div key={p.id} className="p-3 bg-white/5 border border-white/10 rounded-xl text-xs space-y-1">
+                          <div key={p.id} className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-xs space-y-1 hover:border-white/20 transition-colors">
                             <div className="flex items-center justify-between">
                               <span className="font-extrabold text-sky-400">🆔 {p.familyCode}</span>
                               <div className="flex items-center gap-1.5">
@@ -3246,7 +3248,7 @@ export default function OperationsDashboard() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-white/10 pb-3">
                     <div>
                       <h2 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
-                        🌾 Paddy Purchase Items & Sack-by-Sack Weighing
+                        🌾 Weighing & Purchase Invoice
                       </h2>
                       <p className="text-[11px] text-slate-400 mt-0.5">
                         Select approved Specs Record, weigh sacks individually, add premiums, and sign electronically.
@@ -3854,7 +3856,7 @@ export default function OperationsDashboard() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-white/10 pb-3">
                     <div>
                       <h2 className="text-sm sm:text-base font-extrabold text-[#38bdf8] flex items-center gap-2">
-                        🚛 Create Transport Dispatch Record & Multi-Purchase Truck Manifest
+                        🚛 Loading and Transport
                       </h2>
                       <p className="text-[11px] text-slate-400 mt-0.5">
                         Load completed farmer purchase records onto a truck and dispatch to warehouse.
@@ -4053,7 +4055,7 @@ export default function OperationsDashboard() {
                           className="w-4 h-4 accent-sky-500 cursor-pointer"
                         />
                         <label htmlFor="truckCleanedCheck" className="font-bold text-white cursor-pointer">
-                          Truck Sanitized & Organic Cargo Inspection Passed
+                          Truck Cleaning
                         </label>
                       </div>
                       <span className="text-[10px] text-slate-400">Inspected by {currentUserName}</span>
@@ -4071,7 +4073,7 @@ export default function OperationsDashboard() {
                       <Truck className="w-5 h-5" />
                       {editingTransportId
                         ? `Update Transport Record (TR-2026-${editingTransportId.slice(-6).toUpperCase()})`
-                        : `Dispatch Truck Manifest & Assign ${selectedPurchasesForTruck.length} Purchases "IN_TRANSIT"`}
+                        : `Save Transport Record (${selectedPurchasesForTruck.length} Purchases)`}
                     </button>
                   </form>
                 </div>

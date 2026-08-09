@@ -1,6 +1,6 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 generator client {
@@ -15,15 +15,16 @@ enum Role {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  password     String
-  role         Role      @default(FIELD)
-  status       String    @default("ACTIVE")
-  lastLogin    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  password          String
+  role              Role      @default(FIELD)
+  assignedProvinces String?   @default("Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri")
+  status            String    @default("ACTIVE")
+  lastLogin         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   farmerProfiles  FarmerProfile[]
   specsRecords    SpecsRecord[]
@@ -75,7 +76,6 @@ model PaddyPriceSpec {
   variety          String
   grade            String
   basePrice        Float    // KHR/kg
-  organicBonus     Float    @default(100) // KHR/kg
   maxMoisture      Float    @default(14.0) // Max allowed moisture %
   maxForeignMatter Float    @default(5.0)  // Max allowed foreign matter %
   minWholeGrain    Float?   @default(70.0) // Min whole grain %
@@ -126,7 +126,6 @@ model SpecsRecord {
   brokenRice           Float?
   isValid              Boolean
   basePrice            Float
-  organicBonus         Float
   finalPrice           Float
   bestQualifyingGrade  String?
   createdBy            String
@@ -148,7 +147,6 @@ model PurchaseRecord {
   seedBorrowed        Float            @default(0)
   seedRepayment       Float            @default(0)
   seedDeduction       Float            @default(0)
-  premiumDescription  String?
   additionalPremium   Float            @default(0)
   netPayment          Float
   signatureFarmer     String?          // Digital electronic signature of farmer

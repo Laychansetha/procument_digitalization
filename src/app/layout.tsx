@@ -6,7 +6,7 @@ import Providers from '@/components/Providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'IBIS RICE — Operations Portal (Field, Warehouse & Finance)',
+  title: 'Operations Portal',
   description: 'Integrated Paddy Operations System for Specs, Payments, Purchases, Transport & Warehouse Receiving',
   icons: {
     icon: '/logo.png',

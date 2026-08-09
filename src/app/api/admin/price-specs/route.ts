@@ -31,7 +31,6 @@ export async function POST(request: Request) {
       variety,
       grade,
       basePrice,
-      organicBonus,
       maxMoisture,
       maxForeignMatter,
       minWholeGrain,
@@ -55,7 +54,6 @@ export async function POST(request: Request) {
           variety: trimmedVariety,
           grade: trimmedGrade,
           basePrice: parseFloat(basePrice),
-          organicBonus: parseFloat(organicBonus) || 0,
           maxMoisture: parseFloat(maxMoisture) || 14.0,
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
           minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
@@ -73,7 +71,6 @@ export async function POST(request: Request) {
         },
         update: {
           basePrice: parseFloat(basePrice),
-          organicBonus: parseFloat(organicBonus) || 0,
           maxMoisture: parseFloat(maxMoisture) || 14.0,
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
           minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
@@ -84,7 +81,6 @@ export async function POST(request: Request) {
           variety: trimmedVariety,
           grade: trimmedGrade,
           basePrice: parseFloat(basePrice),
-          organicBonus: parseFloat(organicBonus) || 0,
           maxMoisture: parseFloat(maxMoisture) || 14.0,
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
           minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
@@ -103,7 +99,7 @@ export async function POST(request: Request) {
         action: 'CONFIG',
         entityType: 'PaddyPriceSpec',
         entityId: priceSpec.id,
-        details: JSON.stringify({ variety: trimmedVariety, grade: trimmedGrade, basePrice, organicBonus }),
+        details: JSON.stringify({ variety: trimmedVariety, grade: trimmedGrade, basePrice }),
       },
     });
 

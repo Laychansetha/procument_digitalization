@@ -1,5 +1,5 @@
 @echo off
-title IBIS RICE Operations - Local Production Launcher
+title IBIS RICE Operations Local Production Launcher
 color 0A
 cls
 echo ======================================================================
@@ -9,7 +9,7 @@ echo.
 echo [1/3] Verifying uploads directory...
 if not exist "public\uploads" mkdir "public\uploads"
 
-echo [2/3] Running automatic database migration & seed check...
+echo [2/3] Running automatic database migration and seed check...
 call npx prisma db push --skip-generate
 call npx tsx prisma/seed.ts
 

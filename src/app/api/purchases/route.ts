@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
+import { processAndSaveImage } from '@/lib/image-upload-server';
 
 export async function GET() {
   try {
@@ -29,7 +30,6 @@ export async function POST(request: Request) {
       items,
       seedBorrowed,
       seedDeduction,
-      premiumDescription,
       additionalPremium,
       signatureFarmer,
       signatureStaff,
@@ -65,6 +65,9 @@ export async function POST(request: Request) {
       }
     }
 
+    const savedFarmerSig = await processAndSaveImage(signatureFarmer, 'sig_farmer');
+    const savedStaffSig = await processAndSaveImage(signatureStaff, 'sig_staff');
+
     const purchase = await db.purchaseRecord.create({
       data: {
         familyCode: normCode,
@@ -75,11 +78,10 @@ export async function POST(request: Request) {
         seedBorrowed: sBorrowed,
         seedRepayment: sRepayment,
         seedDeduction: sDeduction,
-        premiumDescription: premiumDescription || null,
         additionalPremium: addPremium,
         netPayment,
-        signatureFarmer: signatureFarmer || null,
-        signatureStaff: signatureStaff || null,
+        signatureFarmer: savedFarmerSig || signatureFarmer || null,
+        signatureStaff: savedStaffSig || signatureStaff || null,
         purchasingStaffId: userId,
         purchasingStaffName: userName,
         specsRecordId: linkedSpecsId,

@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
-// PUT /api/admin/users/[id] — Edit user account, reset password, toggle status
+// PUT /api/admin/users/[id] — Edit user account, reset password, update assignedProvinces
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -20,7 +20,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, email, password, role, status } = body;
+    const { name, email, password, role, status, assignedProvinces } = body;
 
     const existing = await db.user.findUnique({
       where: { id },
@@ -35,6 +35,11 @@ export async function PUT(
     if (email) updateData.email = email.toLowerCase().trim();
     if (role) updateData.role = role;
     if (status) updateData.status = status;
+    if (assignedProvinces !== undefined) {
+      updateData.assignedProvinces = Array.isArray(assignedProvinces)
+        ? assignedProvinces.join(',')
+        : String(assignedProvinces);
+    }
     if (password && password.trim().length > 0) {
       updateData.password = await bcrypt.hash(password.trim(), 10);
     }
@@ -47,6 +52,7 @@ export async function PUT(
         name: true,
         email: true,
         role: true,
+        assignedProvinces: true,
         status: true,
         updatedAt: true,
       },
@@ -75,7 +81,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/admin/users/[id] — Delete user account (testing only)
+// DELETE /api/admin/users/[id] — Delete user account
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -91,7 +97,6 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Prevent admin from deleting their own account
     if (id === adminId) {
       return NextResponse.json({ error: 'Cannot delete your own active Admin account.' }, { status: 400 });
     }

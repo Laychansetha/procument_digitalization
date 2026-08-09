@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
+import { processAndSaveImage } from '@/lib/image-upload-server';
 
 export async function GET() {
   try {
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
       },
     });
 
+    const savedDocUrl = await processAndSaveImage(bankDocumentUrl, 'doc');
+
     let profile;
     if (existing) {
       profile = await db.farmerProfile.update({
@@ -60,7 +63,7 @@ export async function POST(request: Request) {
           accountNumber: paymentMethod === 'Bank Transfer' ? (accountNumber || existing.accountNumber) : '—',
           accountHolder: paymentMethod === 'Bank Transfer' ? (accountHolder || farmerName) : farmerName,
           relationship: relationship || existing.relationship,
-          bankDocumentUrl: bankDocumentUrl || existing.bankDocumentUrl,
+          bankDocumentUrl: savedDocUrl || existing.bankDocumentUrl,
           notes: notes || existing.notes,
         },
       });
@@ -76,7 +79,7 @@ export async function POST(request: Request) {
           accountNumber: paymentMethod === 'Bank Transfer' ? (accountNumber || '—') : '—',
           accountHolder: paymentMethod === 'Bank Transfer' ? (accountHolder || farmerName) : farmerName,
           relationship: relationship || 'Self',
-          bankDocumentUrl: bankDocumentUrl || null,
+          bankDocumentUrl: savedDocUrl || null,
           notes: notes || '',
           createdBy: userId,
         },

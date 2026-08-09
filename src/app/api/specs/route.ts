@@ -34,7 +34,6 @@ export async function POST(request: Request) {
       brokenRice,
       isValid,
       basePrice,
-      organicBonus,
       finalPrice,
       bestQualifyingGrade,
     } = body;
@@ -45,6 +44,8 @@ export async function POST(request: Request) {
 
     const normCode = familyCode.toUpperCase().trim();
     const normVillage = (village || '').trim();
+    const bPrice = parseFloat(basePrice) || 0;
+    const fPrice = parseFloat(finalPrice) || bPrice;
 
     // Check if specs record already exists for this (Family Code + Village)
     const existing = await db.specsRecord.findFirst({
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
           farmerName: farmerName.trim(),
           paddyType,
           selectedGrade,
-          isOrganic: Boolean(isOrganic),
+          isOrganic: isOrganic !== undefined ? Boolean(isOrganic) : true,
           moisture: parseFloat(moisture) || 0,
           foreignMatter: parseFloat(foreignMatter) || 0,
           purity: purity !== undefined && purity !== null ? parseFloat(purity) : null,
@@ -70,9 +71,8 @@ export async function POST(request: Request) {
           wholeGrain: wholeGrain !== undefined && wholeGrain !== null ? parseFloat(wholeGrain) : null,
           brokenRice: brokenRice !== undefined && brokenRice !== null ? parseFloat(brokenRice) : null,
           isValid: Boolean(isValid),
-          basePrice: parseFloat(basePrice) || 0,
-          organicBonus: parseFloat(organicBonus) || 0,
-          finalPrice: parseFloat(finalPrice) || 0,
+          basePrice: bPrice,
+          finalPrice: fPrice,
           bestQualifyingGrade: bestQualifyingGrade || selectedGrade,
         },
       });
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
           village: normVillage,
           paddyType,
           selectedGrade,
-          isOrganic: Boolean(isOrganic),
+          isOrganic: isOrganic !== undefined ? Boolean(isOrganic) : true,
           moisture: parseFloat(moisture) || 0,
           foreignMatter: parseFloat(foreignMatter) || 0,
           purity: purity !== undefined && purity !== null ? parseFloat(purity) : null,
@@ -92,9 +92,8 @@ export async function POST(request: Request) {
           wholeGrain: wholeGrain !== undefined && wholeGrain !== null ? parseFloat(wholeGrain) : null,
           brokenRice: brokenRice !== undefined && brokenRice !== null ? parseFloat(brokenRice) : null,
           isValid: Boolean(isValid),
-          basePrice: parseFloat(basePrice) || 0,
-          organicBonus: parseFloat(organicBonus) || 0,
-          finalPrice: parseFloat(finalPrice) || 0,
+          basePrice: bPrice,
+          finalPrice: fPrice,
           bestQualifyingGrade: bestQualifyingGrade || selectedGrade,
           createdBy: userId,
         },
@@ -110,7 +109,7 @@ export async function POST(request: Request) {
         action: existing ? 'UPDATE' : 'CREATE',
         entityType: 'SpecsRecord',
         entityId: spec.id,
-        details: JSON.stringify({ familyCode: normCode, village: normVillage, farmerName, paddyType, selectedGrade, finalPrice }),
+        details: JSON.stringify({ familyCode: normCode, village: normVillage, farmerName, paddyType, selectedGrade, finalPrice: fPrice }),
       },
     });
 

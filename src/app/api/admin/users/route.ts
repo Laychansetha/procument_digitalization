@@ -20,6 +20,7 @@ export async function GET() {
         name: true,
         email: true,
         role: true,
+        assignedProvinces: true,
         status: true,
         lastLogin: true,
         createdAt: true,
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, email, password, role, status } = body;
+    const { name, email, password, role, status, assignedProvinces } = body;
 
     if (!name || !email || !password || !role) {
       return NextResponse.json(
@@ -74,12 +75,17 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const provStr = Array.isArray(assignedProvinces)
+      ? assignedProvinces.join(',')
+      : (assignedProvinces || 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri');
+
     const newUser = await db.user.create({
       data: {
         name,
         email: usernameClean,
         password: hashedPassword,
         role: role || 'FIELD',
+        assignedProvinces: provStr,
         status: status || 'ACTIVE',
       },
       select: {
@@ -87,6 +93,7 @@ export async function POST(request: Request) {
         name: true,
         email: true,
         role: true,
+        assignedProvinces: true,
         status: true,
         createdAt: true,
       },
@@ -101,7 +108,7 @@ export async function POST(request: Request) {
         action: 'CREATE',
         entityType: 'UserAccount',
         entityId: newUser.id,
-        details: JSON.stringify({ name: newUser.name, email: newUser.email, role: newUser.role }),
+        details: JSON.stringify({ name: newUser.name, email: newUser.email, role: newUser.role, assignedProvinces: provStr }),
       },
     });
 

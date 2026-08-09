@@ -1,5 +1,5 @@
 @echo off
-title IBIS RICE PostgreSQL Database Setup & Migration
+title IBIS RICE PostgreSQL Database Setup
 color 0B
 cls
 echo ======================================================================
@@ -17,7 +17,7 @@ if not exist ".env" (
     echo IMPORTANT: Please edit .env to set your PostgreSQL database connection details!
 )
 
-echo [3/4] Generating Prisma Client & Syncing Database Tables...
+echo [3/4] Generating Prisma Client and Syncing Database Tables...
 call npx prisma generate
 call npx prisma db push
 call npx tsx prisma/seed.ts

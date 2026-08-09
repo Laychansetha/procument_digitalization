@@ -147,9 +147,9 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
               <span className="text-slate-200 font-mono">{transport.mobileNumber || 'N/A'}</span>
             </div>
             <div>
-              <span className="text-slate-400 font-bold uppercase text-[10px] block">Truck Sanitized</span>
+              <span className="text-slate-400 font-bold uppercase text-[10px] block">Truck Cleaning</span>
               <span className={`font-bold ${transport.truckCleaned ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {transport.truckCleaned ? '✓ Inspection Passed' : 'Not Inspected'}
+                {transport.truckCleaned ? '✓ Cleaned' : 'Not Cleaned'}
               </span>
             </div>
           </div>
@@ -157,15 +157,15 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
           {/* Locations Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#0f172a] border border-sky-500/30 rounded-xl">
             <div>
-              <span className="text-slate-400 block text-[10px] font-bold uppercase">Loading Station</span>
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Loading Location</span>
               <span className="font-bold text-white flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-purple-400" /> {transport.loadingLocation || 'Chhaeb Buying Station'}
+                <MapPin className="w-3.5 h-3.5 text-purple-400" /> {transport.loadingLocation || 'Preah Vihear'}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] font-bold uppercase">Destination Warehouse</span>
               <span className="font-bold text-sky-400 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-sky-400" /> {transport.destinationWarehouse || 'Central Mill Warehouse, Preah Vihear'}
+                <MapPin className="w-3.5 h-3.5 text-sky-400" /> {transport.destinationWarehouse || 'CACC (KPT)'}
               </span>
             </div>
           </div>

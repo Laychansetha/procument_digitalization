@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Printer } from 'lucide-react';
+import { Printer, X, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { formatImageSrc } from '@/lib/image-utils';
 import { getReportTranslation } from '@/lib/report-translations';
 
 interface PrintReceiptModalProps {
@@ -128,9 +129,9 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
               <div className="flex flex-col items-center">
                 <p className="font-bold text-slate-800 text-xs mb-2">{t.farmerSignature}</p>
                 <div className="w-full h-20 flex items-end justify-center">
-                  {purchase.signatureFarmer && (
-                    <img src={purchase.signatureFarmer} alt="Farmer Signature" className="h-full object-contain mx-auto" />
-                  )}
+                  {formatImageSrc(purchase.signatureFarmer) ? (
+                    <img src={formatImageSrc(purchase.signatureFarmer)} alt="Farmer Signature" className="h-full object-contain mx-auto" />
+                  ) : null}
                 </div>
                 <div className="w-full border-b border-slate-400 my-1" />
                 <p className="text-[11px] text-slate-700 font-bold">{purchase.farmerName}</p>
@@ -140,9 +141,9 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
               <div className="flex flex-col items-center">
                 <p className="font-bold text-slate-800 text-xs mb-2">{t.staffSignature}</p>
                 <div className="w-full h-20 flex items-end justify-center">
-                  {purchase.signatureStaff && (
-                    <img src={purchase.signatureStaff} alt="Staff Signature" className="h-full object-contain mx-auto" />
-                  )}
+                  {formatImageSrc(purchase.signatureStaff) ? (
+                    <img src={formatImageSrc(purchase.signatureStaff)} alt="Staff Signature" className="h-full object-contain mx-auto" />
+                  ) : null}
                 </div>
                 <div className="w-full border-b border-slate-400 my-1" />
                 <p className="text-[11px] text-slate-700 font-bold">{purchase.purchasingStaffName || 'Field Inspector'}</p>
@@ -228,9 +229,9 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
           <div className="flex flex-col items-center">
             <p className="font-bold text-slate-800 text-xs mb-2">{t.farmerSignature}</p>
             <div className="w-full h-20 flex items-end justify-center">
-              {purchase.signatureFarmer && (
-                <img src={purchase.signatureFarmer} alt="Farmer Signature" className="h-full object-contain mx-auto" />
-              )}
+              {formatImageSrc(purchase.signatureFarmer) ? (
+                <img src={formatImageSrc(purchase.signatureFarmer)} alt="Farmer Signature" className="h-full object-contain mx-auto" />
+              ) : null}
             </div>
             <div className="w-full border-b border-slate-400 my-1" />
             <p className="text-[11px] text-slate-700 font-bold">{purchase.farmerName}</p>
@@ -240,9 +241,9 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
           <div className="flex flex-col items-center">
             <p className="font-bold text-slate-800 text-xs mb-2">{t.staffSignature}</p>
             <div className="w-full h-20 flex items-end justify-center">
-              {purchase.signatureStaff && (
-                <img src={purchase.signatureStaff} alt="Staff Signature" className="h-full object-contain mx-auto" />
-              )}
+              {formatImageSrc(purchase.signatureStaff) ? (
+                <img src={formatImageSrc(purchase.signatureStaff)} alt="Staff Signature" className="h-full object-contain mx-auto" />
+              ) : null}
             </div>
             <div className="w-full border-b border-slate-400 my-1" />
             <p className="text-[11px] text-slate-700 font-bold">{purchase.purchasingStaffName || 'Field Inspector'}</p>

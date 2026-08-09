@@ -75,9 +75,12 @@ npm install
 
 # 2. Run 1-Click Database Setup & Master Data Seed
 .\switch-to-postgresql.bat
+
+# OPTIONAL: To wipe existing test data and reset to a 100% clean fresh environment:
+.\reset-fresh-postgresql.bat
 ```
 
-*This script creates all tables in your PostgreSQL database (`ibis_db`) and seeds initial target villages, commercial banks, price specs, and default user accounts.*
+*This script creates all tables in your PostgreSQL database (`ibis_db`) and seeds initial target villages, commercial banks, price specs, locations, and default user accounts.*
 
 ---
 

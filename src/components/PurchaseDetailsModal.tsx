@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Eye, Package, Calendar, User, MapPin, DollarSign, PenTool, CheckCircle2 } from 'lucide-react';
+import { X, CheckCircle2, User, Scale, ShieldCheck, MapPin, AlertCircle, FileSpreadsheet, Package } from 'lucide-react';
+import { formatImageSrc } from '@/lib/image-utils';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -145,8 +146,8 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1">
               <span className="text-[10px] font-bold text-emerald-400 uppercase block">Farmer Signature (Seller)</span>
-              {purchase.signatureFarmer ? (
-                <img src={purchase.signatureFarmer} alt="Farmer Signature" className="h-20 object-contain mx-auto border border-white/10 rounded bg-[#1e293b]" />
+              {formatImageSrc(purchase.signatureFarmer) ? (
+                <img src={formatImageSrc(purchase.signatureFarmer)} alt="Farmer Signature" className="h-20 object-contain mx-auto border border-white/10 rounded bg-[#1e293b] p-1" />
               ) : (
                 <div className="h-20 flex items-center justify-center text-slate-500 italic text-[11px]">No signature image</div>
               )}
@@ -154,8 +155,8 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
 
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1">
               <span className="text-[10px] font-bold text-sky-400 uppercase block">Purchasing Staff Signature (Buyer)</span>
-              {purchase.signatureStaff ? (
-                <img src={purchase.signatureStaff} alt="Staff Signature" className="h-20 object-contain mx-auto border border-white/10 rounded bg-[#1e293b]" />
+              {formatImageSrc(purchase.signatureStaff) ? (
+                <img src={formatImageSrc(purchase.signatureStaff)} alt="Staff Signature" className="h-20 object-contain mx-auto border border-white/10 rounded bg-[#1e293b] p-1" />
               ) : (
                 <div className="h-20 flex items-center justify-center text-slate-500 italic text-[11px]">No signature image</div>
               )}

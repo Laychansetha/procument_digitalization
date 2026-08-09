@@ -1,6 +1,7 @@
 'use client';
 
 import { X, Scale, Camera, CheckCircle2, AlertTriangle, XCircle, FileSpreadsheet } from 'lucide-react';
+import { formatImageSrc } from '@/lib/image-utils';
 
 interface FinanceTruckDetailsModalProps {
   isOpen: boolean;
@@ -320,14 +321,14 @@ export default function FinanceTruckDetailsModal({
                           )}
                         </td>
                         <td className="p-2.5 text-center space-y-1">
-                          {f.bankDocumentUrl && (
-                            <a href={f.bankDocumentUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[10px] block">
+                          {formatImageSrc(f?.bankDocumentUrl) ? (
+                            <a href={formatImageSrc(f.bankDocumentUrl)} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[10px] block">
                               📄 Bank Paper Photo
                             </a>
-                          )}
-                          {p.signatureFarmer && (
+                          ) : null}
+                          {formatImageSrc(p.signatureFarmer) ? (
                             <span className="text-emerald-400 font-bold text-[10px] block">✓ Farmer Signed</span>
-                          )}
+                          ) : null}
                         </td>
                       </tr>
                     );
