@@ -1,7 +1,13 @@
 Add-Type -AssemblyName System.Drawing
 
-$srcPath = "c:\Users\laych\Documents\digitalization_payment_dev\public\logo.png"
-$resDir = "c:\Users\laych\Documents\digitalization_payment_dev\ibis_rice_field_app\android\app\src\main\res"
+# Resolve paths relative to this script's location (works on any machine)
+$srcPath = Join-Path $PSScriptRoot "public\logo.png"
+$resDir  = Join-Path $PSScriptRoot "field_app\android\app\src\main\res"
+
+if (-not (Test-Path $srcPath)) {
+    Write-Error "Source logo not found: $srcPath"
+    exit 1
+}
 
 # 1. Ensure values/colors.xml exists
 $valuesDir = Join-Path $resDir "values"

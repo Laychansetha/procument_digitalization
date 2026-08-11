@@ -6,12 +6,10 @@ Official enterprise application suite built for **IBIS RICE CONSERVATION CO., LT
 
 ## 🏗️ System Architecture Overview
 
-The system consists of two tightly integrated components:
-
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   IBIS RICE CENTRAL WEB APPLICATION                    │
-│                 (Next.js 16 + PostgreSQL + Prisma ORM)                 │
+│                 (Next.js + PostgreSQL + Prisma ORM)                    │
 └────────────────────────────────────────────────────────────────────────┘
                                     │
            ┌────────────────────────┴────────────────────────┐
@@ -28,76 +26,262 @@ The system consists of two tightly integrated components:
 └──────────────────────────────┘          └──────────────────────────────┘
 ```
 
-1. **Central Web Application & REST API Server** (Next.js 16 + PostgreSQL):
-   - Serves as the central administration portal, warehouse scale receiving terminal, finance payment reconciliation hub, and master configuration center.
+1. **Central Web Application & REST API Server** (Next.js + PostgreSQL):
+   - Central administration portal, warehouse scale receiving terminal, finance payment reconciliation hub, and master configuration center.
 2. **Android Field Application** (Flutter Native + SQLite):
    - Runs on physical Android tablets used by field inspectors in remote villages across 4 provinces (**Preah Vihear**, **Stung Treng**, **Ratanakiri**, **Mondulkiri**).
-   - Operates 100% offline without internet. Automatically synchronizes with the central server when connected to Wi-Fi.
+   - Operates 100% offline. Automatically synchronises with the central server when connected to Wi-Fi.
 
 ---
 
-## 📁 Clean Repository Structure
+## 📁 Repository Structure
 
 ```text
 digitalization_payment_dev/
 ├── field_app/                    # Flutter Android Native Application
-│   ├── lib/                      # Flutter Dart source code (views, models, database, services)
+│   ├── lib/                      # Dart source (views, models, database, services)
 │   ├── android/                  # Android native project configuration
-│   └── pubspec.yaml              # Flutter dependencies manifest
-├── prisma/                       # Prisma ORM Database Schemas & Seed Data
-│   ├── schema.prisma             # Primary active database schema
+│   ├── assets/                   # App assets (images, fonts)
+│   └── pubspec.yaml              # Flutter dependency manifest
+├── prisma/                       # Prisma ORM — Database Schema & Seed
+│   ├── schema.prisma             # Active PostgreSQL database schema
 │   ├── schema.postgresql.prisma  # PostgreSQL schema template
-│   └── seed.ts                   # Master configuration & user account seed script
-├── public/                       # Static web assets & media uploads
+│   └── seed.ts                   # Master config & default user account seed
+├── public/                       # Static web assets & uploaded media
 │   └── uploads/                  # Uploaded bank passbooks & scale photos
+├── scripts/                      # Developer utility scripts
+│   ├── check-counts.ts           # DB row count report
+│   ├── check_province_villages.ts# Province/village audit
+│   └── clean-database.ts         # Development DB cleanup
 ├── src/                          # Next.js Web Application & REST APIs
-│   ├── app/                      # Next.js 16 App Router pages & API handlers
-│   ├── components/               # UI Modals, search selectors & print reports
-│   └── lib/                      # Database client, auth & server helpers
-├── .env.example                  # Environment variable configuration template
-├── DEPLOYMENT_GUIDE.md           # Step-by-step end-to-end deployment guide
-├── field_app.apk                 # Single Release APK for Android Tablets (22.4 MB)
-├── reset-fresh-postgresql.bat    # 1-Click clean database reset & seed script
-├── switch-to-postgresql.bat      # 1-Click PostgreSQL table creation & seed script
-├── start-production-local.bat    # 1-Click local production web server launcher
-├── build-android-apk.bat         # 1-Click Android Release APK build script
-├── create-zip-package.bat        # 1-Click deployment ZIP package creator
-└── package.json                  # Web application dependencies & scripts
+│   ├── app/                      # App Router — pages & API route handlers
+│   ├── components/               # UI modals, selectors & print reports
+│   └── lib/                      # DB client, auth helpers
+├── .env.example                  # ← Environment variable template (copy to .env)
+├── .gitignore                    # Git exclusion rules
+├── DEPLOYMENT_GUIDE.md           # Full production deployment guide
+├── README.md                     # This file
+├── package.json                  # Web app Node.js dependencies
+├── next.config.ts                # Next.js configuration
+├── tsconfig.json                 # TypeScript configuration
+├── reset-fresh-postgresql.bat    # 1-click clean DB reset & seed
+├── switch-to-postgresql.bat      # 1-click DB setup for a fresh install
+├── start-production-local.bat    # 1-click local production server
+├── build-android-apk.bat         # 1-click Android APK build
+└── create-app-icons.ps1          # Android app icon generator
 ```
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Developer Setup Guide (Windows)
+
+Follow these steps to clone and run the project on a new Windows computer.
 
 ### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **PostgreSQL**: v14.0 or higher
-- **Flutter SDK**: (Optional, only needed if modifying mobile app source code)
 
-### 1. Database Setup & Seed
-1. Edit `.env` to configure your local PostgreSQL database connection string:
-   ```env
-   DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/ibis_db?schema=public"
-   ```
-2. Run the 1-Click clean reset script:
-   ```cmd
-   reset-fresh-postgresql.bat
-   ```
+Install the following before proceeding:
 
-### 2. Launch Local Web Application
-Double-click **`start-production-local.bat`** (or run `npm run build && npm run start`).  
-Open [http://localhost:3000](http://localhost:3000) in your web browser.
-
-### 3. Install Mobile Application on Android Tablet
-Locate **`field_app.apk`** in the project folder and copy it to your Android tablet to install.
+| Tool | Version | Download |
+|------|---------|----------|
+| **Git** | Latest | https://git-scm.com/download/win |
+| **Node.js** | v18 or higher | https://nodejs.org |
+| **PostgreSQL** | v14 or higher | https://www.postgresql.org/download/windows/ |
+| **Flutter SDK** | ≥ 3.0.0 | https://flutter.dev (only needed to modify/build mobile app) |
+| **JDK 17** | 17.x | https://adoptium.net (only needed to build the Android APK) |
 
 ---
 
-## 🔐 Default Pre-Configured Accounts
+### 1. Clone the Repository
+
+```cmd
+git clone https://github.com/Laychansetha/digitalization_payment_dev.git
+cd digitalization_payment_dev
+```
+
+---
+
+### 2. Install Node.js Dependencies
+
+```cmd
+npm install
+```
+
+---
+
+### 3. Configure Environment Variables
+
+Copy the template to create your local `.env` file:
+
+```cmd
+copy .env.example .env
+```
+
+Then open `.env` in a text editor and fill in your values:
+
+```env
+# Your PostgreSQL connection — update password and database name as needed
+DATABASE_URL="postgresql://postgres:<YOUR_DB_PASSWORD>@localhost:5432/ibis_db?schema=public"
+
+# Generate a secure random secret:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+NEXTAUTH_SECRET="<your-generated-secret>"
+NEXTAUTH_URL="http://localhost:3000"
+
+PORT=3000
+HOSTNAME="0.0.0.0"
+```
+
+> ⚠️ **Never commit `.env` to Git.** It is already in `.gitignore`.
+
+---
+
+### 4. Set Up PostgreSQL
+
+1. Open **pgAdmin** or **psql** and create a database:
+   ```sql
+   CREATE DATABASE ibis_db;
+   ```
+2. Make sure your `DATABASE_URL` in `.env` matches the database name, user, and password.
+
+---
+
+### 5. Run Prisma Migrations & Seed
+
+Run the included 1-click script:
+
+```cmd
+switch-to-postgresql.bat
+```
+
+This will:
+- Generate the Prisma client
+- Push the schema to your PostgreSQL database
+- Seed all master data and default user accounts
+
+**Or run the commands manually:**
+
+```cmd
+npx prisma generate
+npx prisma db push
+npx tsx prisma/seed.ts
+```
+
+---
+
+### 6. Start the Web Application
+
+#### Development mode (with hot reload):
+
+```cmd
+npm run dev
+```
+
+#### Production mode:
+
+```cmd
+start-production-local.bat
+```
+
+Or manually:
+
+```cmd
+npm run build
+npm run start
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+### 7. Default Login Accounts
 
 Password for all pre-configured accounts: **`Ibis2026!`**
 
-- **System Admin**: `admin@ibisrice.org`
-- **Field Inspector**: `field@ibisrice.org` (and `field1@ibisrice.org` to `field24@ibisrice.org`)
-- **Warehouse Operator**: `warehouse@ibisrice.org`
-- **Finance Officer**: `finance@ibisrice.org`
+| Role | Email |
+|------|-------|
+| System Admin | `admin@ibisrice.org` |
+| Warehouse Operator | `warehouse@ibisrice.org` |
+| Finance Officer | `finance@ibisrice.org` |
+| Field Inspector | `field@ibisrice.org` (and `field1` → `field24`) |
+
+---
+
+### 8. Build or Run the Flutter Mobile App
+
+> **Prerequisites**: Flutter SDK ≥ 3.0.0 and JDK 17 must both be on your system PATH.
+
+#### Run in development (connected Android device or emulator):
+
+```cmd
+cd field_app
+flutter pub get
+flutter run
+```
+
+> Before running, set `baseUrl` in `field_app/lib/services/api_service.dart` to your server's LAN IP address, e.g. `http://192.168.1.10:3000`.
+
+#### Build a release APK:
+
+```cmd
+build-android-apk.bat
+```
+
+The APK will be placed at the project root as `field_app.apk`.
+
+> **Note**: `field_app.apk` is excluded from version control (it's a build artifact). Build it fresh from source on each machine.
+
+---
+
+### 9. Reset the Database (Development Only)
+
+To completely wipe and re-seed the database:
+
+```cmd
+reset-fresh-postgresql.bat
+```
+
+---
+
+## 🔄 Git Workflow — Continuing Development
+
+### Push changes to GitHub
+
+```cmd
+git add .
+git commit -m "feat: describe what you changed"
+git push origin main
+```
+
+### Pull latest changes on another computer
+
+```cmd
+git pull origin main
+npm install          # in case dependencies changed
+npx prisma generate  # in case schema changed
+```
+
+### Common workflow after pulling:
+
+```cmd
+git pull origin main
+npm install
+npx prisma generate
+npx prisma db push
+npm run dev
+```
+
+---
+
+## 🔐 Security Notes
+
+- `.env` is **always** excluded from Git (see `.gitignore`)
+- Never commit database passwords, API keys, or secrets
+- The `NEXTAUTH_SECRET` should be a unique, randomly generated string per environment
+- Default accounts (`Ibis2026!`) are for development/demo only — change passwords in production
+
+---
+
+## 📖 Additional Documentation
+
+- [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) — Full production server deployment guide
+- [PROJECT_MEMORY.md](./PROJECT_MEMORY.md) — Architecture decisions and development history

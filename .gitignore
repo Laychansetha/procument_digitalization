@@ -1,6 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ─── Node.js dependencies ─────────────────────────────────────────────────────
 /node_modules
 /.pnp
 .pnp.*
@@ -10,34 +10,74 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# ─── Testing ──────────────────────────────────────────────────────────────────
 /coverage
 
-# next.js
+# ─── Next.js build output ─────────────────────────────────────────────────────
 /.next/
 /out/
-
-# production
 /build
 
-# misc
-.DS_Store
-*.pem
+# ─── TypeScript build info ────────────────────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
 
-# debug
+# ─── Prisma generated client ──────────────────────────────────────────────────
+/src/generated/prisma
+
+# ─── Local databases (never commit local DB files) ────────────────────────────
+prisma/*.db
+prisma/*.db-shm
+prisma/*.db-wal
+prisma/*.db-journal
+*.sqlite
+*.sqlite3
+
+# ─── Environment / secrets (NEVER commit real .env files) ─────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+# Allow .env.example so developers can get the template
+!.env.example
+
+# ─── Android / Flutter build artifacts ────────────────────────────────────────
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ─── Deployment packages (large zip archives) ─────────────────────────────────
+*.zip
+
+# ─── Bundled / embedded JDK (never commit JDK binaries) ──────────────────────
+/jdk-17/
+/jdk-17-real/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
-# env files (can opt-in for committing if needed)
-.env*
+# ─── OS-specific files ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# vercel
+# ─── SSL / PEM certificates ───────────────────────────────────────────────────
+*.pem
+*.crt
+*.key
+
+# ─── Vercel ───────────────────────────────────────────────────────────────────
 .vercel
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ─── IDE / editor config folders (machine-specific symlinks / settings) ───────
+.claude/
+.windsurf/
 
-/src/generated/prisma
+# ─── Antigravity IDE internal lock file ───────────────────────────────────────
+skills-lock.json
