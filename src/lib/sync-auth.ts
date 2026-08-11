@@ -11,12 +11,30 @@ export interface ResolvedUser {
 export async function getResolvedUser(): Promise<ResolvedUser> {
   try {
     const session = await getServerSession(authOptions);
-    if (session?.user && (session.user as { id?: string }).id) {
-      return {
-        userId: (session.user as { id: string }).id,
-        userName: session.user.name || 'Web User',
-        userRole: ((session.user as { role?: any }).role || 'FIELD') as any,
-      };
+    if (session?.user) {
+      const sessUserId = (session.user as { id?: string }).id;
+      const sessUserEmail = session.user.email;
+      const sessUserName = session.user.name;
+
+      // Verify the user exists in the database by ID, Email, or Name
+      let dbUser = null;
+      if (sessUserId) {
+        dbUser = await db.user.findUnique({ where: { id: sessUserId } });
+      }
+      if (!dbUser && sessUserEmail) {
+        dbUser = await db.user.findUnique({ where: { email: sessUserEmail } });
+      }
+      if (!dbUser && sessUserName) {
+        dbUser = await db.user.findFirst({ where: { name: sessUserName } });
+      }
+
+      if (dbUser) {
+        return {
+          userId: dbUser.id,
+          userName: dbUser.name,
+          userRole: dbUser.role as any,
+        };
+      }
     }
   } catch (e) {
     // Session lookup skipped or failed

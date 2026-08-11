@@ -1,6 +1,9 @@
 'use client';
 
 import { X, Scale, Camera, Eye, MapPin, User, Package, CheckCircle2, AlertTriangle, XCircle, FileSpreadsheet } from 'lucide-react';
+import { formatImageSrc } from '@/lib/image-utils';
+
+import RejectionHistorySection from '@/components/RejectionHistorySection';
 
 interface WarehouseDetailsModalProps {
   isOpen: boolean;
@@ -48,38 +51,49 @@ export default function WarehouseDetailsModal({
       return;
     }
 
-    const grossWeight = intake.warehouseGrossWeight || 0;
-    const tareWeight = intake.warehouseTareWeight || 0;
-    const receivingDateTime = new Date(intake.createdAt).toLocaleString();
-    const warehouseStaff = intake.receivingStaffName || 'Warehouse Staff';
-    const totalFarmers = new Set(purchases.map((p: any) => p.familyCode)).size;
-    const totalSacks = purchases.reduce((acc: number, p: any) => acc + (p.items?.[0]?.sacks || 0), 0);
+    const rows: any[][] = [];
 
-    // 1. Summary Section at Top
-    const summaryRows = [
-      ['SUMMARY - WAREHOUSE RECEIVING TRUCK MANIFEST', ''],
-      ['Warehouse Receiving ID', receivingIdFormatted],
-      ['Transport ID', transportIdFormatted],
-      ['Driver Name', transport.driverName || 'N/A'],
-      ['Truck Plate Number', transport.plateNumber || 'N/A'],
-      ['Receiving Date & Time', receivingDateTime],
-      ['Warehouse Staff', warehouseStaff],
-      ['Total Farmers', totalFarmers],
-      ['Total Purchase Records', purchases.length],
-      ['Total Number of Sacks', totalSacks],
-      ['Total Field Weight (Kg)', fieldWeight.toFixed(2)],
-      ['Warehouse Gross Weight (Kg)', grossWeight.toFixed(2)],
-      ['Warehouse Tare Weight (Kg)', tareWeight.toFixed(2)],
-      ['Warehouse Net Weight (Kg)', netWeight.toFixed(2)],
-      ['Weight Difference (Kg)', `${diffKg >= 0 ? '+' : ''}${diffKg.toFixed(2)}`],
-      ['Weight Difference (%)', `${diffPercent >= 0 ? '+' : ''}${diffPercent.toFixed(2)}%`],
-      ['', ''], // Empty row separator
-    ];
-
-    // 2. Itemized Manifest Columns
-    const itemHeaders = [
-      'Warehouse Receiving ID',
+    // TOP SUMMARY SECTION
+    rows.push(['=== WAREHOUSE SCALE RECEIVING MANIFEST ===']);
+    rows.push([
+      'Warehouse Intake ID',
       'Transport ID',
+      'Receiving Date & Time',
+      'Driver Name',
+      'Truck Plate Number',
+      'Receiving Staff',
+      'Warehouse Gross Weight (Kg)',
+      'Warehouse Tare Weight (Kg)',
+      'Warehouse Net Weight (Kg)',
+      'Field Dispatch Weight (Kg)',
+      'Weight Variance (Kg)',
+      'Weight Variance (%)',
+      'Tolerance Audit Status',
+      'Inventory Status',
+      'Storage Location',
+    ]);
+    rows.push([
+      receivingIdFormatted,
+      transportIdFormatted,
+      new Date(intake.createdAt).toLocaleString(),
+      transport.driverName || '',
+      transport.plateNumber || '',
+      intake.receivingStaffName || 'Warehouse Staff',
+      intake.warehouseGrossWeight || 0,
+      intake.warehouseTareWeight || 0,
+      netWeight,
+      fieldWeight,
+      diffKg,
+      `${diffPercent.toFixed(2)}%`,
+      toleranceText,
+      intake.inventoryStatus || 'WAITING_FOR_INVENTORY',
+      intake.inventoryLocation || 'Main Warehouse',
+    ]);
+
+    // ITEMIZED PURCHASE INVOICES SECTION
+    rows.push([]);
+    rows.push(['--- ASSIGNED FARMER PURCHASE INVOICES ---']);
+    rows.push([
       'Purchase ID',
       'Family Code',
       'Farmer Name',
@@ -87,26 +101,19 @@ export default function WarehouseDetailsModal({
       'Paddy Variety',
       'Grade',
       'Number of Sacks',
-      'Field Weight (Kg)',
-      'Warehouse Gross Weight (Kg)',
-      'Warehouse Tare Weight (Kg)',
-      'Warehouse Net Weight (Kg)',
-      'Weight Difference (Kg)',
-      'Driver Name',
-      'Truck Plate Number',
-      'Receiving Date & Time',
-      'Warehouse Staff',
-    ];
-
-    const rows = [...summaryRows, itemHeaders];
+      'Field Net Weight (Kg)',
+      'Total Net Payment (KHR)',
+      'Bank Name',
+      'Account Number',
+      'Account Holder',
+    ]);
 
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
+      const f = p.farmerProfile || {};
       const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
 
       rows.push([
-        receivingIdFormatted,
-        transportIdFormatted,
         pIdFormatted,
         p.familyCode || '',
         p.farmerName || '',
@@ -114,15 +121,11 @@ export default function WarehouseDetailsModal({
         item.variety || 'Red Jasmine',
         item.grade || 'A1',
         item.sacks || 0,
-        (p.totalWeight || 0).toFixed(2),
-        grossWeight.toFixed(2),
-        tareWeight.toFixed(2),
-        netWeight.toFixed(2),
-        `${diffKg >= 0 ? '+' : ''}${diffKg.toFixed(2)}`,
-        transport.driverName || 'N/A',
-        transport.plateNumber || 'N/A',
-        receivingDateTime,
-        warehouseStaff,
+        p.totalWeight || 0,
+        p.netPayment || 0,
+        f.bankName || 'N/A',
+        f.accountNumber || 'N/A',
+        f.accountHolder || p.farmerName,
       ]);
     });
 
@@ -181,6 +184,8 @@ export default function WarehouseDetailsModal({
 
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto space-y-5 text-xs">
+          {/* Rejection Audit History */}
+          <RejectionHistorySection entityType="WarehouseIntake" entityId={intake.id} />
           {/* Transport Details Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
             <div>
@@ -260,26 +265,48 @@ export default function WarehouseDetailsModal({
                 </span>
               </div>
             </div>
+
+            {/* Inventory Status Audit Banner */}
+            <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-purple-400">📦 Inventory Recording Status:</span>
+                {intake.inventoryStatus === 'INVENTORY_RECORDED' ? (
+                  <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-purple-500/40">
+                    ✓ INVENTORY RECORDED
+                  </span>
+                ) : (
+                  <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-amber-500/40">
+                    ⏳ WAITING FOR INVENTORY
+                  </span>
+                )}
+              </div>
+
+              {intake.inventoryStatus === 'INVENTORY_RECORDED' && (
+                <div className="text-slate-300 text-[11px] font-mono">
+                  Recorded by: <strong className="text-white">{intake.inventoryStaffName || 'Inventory Staff'}</strong> · Location: <strong className="text-purple-300">{intake.inventoryLocation || 'Main Warehouse'}</strong>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* 4. SCALE DISPLAY PHOTOS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* 4. SCALE DISPLAY & TRANSPORT INVOICE PHOTOS */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             {/* Gross Scale Photo */}
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2">
               <span className="text-[10px] font-bold text-sky-400 uppercase flex items-center gap-1">
-                <Camera className="w-3.5 h-3.5" /> Gross Weight Scale Display Photo
+                <Camera className="w-3.5 h-3.5" /> Gross Scale Display Photo
               </span>
               {intake.grossScalePhotoUrl ? (
-                <a href={intake.grossScalePhotoUrl} target="_blank" rel="noreferrer">
+                <a href={formatImageSrc(intake.grossScalePhotoUrl)} target="_blank" rel="noreferrer">
                   <img
-                    src={intake.grossScalePhotoUrl}
+                    src={formatImageSrc(intake.grossScalePhotoUrl)}
                     alt="Gross Weight Scale Display"
-                    className="h-32 w-full object-cover rounded-lg border border-sky-500/30 hover:opacity-90 cursor-pointer"
+                    className="h-28 w-full object-cover rounded-lg border border-sky-500/30 hover:opacity-90 cursor-pointer"
                   />
                 </a>
               ) : (
-                <div className="h-32 flex items-center justify-center text-slate-500 italic text-[11px] bg-[#1e293b] rounded-lg">
-                  No Gross scale photo uploaded
+                <div className="h-28 flex items-center justify-center text-slate-500 italic text-[11px] bg-[#1e293b] rounded-lg">
+                  No Gross photo uploaded
                 </div>
               )}
             </div>
@@ -287,19 +314,39 @@ export default function WarehouseDetailsModal({
             {/* Tare Scale Photo */}
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2">
               <span className="text-[10px] font-bold text-sky-400 uppercase flex items-center gap-1">
-                <Camera className="w-3.5 h-3.5" /> Tare Weight Scale Display Photo
+                <Camera className="w-3.5 h-3.5" /> Tare Scale Display Photo
               </span>
               {intake.tareScalePhotoUrl ? (
-                <a href={intake.tareScalePhotoUrl} target="_blank" rel="noreferrer">
+                <a href={formatImageSrc(intake.tareScalePhotoUrl)} target="_blank" rel="noreferrer">
                   <img
-                    src={intake.tareScalePhotoUrl}
+                    src={formatImageSrc(intake.tareScalePhotoUrl)}
                     alt="Tare Weight Scale Display"
-                    className="h-32 w-full object-cover rounded-lg border border-sky-500/30 hover:opacity-90 cursor-pointer"
+                    className="h-28 w-full object-cover rounded-lg border border-sky-500/30 hover:opacity-90 cursor-pointer"
                   />
                 </a>
               ) : (
-                <div className="h-32 flex items-center justify-center text-slate-500 italic text-[11px] bg-[#1e293b] rounded-lg">
-                  No Tare scale photo uploaded
+                <div className="h-28 flex items-center justify-center text-slate-500 italic text-[11px] bg-[#1e293b] rounded-lg">
+                  No Tare photo uploaded
+                </div>
+              )}
+            </div>
+
+            {/* Truck Transport Invoice Photo */}
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2">
+              <span className="text-[10px] font-bold text-sky-400 uppercase flex items-center gap-1">
+                <FileSpreadsheet className="w-3.5 h-3.5" /> Transport Invoice Photo
+              </span>
+              {intake.transportInvoiceUrl ? (
+                <a href={formatImageSrc(intake.transportInvoiceUrl)} target="_blank" rel="noreferrer">
+                  <img
+                    src={formatImageSrc(intake.transportInvoiceUrl)}
+                    alt="Truck Transport Invoice"
+                    className="h-28 w-full object-cover rounded-lg border border-sky-500/30 hover:opacity-90 cursor-pointer"
+                  />
+                </a>
+              ) : (
+                <div className="h-28 flex items-center justify-center text-slate-500 italic text-[11px] bg-[#1e293b] rounded-lg">
+                  No Invoice photo uploaded
                 </div>
               )}
             </div>

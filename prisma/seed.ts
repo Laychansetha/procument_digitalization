@@ -8,65 +8,77 @@ async function main() {
 
   const passwordHash = await bcrypt.hash('Ibis2026!', 10);
 
-  // 1. Create Default Core Role Accounts (.org & .com)
+  // 1. Seed Official Accounts from username_roles.csv
+  const csvUsers = [
+    { province: 'Preah Vihear', username: 'piseth', password: 'PVH-piseth-2026', role: 'FIELD' },
+    { province: 'Preah Vihear', username: 'chandara', password: 'PVH-chandara-2026', role: 'FIELD' },
+    { province: 'Preah Vihear', username: 'chin', password: 'PVH-chin-2026', role: 'FIELD' },
+    { province: 'Preah Vihear', username: 'sokunrath', password: 'PVH-sokunrath-2026', role: 'FIELD' },
+    { province: 'Preah Vihear', username: 'vornne', password: 'PVH-vornne-2026', role: 'FIELD' },
+    { province: 'Preah Vihear', username: 'sokun', password: 'PVH-sokun-2026', role: 'FIELD' },
+    { province: 'Preah Vihear', username: 'vuthy', password: 'PVH-vuthy-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'chansetha', password: 'ST-chansetha-2026', role: 'ADMIN' },
+    { province: 'Stung Treng', username: 'theavy', password: 'ST-theavy-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'samol', password: 'ST-samol-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'yornthy', password: 'ST-yornthy-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'heap', password: 'ST-heap-2026', role: 'FINANCE' },
+    { province: 'Stung Treng', username: 'kalayan', password: 'ST-kalayan-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'vongrith', password: 'ST-vongrith-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'samath', password: 'ST-samath-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'kimly', password: 'ST-kimly-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'sreypov', password: 'ST-sreypov-2026', role: 'FIELD' },
+    { province: 'Stung Treng', username: 'thearith', password: 'ST-thearith-2026', role: 'FIELD' },
+    { province: 'Ratanakiri', username: 'sombath', password: 'RTK-sombath-2026', role: 'FIELD' },
+    { province: 'Mondolkiri', username: 'tong', password: 'MDK-tong-2026', role: 'FIELD' },
+    { province: 'Mondolkiri', username: 'sokmen', password: 'MDK-sokmen-2026', role: 'FIELD' },
+    { province: 'Mondolkiri', username: 'vimean', password: 'MDK-vimean-2026', role: 'FIELD' },
+    { province: 'Mondolkiri', username: 'chantha', password: 'MDK-chantha-2026', role: 'FIELD' },
+    { province: 'Mondolkiri', username: 'thana', password: 'MDK-thana-2026', role: 'FIELD' },
+    { province: 'Kampong Thom', username: 'phearun', password: 'KPT-phearun-2026', role: 'WAREHOUSE' },
+    { province: 'Phnom Penh', username: 'bousong', password: 'PNH-bousong-2026', role: 'INVENTORY' },
+  ];
+
+  for (const u of csvUsers) {
+    const userPassHash = await bcrypt.hash(u.password, 10);
+    const email = `${u.username}@ibisrice.com`;
+    await prisma.user.upsert({
+      where: { email },
+      update: { name: u.username, password: userPassHash, role: u.role as any, assignedProvinces: u.province, status: 'ACTIVE' },
+      create: {
+        name: u.username,
+        email: email,
+        password: userPassHash,
+        role: u.role as any,
+        assignedProvinces: u.province,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  // 2. Create Default Alias Core Accounts (.org & .com) for backward compatibility
   const coreAccounts = [
-    { email: 'admin@ibisrice.org', name: 'System Admin', role: 'ADMIN', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri' },
-    { email: 'admin@ibisrice.com', name: 'System Admin', role: 'ADMIN', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri' },
-    { email: 'warehouse@ibisrice.org', name: 'Bopha (Warehouse Scale Operator)', role: 'WAREHOUSE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri' },
-    { email: 'warehouse@ibisrice.com', name: 'Bopha (Warehouse Scale Operator)', role: 'WAREHOUSE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri' },
-    { email: 'finance@ibisrice.org', name: 'Channa (Finance Officer)', role: 'FINANCE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri' },
-    { email: 'finance@ibisrice.com', name: 'Channa (Finance Officer)', role: 'FINANCE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri' },
+    { email: 'admin@ibisrice.com', name: 'admin', role: 'ADMIN', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'ST-chansetha-2026' },
+    { email: 'field@ibisrice.com', name: 'field', role: 'FIELD', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'PVH-piseth-2026' },
+    { email: 'warehouse@ibisrice.com', name: 'warehouse', role: 'WAREHOUSE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'KPT-phearun-2026' },
+    { email: 'inventory@ibisrice.com', name: 'inventory', role: 'INVENTORY', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'PNH-bousong-2026' },
+    { email: 'finance@ibisrice.com', name: 'finance', role: 'FINANCE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'ST-heap-2026' },
   ];
 
   for (const acc of coreAccounts) {
+    const passHash = await bcrypt.hash(acc.pass, 10);
     await prisma.user.upsert({
       where: { email: acc.email },
-      update: { name: acc.name, role: acc.role as any, assignedProvinces: acc.provinces, status: 'ACTIVE' },
+      update: { name: acc.name, password: passHash, role: acc.role as any, assignedProvinces: acc.provinces, status: 'ACTIVE' },
       create: {
         name: acc.name,
         email: acc.email,
-        password: passwordHash,
+        password: passHash,
         role: acc.role as any,
         assignedProvinces: acc.provinces,
         status: 'ACTIVE',
       },
     });
   }
-
-  // 2. Create 24 Field Staff Accounts across 4 Provinces
-  const provincesList = ['Preah Vihear', 'Stung Treng', 'Ratanakiri', 'Mondulkiri'];
-  for (let i = 1; i <= 24; i++) {
-    const provinceAssigned = provincesList[(i - 1) % provincesList.length];
-    const staffEmail = `field${i}@ibisrice.org`;
-    const staffName = `Field Inspector #${i} (${provinceAssigned})`;
-
-    await prisma.user.upsert({
-      where: { email: staffEmail },
-      update: { name: staffName, role: 'FIELD', assignedProvinces: provinceAssigned, status: 'ACTIVE' },
-      create: {
-        name: staffName,
-        email: staffEmail,
-        password: passwordHash,
-        role: 'FIELD',
-        assignedProvinces: provinceAssigned,
-        status: 'ACTIVE',
-      },
-    });
-  }
-
-  // Include general field@ibisrice.org & field@ibisrice.com
-  await prisma.user.upsert({
-    where: { email: 'field@ibisrice.org' },
-    update: { name: 'Sokha (Lead Inspector)', role: 'FIELD', assignedProvinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri' },
-    create: {
-      name: 'Sokha (Lead Inspector)',
-      email: 'field@ibisrice.org',
-      password: passwordHash,
-      role: 'FIELD',
-      assignedProvinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri',
-      status: 'ACTIVE',
-    },
-  });
 
   // 3. Seed Official Target Villages & Provinces from Excel configuration
   const villageData = [
@@ -181,29 +193,29 @@ async function main() {
   // 5. Seed Official Paddy Price Specifications & Base Prices from Excel configuration
   const defaultPriceSpecs = [
     // Phka Rumduol
-    { variety: 'Phka Rumduol', grade: 'A1', basePrice: 1650, maxMoisture: 14.0, maxForeignMatter: 5.0 },
-    { variety: 'Phka Rumduol', grade: 'A2', basePrice: 1550, maxMoisture: 14.5, maxForeignMatter: 5.0 },
-    { variety: 'Phka Rumduol', grade: 'B1', basePrice: 1500, maxMoisture: 15.0, maxForeignMatter: 6.0 },
-    { variety: 'Phka Rumduol', grade: 'B2', basePrice: 1450, maxMoisture: 15.5, maxForeignMatter: 6.5 },
+    { variety: 'Phka Rumduol', grade: 'A1', basePrice: 1650, minWholeGrain: 75, maxBrokenRice: 25, impurity: 2, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { variety: 'Phka Rumduol', grade: 'A2', basePrice: 1550, minWholeGrain: 70, maxBrokenRice: 30, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { variety: 'Phka Rumduol', grade: 'B1', basePrice: 1500, minWholeGrain: 60, maxBrokenRice: 40, impurity: 2, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { variety: 'Phka Rumduol', grade: 'B2', basePrice: 1450, minWholeGrain: 50, maxBrokenRice: 50, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
 
     // Red Jasmine
-    { variety: 'Red Jasmine', grade: 'A1', basePrice: 1850, maxMoisture: 14.0, maxForeignMatter: 5.0 },
-    { variety: 'Red Jasmine', grade: 'A2', basePrice: 1750, maxMoisture: 14.5, maxForeignMatter: 5.0 },
-    { variety: 'Red Jasmine', grade: 'B1', basePrice: 1700, maxMoisture: 15.0, maxForeignMatter: 6.0 },
-    { variety: 'Red Jasmine', grade: 'B2', basePrice: 1650, maxMoisture: 15.5, maxForeignMatter: 6.5 },
-
-    // Foundation Seed - Phka Rumduol
-    { variety: 'Foundation Seed - Phka Rumduol', grade: 'A', basePrice: 2050, maxMoisture: 13.5, maxForeignMatter: 3.0 },
+    { variety: 'Red Jasmine', grade: 'A1', basePrice: 1850, minWholeGrain: 75, maxBrokenRice: 25, impurity: null, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { variety: 'Red Jasmine', grade: 'A2', basePrice: 1750, minWholeGrain: 70, maxBrokenRice: 30, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { variety: 'Red Jasmine', grade: 'B1', basePrice: 1700, minWholeGrain: 60, maxBrokenRice: 40, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { variety: 'Red Jasmine', grade: 'B2', basePrice: 1650, minWholeGrain: 50, maxBrokenRice: 50, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
 
     // Foundation Seed - Red Jasmine
-    { variety: 'Foundation Seed - Red Jasmine', grade: 'A', basePrice: 2150, maxMoisture: 13.5, maxForeignMatter: 3.0 },
+    { variety: 'Foundation Seed - Red Jasmine', grade: 'A', basePrice: 2150, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
+
+    // Foundation Seed - Phka Rumduol
+    { variety: 'Foundation Seed - Phka Rumduol', grade: 'A', basePrice: 2050, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
 
     // Certified Seed
-    { variety: 'Certified Seed', grade: 'A', basePrice: 1900, maxMoisture: 14.0, maxForeignMatter: 4.0 },
+    { variety: 'Certified Seed', grade: 'A', basePrice: 1900, minWholeGrain: 96, maxBrokenRice: null, impurity: 2, maxForeignMatter: 2, maxMoisture: 12.0, moistureRange: '11 - 13' },
 
     // White Rice
-    { variety: 'White Rice', grade: 'A', basePrice: 1320, maxMoisture: 14.0, maxForeignMatter: 5.0 },
-    { variety: 'White Rice', grade: 'B', basePrice: 1220, maxMoisture: 15.0, maxForeignMatter: 6.0 },
+    { variety: 'White Rice', grade: 'A', basePrice: 1320, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 4, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { variety: 'White Rice', grade: 'B', basePrice: 1220, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 8, maxMoisture: 13.5, moistureRange: '13 - 14' },
   ];
 
   for (const spec of defaultPriceSpecs) {

@@ -39,6 +39,7 @@ export async function PUT(
     const tareWeight = parseFloat(body.warehouseTareWeight) || 0;
     const grossScalePhotoUrl = body.grossScalePhotoUrl ?? existing.grossScalePhotoUrl;
     const tareScalePhotoUrl = body.tareScalePhotoUrl ?? existing.tareScalePhotoUrl;
+    const transportInvoiceUrl = body.transportInvoiceUrl ?? existing.transportInvoiceUrl;
 
     const netWeight = Math.max(0, grossWeight - tareWeight);
     const fieldWeight = existing.transport?.totalFieldWeight || 0;
@@ -55,9 +56,29 @@ export async function PUT(
         weightDiffPercent,
         grossScalePhotoUrl,
         tareScalePhotoUrl,
+        transportInvoiceUrl,
+        status: 'RECEIVED',
+        inventoryStatus: 'WAITING_FOR_INVENTORY',
       },
       include: { transport: true },
     });
+
+    // Mark active rejection log as RESOLVED when Warehouse resubmits corrected intake
+    const activeRejection = await db.rejectionLog.findFirst({
+      where: { entityType: 'WarehouseIntake', entityId: id, status: 'REJECTED' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (activeRejection) {
+      await db.rejectionLog.update({
+        where: { id: activeRejection.id },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolvedByName: session.user?.name || session.user?.email || 'Warehouse Staff',
+        },
+      });
+    }
 
     // Audit Log
     await db.auditLog.create({

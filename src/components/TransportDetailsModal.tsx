@@ -2,6 +2,8 @@
 
 import { X, Truck, Calendar, User, MapPin, Package, Scale, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 
+import RejectionHistorySection from '@/components/RejectionHistorySection';
+
 interface TransportDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -132,6 +134,8 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
 
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto space-y-5 text-xs flex-1">
+          {/* Rejection Audit History */}
+          <RejectionHistorySection entityType="TransportRecord" entityId={transport.id} />
           {/* Driver & Truck Info */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
             <div>
@@ -189,6 +193,45 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
               <span className="font-black text-sky-400 text-base">{transport.totalFieldWeight.toFixed(2)} kg</span>
             </div>
           </div>
+
+          {/* Payment Transfer Receipt Proof (Field View) */}
+          {(transport.status === 'DISBURSED' || transport.paymentReceiptUrl) && (
+            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-1.5 shadow-md">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-xs text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Payment Disbursed & Bank Transfer Receipt Proof
+                </span>
+                <span className="bg-emerald-400 text-[#0b0f19] px-2 py-0.5 rounded-full text-[10px] font-black">
+                  ✅ DISBURSED
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-bold">Payment Method & Batch</span>
+                  <span className="text-white font-bold">{transport.paymentMethod || 'Bank Transfer'} ({transport.paymentBatchNumber || 'BATCH-2026'})</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-bold">Paid Date & Staff</span>
+                  <span className="text-slate-200">{transport.paidAt ? new Date(transport.paidAt).toLocaleDateString() : 'Completed'} ({transport.paidByStaffName || 'Finance'})</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-bold">Bank Receipt Proof</span>
+                  {transport.paymentReceiptUrl ? (
+                    <a
+                      href={transport.paymentReceiptUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-emerald-400 font-extrabold underline text-xs flex items-center gap-1 hover:text-emerald-300"
+                    >
+                      📄 Open & Forward Transfer Receipt to Farmers
+                    </a>
+                  ) : (
+                    <span className="text-slate-500 text-[10px] italic">No receipt attached</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Assigned Purchase Records Table */}
           <div className="space-y-2">

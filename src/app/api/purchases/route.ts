@@ -1,13 +1,25 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
 import { processAndSaveImage } from '@/lib/image-upload-server';
+import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    const allowedVillages = await getAllowedVillagesForSession(session?.user);
+
+    const whereClause = allowedVillages !== null ? { village: { in: allowedVillages } } : {};
+
     const purchases = await db.purchaseRecord.findMany({
+      where: whereClause,
       include: {
         items: true,
+        transportRecord: {
+          select: { id: true, status: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -20,6 +32,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
     const { userId, userName, userRole } = await getResolvedUser();
 
     const body = await request.json();
@@ -42,6 +55,10 @@ export async function POST(request: Request) {
 
     const normCode = familyCode.toUpperCase().trim();
     const normVillage = (village || '').trim();
+
+    if (session?.user && !(await isVillageAuthorized(normVillage, session.user))) {
+      return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
+    }
 
     const totalWeight = items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
     const grossPayment = items.reduce((sum, item) => sum + (parseFloat(item.totalValue) || 0), 0);

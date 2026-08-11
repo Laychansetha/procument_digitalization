@@ -81,7 +81,12 @@ export async function GET(request: Request) {
       where: { status: 'ACTIVE' },
     });
 
+    const serverTimestamp = new Date().toISOString();
+    const configVersion = `v1-${Date.now()}`;
+
     return NextResponse.json({
+      serverTimestamp,
+      configVersion,
       settings: settingsMap,
       paddySpecs,
       rawVillages: filteredVillages,
@@ -97,6 +102,8 @@ export async function GET(request: Request) {
     console.error('API Config GET Error:', error);
     return NextResponse.json(
       {
+        serverTimestamp: new Date().toISOString(),
+        configVersion: 'v1-fallback',
         settings: DEFAULT_SETTINGS,
         paddySpecs: [],
         rawVillages: [],

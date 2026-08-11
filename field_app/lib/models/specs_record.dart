@@ -9,8 +9,9 @@ class SpecsRecord {
   final bool isOrganic;
   final double moisture;
   final double foreignMatter;
-  final double wholeGrain;
-  final double brokenRice;
+  final double? wholeGrain;
+  final double? brokenRice;
+  final double? impurity;
   final bool isValid;
   final double basePrice;
   final double organicBonus; // Kept as 0.0 for backwards compatibility
@@ -30,8 +31,9 @@ class SpecsRecord {
     this.isOrganic = true,
     required this.moisture,
     required this.foreignMatter,
-    required this.wholeGrain,
-    required this.brokenRice,
+    this.wholeGrain,
+    this.brokenRice,
+    this.impurity,
     required this.isValid,
     required this.basePrice,
     this.organicBonus = 0.0,
@@ -55,6 +57,7 @@ class SpecsRecord {
       'foreignMatter': foreignMatter,
       'wholeGrain': wholeGrain,
       'brokenRice': brokenRice,
+      'impurity': impurity,
       'isValid': isValid ? 1 : 0,
       'basePrice': basePrice,
       'organicBonus': organicBonus,
@@ -77,8 +80,9 @@ class SpecsRecord {
       isOrganic: map['isOrganic'] == 1 || map['isOrganic'] == true,
       moisture: (map['moisture'] as num).toDouble(),
       foreignMatter: (map['foreignMatter'] as num).toDouble(),
-      wholeGrain: (map['wholeGrain'] as num?)?.toDouble() ?? 0.0,
-      brokenRice: (map['brokenRice'] as num?)?.toDouble() ?? 0.0,
+      wholeGrain: map['wholeGrain'] != null ? (map['wholeGrain'] as num).toDouble() : null,
+      brokenRice: map['brokenRice'] != null ? (map['brokenRice'] as num).toDouble() : null,
+      impurity: map['impurity'] != null ? (map['impurity'] as num).toDouble() : null,
       isValid: map['isValid'] == 1 || map['isValid'] == true,
       basePrice: (map['basePrice'] as num).toDouble(),
       organicBonus: (map['organicBonus'] as num?)?.toDouble() ?? 0.0,
@@ -101,6 +105,7 @@ class SpecsRecord {
       'foreignMatter': foreignMatter,
       'wholeGrain': wholeGrain,
       'brokenRice': brokenRice,
+      'impurity': impurity,
       'isValid': isValid,
       'basePrice': basePrice,
       'organicBonus': 0.0,

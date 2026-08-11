@@ -109,9 +109,14 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
                 {sackWeightsList.map((w, idx) => (
                   <div
                     key={idx}
-                    className="bg-[#1e293b] border border-sky-500/30 text-sky-300 px-2.5 py-1 rounded-full font-mono text-[11px] font-bold"
+                    className="bg-[#1e293b] border border-sky-500/30 text-sky-300 px-2 py-1 rounded-lg font-mono text-xs flex items-center gap-1.5"
                   >
-                    #{idx + 1} {w.toFixed(1)} kg
+                    <span className="bg-sky-500/20 text-sky-300 font-extrabold px-1.5 py-0.5 rounded text-[10px] border border-sky-500/30">
+                      #{idx + 1}
+                    </span>
+                    <span className="font-extrabold text-white text-xs">
+                      {Math.round(w)} kg
+                    </span>
                   </div>
                 ))}
               </div>
@@ -142,7 +147,7 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
             </div>
           </div>
 
-          {/* Signatures Images */}
+          {/* Signatures / Purchaser Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1">
               <span className="text-[10px] font-bold text-emerald-400 uppercase block">Farmer Signature (Seller)</span>
@@ -153,13 +158,10 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
               )}
             </div>
 
-            <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-sky-400 uppercase block">Purchasing Staff Signature (Buyer)</span>
-              {formatImageSrc(purchase.signatureStaff) ? (
-                <img src={formatImageSrc(purchase.signatureStaff)} alt="Staff Signature" className="h-20 object-contain mx-auto border border-white/10 rounded bg-[#1e293b] p-1" />
-              ) : (
-                <div className="h-20 flex items-center justify-center text-slate-500 italic text-[11px]">No signature image</div>
-              )}
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1 flex flex-col justify-center">
+              <span className="text-[10px] font-bold text-sky-400 uppercase block">Purchasing Staff (Buyer)</span>
+              <div className="text-sm font-bold text-white">{purchase.purchasingStaffName || 'Field Staff'}</div>
+              <div className="text-[11px] text-slate-400">Authenticated System Account</div>
             </div>
           </div>
         </div>

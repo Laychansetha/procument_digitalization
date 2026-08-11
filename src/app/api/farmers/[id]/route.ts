@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { isVillageAuthorized } from '@/lib/province-guard';
 
 export async function PUT(
   request: Request,
@@ -25,6 +26,14 @@ export async function PUT(
 
     if (!existing) {
       return NextResponse.json({ error: 'Farmer profile not found.' }, { status: 404 });
+    }
+
+    if (session.user && !(await isVillageAuthorized(existing.village, session.user as any))) {
+      return NextResponse.json({ error: `Unauthorized. Record belongs to village '${existing.village}' which is outside your assigned province.` }, { status: 403 });
+    }
+
+    if (body.village && session.user && !(await isVillageAuthorized(body.village, session.user as any))) {
+      return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
     }
 
     const updated = await db.farmerProfile.update({
@@ -75,14 +84,10 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const userRole = (session?.user as { role?: string })?.role;
     const userId = (session?.user as { id?: string })?.id;
 
-    if (!session || !userId || userRole !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Unauthorized. Admin role required to delete farmer profiles.' },
-        { status: 403 }
-      );
+    if (!session || !userId) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const { id } = await params;
@@ -95,6 +100,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Farmer profile not found.' }, { status: 404 });
     }
 
+    // Check village authorization for Field Staff / Province bounds
+    if (session.user && !(await isVillageAuthorized(existing.village, session.user as any))) {
+      return NextResponse.json(
+        { error: `Unauthorized. Record belongs to village '${existing.village}' which is outside your assigned province.` },
+        { status: 403 }
+      );
+    }
+
     await db.farmerProfile.delete({
       where: { id },
     });
@@ -103,8 +116,8 @@ export async function DELETE(
     await db.auditLog.create({
       data: {
         userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
+        userName: session.user?.name || 'Field Staff',
+        userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
         action: 'DELETE',
         entityType: 'FarmerProfile',
         entityId: id,

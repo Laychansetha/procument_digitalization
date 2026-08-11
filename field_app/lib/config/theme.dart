@@ -27,7 +27,6 @@ class AppTheme {
         primary: emeraldPrimary,
         secondary: skyBlue,
         surface: cardBackground,
-        background: background,
         error: errorRed,
       ),
       appBarTheme: const AppBarTheme(

@@ -5,7 +5,23 @@ import { db } from '@/lib/db';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    const user = session?.user as { role?: string; assignedProvinces?: string } | undefined;
+
+    let whereClause = {};
+    if (user?.role === 'FIELD' && user.assignedProvinces) {
+      const provinces = user.assignedProvinces
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      if (provinces.length > 0 && provinces.length < 4) {
+        whereClause = { province: { in: provinces } };
+      }
+    }
+
     const villages = await db.village.findMany({
+      where: whereClause,
       orderBy: { name: 'asc' },
     });
     return NextResponse.json(villages);

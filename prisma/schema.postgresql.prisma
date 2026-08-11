@@ -10,6 +10,7 @@ generator client {
 enum Role {
   FIELD
   WAREHOUSE
+  INVENTORY
   FINANCE
   ADMIN
 }
@@ -80,6 +81,8 @@ model PaddyPriceSpec {
   maxForeignMatter Float    @default(5.0)  // Max allowed foreign matter %
   minWholeGrain    Float?   @default(70.0) // Min whole grain %
   maxBrokenRice    Float?   @default(30.0) // Max broken rice %
+  impurity         Float?   // Impurity %
+  moistureRange    String?  // Moisture Range string e.g. "13 - 14"
   status           String   @default("ACTIVE") // ACTIVE, INACTIVE
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -234,10 +237,17 @@ model WarehouseIntake {
   weightDiffPercent    Float?          @default(0)
   grossScalePhotoUrl   String?         // Photo of Gross Weight scale display indicator
   tareScalePhotoUrl    String?         // Photo of Tare Weight scale display indicator
+  transportInvoiceUrl  String?         // Photo of Truck Transport Invoice for Finance payment verification
   receivingStaffId     String
   receivingStaffName   String?
   notes                String?
-  status               String          @default("RECEIVED")
+  inventoryStatus      String    @default("WAITING_FOR_INVENTORY") // WAITING_FOR_INVENTORY, INVENTORY_RECORDED
+  inventoryStaffId     String?
+  inventoryStaffName   String?
+  inventoryConfirmedAt DateTime?
+  inventoryLocation    String?   // Storage location e.g. Silo 02, Stack A, Bay 4
+  inventoryNotes       String?
+  status               String    @default("RECEIVED")
   createdAt            DateTime        @default(now())
 }
 

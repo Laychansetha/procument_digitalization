@@ -105,6 +105,13 @@ export async function POST(request: Request) {
         );
       }
 
+      if (transport.intake.inventoryStatus !== 'INVENTORY_RECORDED') {
+        return NextResponse.json(
+          { error: 'Cannot verify. Paddy must be recorded into the inventory system by the Inventory Team before Finance verification.' },
+          { status: 400 }
+        );
+      }
+
       await db.transportRecord.update({
         where: { id: transportId },
         data: { status: 'VERIFIED' },
@@ -132,9 +139,19 @@ export async function POST(request: Request) {
 
     // 5. PAYMENT PROCESSING (COMPLETE PAYMENT)
     if (action === 'COMPLETE_PAYMENT') {
+      const { paymentReceiptUrl } = body;
+      const userName = session.user?.name || session.user?.email || 'Finance Officer';
+
       await db.transportRecord.update({
         where: { id: transportId },
-        data: { status: 'DISBURSED' },
+        data: {
+          status: 'DISBURSED',
+          paymentReceiptUrl: paymentReceiptUrl || null,
+          paymentMethod: paymentMethod || 'ABA Bulk Transfer',
+          paymentBatchNumber: paymentBatchNumber || null,
+          paidAt: new Date(),
+          paidByStaffName: userName,
+        },
       });
 
       await db.purchaseRecord.updateMany({
@@ -145,7 +162,7 @@ export async function POST(request: Request) {
       await db.auditLog.create({
         data: {
           userId,
-          userName: session.user?.name || 'Finance Officer',
+          userName,
           userRole: userRole as any,
           action: 'DISBURSE',
           entityType: 'TransportRecord',
@@ -154,6 +171,7 @@ export async function POST(request: Request) {
             plateNumber: transport.plateNumber,
             paymentMethod: paymentMethod || 'ABA Bulk Transfer',
             paymentBatchNumber: paymentBatchNumber || 'BATCH-2026',
+            paymentReceiptUrl: paymentReceiptUrl || null,
             status: 'DISBURSED',
           }),
         },

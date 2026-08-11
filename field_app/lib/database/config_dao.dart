@@ -9,9 +9,12 @@ class ConfigDao {
   ConfigDao._init();
 
   static const String _kCachedConfigKey = 'cached_master_config_v1';
+  static const String _kLastSyncedAtKey = 'cached_config_last_synced_at';
 
   double _seedInterestRate = 1.10;
   double _scaleTolerancePercent = 1.5;
+  String? _lastSyncedAt;
+  List<Map<String, dynamic>> _fleet = [];
 
   List<String> _villages = [
     'Prey Veng', 'Sambou', 'Koh Ker', 'Damnak Kantout', 'Dan', 'Pongro', 'Kampenh', 'Yeang', 'Kong Yoang', 'Tmat Paeuy', 'Krala Peas', 'Dang Phlet', 'Narong', 'Bra', 'Soung', 'Kham Keut', 'Kampong Sangkae',
@@ -59,7 +62,7 @@ class ConfigDao {
     'Other'
   ];
 
-  Map<String, double> _basePrices = {
+  final Map<String, double> _basePrices = {
     'Phka Rumduol': 1650.0,
     'Red Jasmine': 1850.0,
     'Foundation Seed - Phka Rumduol': 2050.0,
@@ -68,12 +71,66 @@ class ConfigDao {
     'White Rice': 1320.0,
   };
 
+  static final Map<String, String> _villageProvinceMapping = {
+    'Prey Veng': 'Preah Vihear', 'Sambou': 'Preah Vihear', 'Koh Ker': 'Preah Vihear', 'Damnak Kantout': 'Preah Vihear',
+    'Dan': 'Preah Vihear', 'Pongro': 'Preah Vihear', 'Kampenh': 'Preah Vihear', 'Yeang': 'Preah Vihear',
+    'Kong Yoang': 'Preah Vihear', 'Tmat Paeuy': 'Preah Vihear', 'Krala Peas': 'Preah Vihear', 'Dang Phlet': 'Preah Vihear',
+    'Narong': 'Preah Vihear', 'Bra': 'Preah Vihear', 'Soung': 'Preah Vihear', 'Kham Keut': 'Preah Vihear', 'Kampong Sangkae': 'Preah Vihear',
+    'Doung': 'Stung Treng', 'Kes': 'Stung Treng', 'Kang Cham': 'Stung Treng', 'Kang Kngaok': 'Stung Treng',
+    'Khes Kroam': 'Stung Treng', 'Khes Svay': 'Stung Treng', 'Pong Kriel': 'Stung Treng', 'Kham Phouk': 'Stung Treng',
+    'Phum Lun': 'Stung Treng', 'Ban Moung': 'Stung Treng', 'Samor': 'Stung Treng', 'Chantu': 'Stung Treng',
+    'Keng Nhai': 'Stung Treng', 'Siem Pang': 'Stung Treng', 'Dan Loung': 'Stung Treng', 'Peam Khes': 'Stung Treng',
+    'Srae Russei': 'Stung Treng', 'Kanchanh Kouk': 'Stung Treng', 'Teteam': 'Stung Treng', "O'Chay": 'Stung Treng',
+    'Nhang Sum': 'Stung Treng', 'La Kay': 'Stung Treng', 'Pha Bang': 'Stung Treng',
+    'I-Tub': 'Ratanakiri', 'Korng Nork': 'Ratanakiri', 'Kalan': 'Ratanakiri', 'Srae Pokthom': 'Ratanakiri',
+    'Thmey': 'Ratanakiri', 'Srae Chhuk': 'Ratanakiri', 'Srae Poktoch': 'Ratanakiri', 'Srae Chrey': 'Ratanakiri',
+    'Roveak': 'Ratanakiri', 'Bak Kae': 'Ratanakiri',
+    'Pu Char': 'Mondolkiri', 'Pu Kung': 'Mondolkiri', 'Ou Chra': 'Mondolkiri', 'Andoung Kraloeng': 'Mondolkiri',
+    'Srae Lvi': 'Mondolkiri', 'Gati': 'Mondolkiri', 'Pu Trom': 'Mondolkiri', 'Chokchar': 'Mondolkiri',
+    'Sre Andaol': 'Mondolkiri', 'Kmoum': 'Mondolkiri', 'Ktung': 'Mondolkiri',
+  };
+
   double get seedInterestRate => _seedInterestRate;
   double get scaleTolerancePercent => _scaleTolerancePercent;
+  String? get lastSyncedAt => _lastSyncedAt;
+  List<Map<String, dynamic>> get fleet => List.unmodifiable(_fleet);
   List<String> get villages => List.unmodifiable(_villages);
+
+  List<String> getVillagesForProvinces(List<String> assignedProvinces) {
+    if (assignedProvinces.isEmpty || assignedProvinces.length >= 4) {
+      return List.unmodifiable(_villages);
+    }
+    final filtered = _villages.where((v) {
+      final prov = _villageProvinceMapping[v];
+      return prov == null || assignedProvinces.contains(prov);
+    }).toList();
+    return List.unmodifiable(filtered);
+  }
   List<String> get banks => List.unmodifiable(_banks);
   List<String> get paddyCategories => List.unmodifiable(_paddyCategories);
   List<String> get grades => List.unmodifiable(_grades);
+
+  List<String> getGradesForCategory(String? category) {
+    if (category == null || category.isEmpty) return List.unmodifiable(_grades);
+    
+    // Dynamic lookup from synced paddySpecs master data
+    final matchingSpecs = _paddySpecs.where((s) => s['variety'] == category).toList();
+    if (matchingSpecs.isNotEmpty) {
+      final specGrades = matchingSpecs.map((s) => s['grade'].toString()).toSet().toList();
+      return List.unmodifiable(specGrades);
+    }
+    
+    // Fallback business rules
+    if (category == 'Phka Rumduol' || category == 'Red Jasmine') {
+      return const ['A1', 'A2', 'B1', 'B2'];
+    } else if (category.contains('Foundation Seed') || category == 'Certified Seed') {
+      return const ['A'];
+    } else if (category == 'White Rice') {
+      return const ['A', 'B'];
+    }
+    return List.unmodifiable(_grades);
+  }
+
   List<Map<String, dynamic>> get paddySpecs => List.unmodifiable(_paddySpecs);
   List<String> get buyingStations => List.unmodifiable(_buyingStations);
   List<String> get destinationWarehouses => List.unmodifiable(_destinationWarehouses);
@@ -92,11 +149,12 @@ class ConfigDao {
   Future<void> loadLocalConfig() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      _lastSyncedAt = prefs.getString(_kLastSyncedAtKey);
       final cachedJson = prefs.getString(_kCachedConfigKey);
       if (cachedJson != null && cachedJson.isNotEmpty) {
         final data = jsonDecode(cachedJson);
         _applyConfigData(data);
-        debugPrint('📦 Master Configuration loaded from local cache.');
+        debugPrint('📦 Master Configuration loaded from local cache (Last Synced: $_lastSyncedAt).');
       }
     } catch (e) {
       debugPrint('⚠️ Error loading local config cache: $e');
@@ -112,11 +170,15 @@ class ConfigDao {
         final data = jsonDecode(response.body);
         _applyConfigData(data);
 
+        final nowIso = DateTime.now().toIso8601String();
+        _lastSyncedAt = nowIso;
+
         // Save downloaded master configuration to local cache for offline availability
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_kCachedConfigKey, response.body);
+        await prefs.setString(_kLastSyncedAtKey, nowIso);
 
-        debugPrint('✅ Master Configuration automatically updated from server.');
+        debugPrint('✅ Master Configuration automatically updated from server at $nowIso.');
       }
     } catch (e) {
       debugPrint('⚠️ Offline fallback: continuing with existing cached master configuration. ($e)');
@@ -138,8 +200,26 @@ class ConfigDao {
       _villages = (data['villages'] as List).map((e) => e.toString()).toList();
     }
 
+    // Dynamic village-to-province mapping update from server rawVillages / allVillages
+    final rawVList = data['rawVillages'] ?? data['allVillages'];
+    if (rawVList != null && rawVList is List) {
+      for (var item in rawVList) {
+        if (item is Map) {
+          final vName = item['name']?.toString();
+          final vProv = item['province']?.toString();
+          if (vName != null && vProv != null && vName.isNotEmpty && vProv.isNotEmpty) {
+            _villageProvinceMapping[vName] = vProv;
+          }
+        }
+      }
+    }
+
     if (data['banks'] != null && data['banks'] is List && (data['banks'] as List).isNotEmpty) {
       _banks = (data['banks'] as List).map((e) => e.toString()).toList();
+    }
+
+    if (data['fleet'] != null && data['fleet'] is List) {
+      _fleet = (data['fleet'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
     }
 
     if (data['paddySpecs'] != null && data['paddySpecs'] is List && (data['paddySpecs'] as List).isNotEmpty) {

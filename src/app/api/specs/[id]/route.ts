@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { isVillageAuthorized } from '@/lib/province-guard';
 
 export async function PUT(
   request: Request,
@@ -27,6 +28,14 @@ export async function PUT(
       return NextResponse.json({ error: 'Specs record not found.' }, { status: 404 });
     }
 
+    if (session.user && !(await isVillageAuthorized(existing.village, session.user as any))) {
+      return NextResponse.json({ error: `Unauthorized. Record belongs to village '${existing.village}' which is outside your assigned province.` }, { status: 403 });
+    }
+
+    if (body.village && session.user && !(await isVillageAuthorized(body.village, session.user as any))) {
+      return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
+    }
+
     // LOCKING RULE: Cannot edit SpecsRecord if a PurchaseRecord has already been created from it
     const linkedPurchase = await db.purchaseRecord.findFirst({
       where: { specsRecordId: id },
@@ -39,6 +48,22 @@ export async function PUT(
       );
     }
 
+    const parsedMoisture = body.moisture !== undefined && !isNaN(parseFloat(body.moisture))
+      ? parseFloat(body.moisture)
+      : existing.moisture;
+
+    const parsedForeignMatter = body.foreignMatter !== undefined && !isNaN(parseFloat(body.foreignMatter))
+      ? parseFloat(body.foreignMatter)
+      : existing.foreignMatter;
+
+    const parsedBasePrice = body.basePrice !== undefined && !isNaN(parseFloat(body.basePrice))
+      ? parseFloat(body.basePrice)
+      : existing.basePrice;
+
+    const parsedFinalPrice = body.finalPrice !== undefined && !isNaN(parseFloat(body.finalPrice))
+      ? parseFloat(body.finalPrice)
+      : (parsedBasePrice || existing.finalPrice);
+
     const updated = await db.specsRecord.update({
       where: { id },
       data: {
@@ -48,15 +73,15 @@ export async function PUT(
         paddyType: body.paddyType !== undefined ? body.paddyType : existing.paddyType,
         selectedGrade: body.selectedGrade !== undefined ? body.selectedGrade : existing.selectedGrade,
         isOrganic: body.isOrganic !== undefined ? Boolean(body.isOrganic) : existing.isOrganic,
-        moisture: body.moisture !== undefined ? parseFloat(body.moisture) : existing.moisture,
-        foreignMatter: body.foreignMatter !== undefined ? parseFloat(body.foreignMatter) : existing.foreignMatter,
-        purity: body.purity !== undefined && body.purity !== null ? parseFloat(body.purity) : existing.purity,
-        impurity: body.impurity !== undefined && body.impurity !== null ? parseFloat(body.impurity) : existing.impurity,
-        wholeGrain: body.wholeGrain !== undefined && body.wholeGrain !== null ? parseFloat(body.wholeGrain) : existing.wholeGrain,
-        brokenRice: body.brokenRice !== undefined && body.brokenRice !== null ? parseFloat(body.brokenRice) : existing.brokenRice,
+        moisture: parsedMoisture,
+        foreignMatter: parsedForeignMatter,
+        purity: body.purity !== undefined && body.purity !== null && !isNaN(parseFloat(body.purity)) ? parseFloat(body.purity) : existing.purity,
+        impurity: body.impurity !== undefined && body.impurity !== null && !isNaN(parseFloat(body.impurity)) ? parseFloat(body.impurity) : existing.impurity,
+        wholeGrain: body.wholeGrain !== undefined && body.wholeGrain !== null && !isNaN(parseFloat(body.wholeGrain)) ? parseFloat(body.wholeGrain) : existing.wholeGrain,
+        brokenRice: body.brokenRice !== undefined && body.brokenRice !== null && !isNaN(parseFloat(body.brokenRice)) ? parseFloat(body.brokenRice) : existing.brokenRice,
         isValid: body.isValid !== undefined ? Boolean(body.isValid) : existing.isValid,
-        basePrice: body.basePrice !== undefined ? parseFloat(body.basePrice) : existing.basePrice,
-        finalPrice: body.finalPrice !== undefined ? parseFloat(body.finalPrice) : existing.finalPrice,
+        basePrice: parsedBasePrice,
+        finalPrice: parsedFinalPrice,
         bestQualifyingGrade: body.bestQualifyingGrade || body.selectedGrade || existing.bestQualifyingGrade,
       },
     });
@@ -93,14 +118,10 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const userRole = (session?.user as { role?: string })?.role;
     const userId = (session?.user as { id?: string })?.id;
 
-    if (!session || !userId || userRole !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Unauthorized. Admin role required to delete specs records.' },
-        { status: 403 }
-      );
+    if (!session || !userId) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const { id } = await params;
@@ -113,6 +134,26 @@ export async function DELETE(
       return NextResponse.json({ error: 'Specs record not found.' }, { status: 404 });
     }
 
+    // Check village authorization
+    if (session.user && !(await isVillageAuthorized(existing.village, session.user as any))) {
+      return NextResponse.json(
+        { error: `Unauthorized. Record belongs to village '${existing.village}' which is outside your assigned province.` },
+        { status: 403 }
+      );
+    }
+
+    // LOCKING RULE: Cannot delete SpecsRecord if an active PurchaseRecord is linked to it
+    const linkedPurchase = await db.purchaseRecord.findFirst({
+      where: { specsRecordId: id },
+    });
+
+    if (linkedPurchase) {
+      return NextResponse.json(
+        { error: 'Cannot delete Specs Record. This record is currently linked to an active Purchase Record.' },
+        { status: 400 }
+      );
+    }
+
     await db.specsRecord.delete({
       where: { id },
     });
@@ -121,8 +162,8 @@ export async function DELETE(
     await db.auditLog.create({
       data: {
         userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
+        userName: session.user?.name || 'Field Staff',
+        userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
         action: 'DELETE',
         entityType: 'SpecsRecord',
         entityId: id,

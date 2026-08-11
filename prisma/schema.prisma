@@ -1,6 +1,6 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -10,6 +10,7 @@ generator client {
 enum Role {
   FIELD
   WAREHOUSE
+  INVENTORY
   FINANCE
   ADMIN
 }
@@ -31,6 +32,26 @@ model User {
   purchaseRecords PurchaseRecord[]
   transportRecs   TransportRecord[]
   auditLogs       AuditLog[]
+  rejectionLogs   RejectionLog[]
+}
+
+model RejectionLog {
+  id             String    @id @default(cuid())
+  entityType     String    // TransportRecord, WarehouseIntake, PurchaseRecord
+  entityId       String
+  targetModule   String    // FIELD, WAREHOUSE, INVENTORY
+  rejectedBy     String    // User ID
+  rejectedByName String
+  rejectedByRole Role
+  reason         String    // Required rejection comment
+  status         String    @default("REJECTED") // REJECTED, RESOLVED
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  resolvedByName String?
+
+  user           User      @relation(fields: [rejectedBy], references: [id])
+
+  @@index([entityType, entityId])
 }
 
 model Village {
@@ -80,6 +101,8 @@ model PaddyPriceSpec {
   maxForeignMatter Float    @default(5.0)  // Max allowed foreign matter %
   minWholeGrain    Float?   @default(70.0) // Min whole grain %
   maxBrokenRice    Float?   @default(30.0) // Max broken rice %
+  impurity         Float?   // Impurity %
+  moistureRange    String?  // Moisture Range string e.g. "13 - 14"
   status           String   @default("ACTIVE") // ACTIVE, INACTIVE
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -195,12 +218,17 @@ model TransportRecord {
   driverWitnessName    String?
   driverWitnessDate    String?
   driverWitnessTime    String?
-  loadingLocation      String?          @default("Chhaeb Buying Station")
-  destinationWarehouse String?          @default("Central Mill Warehouse, Preah Vihear")
+  loadingLocation      String?
+  destinationWarehouse String?
   notes                String?
   totalSacks           Int
   totalFieldWeight     Float
-  status               String           @default("EN_ROUTE") // EN_ROUTE, ARRIVED, RECEIVED, VERIFIED
+  status               String           @default("EN_ROUTE") // EN_ROUTE, ARRIVED, RECEIVED, VERIFIED, DISBURSED, REJECTED
+  paymentReceiptUrl    String?          // Photo or PDF proof of bank transfer receipt
+  paymentMethod        String?          // ABA Bulk Transfer, Acleda, etc.
+  paymentBatchNumber   String?          // Payment batch number / Reference ID
+  paidAt               DateTime?        // Timestamp when payment was completed
+  paidByStaffName      String?          // Finance staff name who processed payment
   createdBy            String
   user                 User             @relation(fields: [createdBy], references: [id])
   createdAt            DateTime         @default(now())
@@ -234,10 +262,17 @@ model WarehouseIntake {
   weightDiffPercent    Float?          @default(0)
   grossScalePhotoUrl   String?         // Photo of Gross Weight scale display indicator
   tareScalePhotoUrl    String?         // Photo of Tare Weight scale display indicator
+  transportInvoiceUrl  String?         // Photo of Truck Transport Invoice for Finance payment verification
   receivingStaffId     String
   receivingStaffName   String?
   notes                String?
-  status               String          @default("RECEIVED")
+  inventoryStatus      String    @default("WAITING_FOR_INVENTORY") // WAITING_FOR_INVENTORY, INVENTORY_RECORDED
+  inventoryStaffId     String?
+  inventoryStaffName   String?
+  inventoryConfirmedAt DateTime?
+  inventoryLocation    String?   // Storage location e.g. Silo 02, Stack A, Bay 4
+  inventoryNotes       String?
+  status               String    @default("RECEIVED")
   createdAt            DateTime        @default(now())
 }
 

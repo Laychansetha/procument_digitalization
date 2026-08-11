@@ -4,9 +4,12 @@ import '../../config/theme.dart';
 import '../../database/app_database.dart';
 import '../../database/config_dao.dart';
 import '../../models/specs_record.dart';
+import '../../services/auth_service.dart';
+import '../../utils/app_notification.dart';
+import '../../widgets/searchable_village_select.dart';
 
 class SpecsFormScreen extends StatefulWidget {
-  const SpecsFormScreen({Key? key}) : super(key: key);
+  const SpecsFormScreen({super.key});
 
   @override
   State<SpecsFormScreen> createState() => _SpecsFormScreenState();
@@ -20,6 +23,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   final _foreignMatterController = TextEditingController();
   final _wholeGrainController = TextEditingController();
   final _brokenRiceController = TextEditingController();
+  final _impurityController = TextEditingController();
   final _searchController = TextEditingController();
 
   final FocusNode _familyCodeFocusNode = FocusNode();
@@ -43,14 +47,58 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   void dispose() {
     _familyCodeFocusNode.dispose();
     _searchController.dispose();
+    _impurityController.dispose();
     super.dispose();
   }
 
   Future<void> _loadHistory() async {
     final list = await AppDatabase.instance.getAllSpecs();
+    final userProvinces = await AuthService.getAssignedProvinceList();
+    final allowedVillages = ConfigDao.instance.getVillagesForProvinces(userProvinces);
+
+    final filtered = (userProvinces.isEmpty || userProvinces.length >= 4)
+        ? list
+        : list.where((s) => allowedVillages.contains(s.village)).toList();
+
     setState(() {
-      _localHistory = list;
+      _localHistory = filtered;
     });
+  }
+
+  void _applyMasterSpecsForGrade(String variety, String grade) {
+    final specList = ConfigDao.instance.paddySpecs;
+    final match = specList.firstWhere(
+      (s) => s['variety'] == variety && s['grade'] == grade,
+      orElse: () => <String, dynamic>{},
+    );
+
+    if (match.isNotEmpty) {
+      _wholeGrainController.text = match['minWholeGrain'] != null ? match['minWholeGrain'].toString() : (match['wholeGrain'] != null ? match['wholeGrain'].toString() : '');
+      _brokenRiceController.text = match['maxBrokenRice'] != null ? match['maxBrokenRice'].toString() : (match['brokenRice'] != null ? match['brokenRice'].toString() : '');
+      _impurityController.text = match['impurity'] != null ? match['impurity'].toString() : '';
+      _foreignMatterController.text = match['maxForeignMatter'] != null ? match['maxForeignMatter'].toString() : (match['foreignMatter'] != null ? match['foreignMatter'].toString() : '6.0');
+      _moistureController.text = match['maxMoisture'] != null ? match['maxMoisture'].toString() : (match['moisture'] != null ? match['moisture'].toString() : '13.5');
+    } else {
+      if (variety == 'Phka Rumduol') {
+        if (grade == 'A1') { _wholeGrainController.text = '75'; _brokenRiceController.text = '25'; _impurityController.text = '2'; _foreignMatterController.text = '6.0'; _moistureController.text = '13.5'; }
+        else if (grade == 'A2') { _wholeGrainController.text = '70'; _brokenRiceController.text = '30'; _impurityController.text = '4'; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
+        else if (grade == 'B1') { _wholeGrainController.text = '60'; _brokenRiceController.text = '40'; _impurityController.text = '2'; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
+        else if (grade == 'B2') { _wholeGrainController.text = '50'; _brokenRiceController.text = '50'; _impurityController.text = '4'; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
+      } else if (variety == 'Red Jasmine') {
+        if (grade == 'A1') { _wholeGrainController.text = '75'; _brokenRiceController.text = '25'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '13.5'; }
+        else if (grade == 'A2') { _wholeGrainController.text = '70'; _brokenRiceController.text = '30'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
+        else if (grade == 'B1') { _wholeGrainController.text = '60'; _brokenRiceController.text = '40'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
+        else if (grade == 'B2') { _wholeGrainController.text = '50'; _brokenRiceController.text = '50'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
+      } else if (variety.contains('Foundation Seed')) {
+        _wholeGrainController.text = '98'; _brokenRiceController.text = ''; _impurityController.text = '1'; _foreignMatterController.text = '1.0'; _moistureController.text = '12.0';
+      } else if (variety == 'Certified Seed') {
+        _wholeGrainController.text = '96'; _brokenRiceController.text = ''; _impurityController.text = '2'; _foreignMatterController.text = '2.0'; _moistureController.text = '12.0';
+      } else if (variety == 'White Rice') {
+        _wholeGrainController.text = ''; _brokenRiceController.text = ''; _impurityController.text = '';
+        if (grade == 'B') _foreignMatterController.text = '8.0'; else _foreignMatterController.text = '4.0';
+        _moistureController.text = '13.5';
+      }
+    }
   }
 
   void _resetForm() {
@@ -60,6 +108,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     _foreignMatterController.clear();
     _wholeGrainController.clear();
     _brokenRiceController.clear();
+    _impurityController.clear();
     setState(() {
       _editingId = null;
       _village = null;
@@ -99,12 +148,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           _farmerNameController.text = f.farmerName;
           _village = f.village;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚡ Auto-loaded Farmer (${f.familyCode} · ${f.farmerName} in ${f.village})'),
-            backgroundColor: AppTheme.emeraldPrimary,
-          ),
-        );
+        AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingFarmers.map((f) => {'code': f.familyCode, 'name': f.farmerName, 'village': f.village}).toList());
       }
@@ -128,12 +172,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           _farmerNameController.text = p.farmerName;
           _village = p.village;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚡ Auto-loaded Farmer (${p.familyCode} · ${p.farmerName} in ${p.village})'),
-            backgroundColor: AppTheme.emeraldPrimary,
-          ),
-        );
+        AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingPurchases.map((p) => {'code': p.familyCode, 'name': p.farmerName, 'village': p.village}).toList());
       }
@@ -141,9 +180,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No matching profile found for Family Code + Village combination.'), backgroundColor: AppTheme.skyBlue),
-      );
+      AppNotification.showInfo(context, 'No Match Found');
     }
   }
 
@@ -199,14 +236,22 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     }
 
     final moisture = double.tryParse(_moistureController.text) ?? 13.5;
-    final foreignMatter = double.tryParse(_foreignMatterController.text) ?? 4.0;
-    final wholeGrain = double.tryParse(_wholeGrainController.text) ?? 75.0;
-    final brokenRice = double.tryParse(_brokenRiceController.text) ?? 25.0;
+    final foreignMatter = double.tryParse(_foreignMatterController.text) ?? 6.0;
+    final wholeGrain = double.tryParse(_wholeGrainController.text);
+    final brokenRice = double.tryParse(_brokenRiceController.text);
+    final impurity = double.tryParse(_impurityController.text);
 
-    final basePrice = ConfigDao.instance.getBasePrice(_paddyType!);
-    final organicBonus = 0.0;
+    final currentSpecList = ConfigDao.instance.paddySpecs;
+    final match = currentSpecList.firstWhere(
+      (s) => s['variety'] == _paddyType && s['grade'] == _selectedGrade,
+      orElse: () => <String, dynamic>{'basePrice': 1650.0},
+    );
+    final basePrice = (match['basePrice'] as num?)?.toDouble() ?? 1650.0;
+    const organicBonus = 0.0;
     final finalPrice = basePrice;
-    final isValid = moisture <= 14.0 && foreignMatter <= 5.0;
+    final maxM = (match['maxMoisture'] as num?)?.toDouble() ?? 15.5;
+    final maxF = (match['maxForeignMatter'] as num?)?.toDouble() ?? 8.0;
+    final isValid = moisture <= maxM && foreignMatter <= maxF;
 
     final record = SpecsRecord(
       id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
@@ -220,6 +265,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       foreignMatter: foreignMatter,
       wholeGrain: wholeGrain,
       brokenRice: brokenRice,
+      impurity: impurity,
       isValid: isValid,
       basePrice: basePrice,
       organicBonus: organicBonus,
@@ -231,22 +277,20 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     await AppDatabase.instance.insertSpecs(record);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_editingId != null ? '✅ Quality Specs updated successfully!' : '✅ Quality Specs saved locally! Form cleared for next record.'),
-          backgroundColor: AppTheme.emeraldPrimary,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      AppNotification.showSuccess(context, _editingId != null ? 'Updated' : 'Saved');
     }
 
     _resetForm();
     await _loadHistory();
   }
 
-  void _editRecord(SpecsRecord item) {
-    if (item.isSynced) {
-      _showAlertDialog('Locked Record', 'This inspection record has already been synchronized with the central PostgreSQL server and cannot be edited locally.');
+  Future<void> _editRecord(SpecsRecord item) async {
+    final purchases = await AppDatabase.instance.getAllPurchases();
+    final isUsedInPurchase = purchases.any((p) => p.specsRecordId == item.id);
+    if (isUsedInPurchase) {
+      if (mounted) {
+        _showAlertDialog('Locked Record', 'This Specs Record has already been used for a Purchase Record and cannot be edited.');
+      }
       return;
     }
 
@@ -260,16 +304,21 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       _isOrganic = item.isOrganic;
       _moistureController.text = item.moisture.toString();
       _foreignMatterController.text = item.foreignMatter.toString();
-      _wholeGrainController.text = item.wholeGrain.toString();
-      _brokenRiceController.text = item.brokenRice.toString();
+      _wholeGrainController.text = item.wholeGrain != null ? item.wholeGrain.toString() : '';
+      _brokenRiceController.text = item.brokenRice != null ? item.brokenRice.toString() : '';
+      _impurityController.text = item.impurity != null ? item.impurity.toString() : '';
     });
 
     _familyCodeFocusNode.requestFocus();
   }
 
   Future<void> _deleteRecord(SpecsRecord item) async {
-    if (item.isSynced) {
-      _showAlertDialog('Locked Record', 'Synchronized inspection records cannot be deleted locally.');
+    final purchases = await AppDatabase.instance.getAllPurchases();
+    final isUsedInPurchase = purchases.any((p) => p.specsRecordId == item.id);
+    if (isUsedInPurchase) {
+      if (mounted) {
+        _showAlertDialog('Locked Record', 'Cannot delete Specs Record. This record is currently linked to an active Purchase Record.');
+      }
       return;
     }
 
@@ -294,7 +343,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       await AppDatabase.instance.deleteSpecs(item.id);
       await _loadHistory();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inspection record deleted.')));
+        AppNotification.showSuccess(context, 'Deleted');
       }
     }
   }
@@ -520,31 +569,35 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Row 3: Quality Parameters
+                  // Row 3: Quality Parameters following Master Grading order
                   LayoutBuilder(
                     builder: (context, constraints) {
                       bool isDesktop = constraints.maxWidth > 600;
                       return isDesktop
                           ? Row(
                               children: [
-                                Expanded(child: _buildMoistureInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildForeignMatterInput()),
-                                const SizedBox(width: 12),
                                 Expanded(child: _buildWholeGrainInput()),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 10),
                                 Expanded(child: _buildBrokenRiceInput()),
+                                const SizedBox(width: 10),
+                                Expanded(child: _buildImpurityInput()),
+                                const SizedBox(width: 10),
+                                Expanded(child: _buildForeignMatterInput()),
+                                const SizedBox(width: 10),
+                                Expanded(child: _buildMoistureInput()),
                               ],
                             )
                           : Column(
                               children: [
-                                _buildMoistureInput(),
-                                const SizedBox(height: 12),
-                                _buildForeignMatterInput(),
-                                const SizedBox(height: 12),
                                 _buildWholeGrainInput(),
                                 const SizedBox(height: 12),
                                 _buildBrokenRiceInput(),
+                                const SizedBox(height: 12),
+                                _buildImpurityInput(),
+                                const SizedBox(height: 12),
+                                _buildForeignMatterInput(),
+                                const SizedBox(height: 12),
+                                _buildMoistureInput(),
                               ],
                             );
                     },
@@ -651,9 +704,9 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
                             ],
                           ),
                           subtitle: Text('${item.village} · ${item.paddyType} (${item.selectedGrade})\nMoisture: ${item.moisture}% · Final Price: ${item.finalPrice.toInt()} KHR/kg', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                          trailing: Icon(
-                            item.isSynced ? Icons.lock_outline : Icons.chevron_right,
-                            color: item.isSynced ? AppTheme.textMuted : AppTheme.emeraldLight,
+                          trailing: const Icon(
+                            Icons.chevron_right,
+                            color: AppTheme.emeraldLight,
                             size: 18,
                           ),
                         ),
@@ -700,73 +753,125 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   }
 
   Widget _buildVillageDropdown() {
-    return DropdownButtonFormField<String>(
+    return SearchableVillageSelect(
       value: _village,
-      decoration: const InputDecoration(labelText: 'VILLAGE *', hintText: 'Select Village'),
-      hint: const Text('Select Village', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-      items: ConfigDao.instance.villages
-          .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
-          .toList(),
-      validator: (v) => v == null ? 'Select Village' : null,
       onChanged: (val) => setState(() => _village = val),
+      validator: (v) => v == null || v.isEmpty ? 'Select Village' : null,
     );
   }
 
   Widget _buildPaddyCategoryDropdown() {
     return DropdownButtonFormField<String>(
       value: _paddyType,
-      decoration: const InputDecoration(labelText: 'PADDY CATEGORY *', hintText: 'Select Category'),
+      decoration: const InputDecoration(
+        labelText: 'PADDY CATEGORY *',
+        hintText: 'Select Category',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
       hint: const Text('Select Paddy Category', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
       items: ConfigDao.instance.paddyCategories
           .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
           .toList(),
       validator: (v) => v == null ? 'Select Category' : null,
-      onChanged: (val) => setState(() => _paddyType = val),
+      onChanged: (val) {
+        setState(() {
+          _paddyType = val;
+          final availableGrades = ConfigDao.instance.getGradesForCategory(val);
+          if (_selectedGrade != null && !availableGrades.contains(_selectedGrade)) {
+            _selectedGrade = null;
+          }
+          if (_selectedGrade != null && val != null) {
+            _applyMasterSpecsForGrade(val, _selectedGrade!);
+          }
+        });
+      },
     );
   }
 
   Widget _buildGradeDropdown() {
+    final availableGrades = ConfigDao.instance.getGradesForCategory(_paddyType);
+    final currentGradeValue = availableGrades.contains(_selectedGrade) ? _selectedGrade : null;
+
     return DropdownButtonFormField<String>(
-      value: _selectedGrade,
-      decoration: const InputDecoration(labelText: 'GRADE *', hintText: 'Select Grade'),
-      hint: const Text('Select Grade', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-      items: ConfigDao.instance.grades
+      value: currentGradeValue,
+      decoration: const InputDecoration(
+        labelText: 'GRADE *',
+        hintText: 'Select Grade',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
+      hint: Text(_paddyType == null ? 'Select Category First' : 'Select Grade', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+      items: availableGrades
           .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12))))
           .toList(),
       validator: (v) => v == null ? 'Select Grade' : null,
-      onChanged: (val) => setState(() => _selectedGrade = val),
-    );
-  }
-
-  Widget _buildMoistureInput() {
-    return TextFormField(
-      controller: _moistureController,
-      keyboardType: TextInputType.number,
-      decoration: const InputDecoration(labelText: 'MOISTURE (%)', hintText: '13.5'),
-    );
-  }
-
-  Widget _buildForeignMatterInput() {
-    return TextFormField(
-      controller: _foreignMatterController,
-      keyboardType: TextInputType.number,
-      decoration: const InputDecoration(labelText: 'FOREIGN MATTER (%)', hintText: '4.0'),
+      onChanged: (val) {
+        setState(() {
+          _selectedGrade = val;
+          if (_paddyType != null && val != null) {
+            _applyMasterSpecsForGrade(_paddyType!, val);
+          }
+        });
+      },
     );
   }
 
   Widget _buildWholeGrainInput() {
     return TextFormField(
       controller: _wholeGrainController,
-      keyboardType: TextInputType.number,
-      decoration: const InputDecoration(labelText: 'WHOLE GRAIN (%)', hintText: '75.0'),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'WHOLE GRAIN (%)',
+        hintText: 'e.g. 75.0',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
     );
   }
 
   Widget _buildBrokenRiceInput() {
     return TextFormField(
       controller: _brokenRiceController,
-      keyboardType: TextInputType.number,
-      decoration: const InputDecoration(labelText: 'BROKEN RICE (%)', hintText: '25.0'),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'BROKEN RICE (%)',
+        hintText: 'e.g. 25.0',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
+    );
+  }
+
+  Widget _buildImpurityInput() {
+    return TextFormField(
+      controller: _impurityController,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'IMPURITY (%)',
+        hintText: 'e.g. 2.0',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
+    );
+  }
+
+  Widget _buildForeignMatterInput() {
+    return TextFormField(
+      controller: _foreignMatterController,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'FOREIGN MATTER (%)',
+        hintText: 'e.g. 6.0',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
+    );
+  }
+
+  Widget _buildMoistureInput() {
+    return TextFormField(
+      controller: _moistureController,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'MOISTURE (%)',
+        hintText: 'e.g. 13.5',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
     );
   }
 }

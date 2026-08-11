@@ -8,7 +8,7 @@ import { Lock, Mail, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react'
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'FIELD' | 'WAREHOUSE' | 'FINANCE' | 'ADMIN'>('ADMIN');
+  const [selectedRole, setSelectedRole] = useState<'FIELD' | 'WAREHOUSE' | 'INVENTORY' | 'FINANCE' | 'ADMIN'>('ADMIN');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError('');
 
     if (!email.trim() || !password.trim()) {
-      setError('Please enter your email and password.');
+      setError('Please enter your username and password.');
       return;
     }
 
@@ -45,10 +45,14 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickRoleSelect = (role: 'FIELD' | 'WAREHOUSE' | 'FINANCE' | 'ADMIN', defaultEmail: string) => {
+  const handleQuickRoleSelect = (
+    role: 'FIELD' | 'WAREHOUSE' | 'INVENTORY' | 'FINANCE' | 'ADMIN',
+    quickUsername: string,
+    quickPass: string
+  ) => {
     setSelectedRole(role);
-    setEmail(defaultEmail);
-    setPassword('Ibis2026!');
+    setEmail(quickUsername);
+    setPassword(quickPass);
     setError('');
   };
 
@@ -64,7 +68,7 @@ export default function LoginPage() {
             IBIS RICE <span className="text-[#34d399]">CONSERVATION</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Integrated Field, Warehouse & Finance Operations
+            Integrated Field, Warehouse, Inventory & Finance Operations
           </p>
         </div>
 
@@ -78,7 +82,7 @@ export default function LoginPage() {
 
           <div>
             <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-              ACCOUNT EMAIL
+              USERNAME / ACCOUNT EMAIL
             </label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -87,7 +91,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@ibisrice.com"
+                placeholder="Username or email"
                 className="w-full bg-[#1e293b]/60 border border-slate-700/80 rounded-xl pl-10 pr-3.5 py-3 text-sm text-white focus:outline-none focus:border-[#10b981] placeholder-slate-500"
               />
             </div>
@@ -129,76 +133,94 @@ export default function LoginPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-2.5 text-xs">
+            {/* Field Team Card */}
             <button
               type="button"
-              onClick={() => handleQuickRoleSelect('FIELD', 'field@ibisrice.com')}
-              className={`p-3 rounded-xl border font-bold text-left transition-all ${
-                selectedRole === 'FIELD' && email === 'field@ibisrice.com'
+              onClick={() => handleQuickRoleSelect('FIELD', 'piseth', 'PVH-piseth-2026')}
+              className={`p-3.5 rounded-xl border font-bold text-left transition-all ${
+                selectedRole === 'FIELD'
                   ? 'bg-emerald-500/20 border-emerald-500/80 text-emerald-400 shadow-md shadow-emerald-500/10'
                   : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-emerald-400">🌾 Field Team</span>
-                {selectedRole === 'FIELD' && email === 'field@ibisrice.com' && (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                {selectedRole === 'FIELD' && (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 )}
               </div>
-              <div className="text-[11px] text-slate-400 font-normal mt-0.5">field@ibisrice.com</div>
             </button>
 
+            {/* Warehouse Receiver Card */}
             <button
               type="button"
-              onClick={() => handleQuickRoleSelect('WAREHOUSE', 'warehouse@ibisrice.com')}
-              className={`p-3 rounded-xl border font-bold text-left transition-all ${
-                selectedRole === 'WAREHOUSE' && email === 'warehouse@ibisrice.com'
+              onClick={() => handleQuickRoleSelect('WAREHOUSE', 'phearun', 'KPT-phearun-2026')}
+              className={`p-3.5 rounded-xl border font-bold text-left transition-all ${
+                selectedRole === 'WAREHOUSE'
                   ? 'bg-sky-500/20 border-sky-500/80 text-sky-400 shadow-md shadow-sky-500/10'
                   : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-sky-400">🏬 Warehouse Receiver</span>
-                {selectedRole === 'WAREHOUSE' && email === 'warehouse@ibisrice.com' && (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+                {selectedRole === 'WAREHOUSE' && (
+                  <CheckCircle2 className="w-4 h-4 text-sky-400 flex-shrink-0" />
                 )}
               </div>
-              <div className="text-[11px] text-slate-400 font-normal mt-0.5">warehouse@ibisrice.com</div>
             </button>
 
+            {/* Inventory Team Card */}
             <button
               type="button"
-              onClick={() => handleQuickRoleSelect('FINANCE', 'finance@ibisrice.com')}
-              className={`p-3 rounded-xl border font-bold text-left transition-all ${
-                selectedRole === 'FINANCE' && email === 'finance@ibisrice.com'
+              onClick={() => handleQuickRoleSelect('INVENTORY', 'bousong', 'PNH-bousong-2026')}
+              className={`p-3.5 rounded-xl border font-bold text-left transition-all ${
+                selectedRole === 'INVENTORY'
+                  ? 'bg-purple-500/20 border-purple-500/80 text-purple-300 shadow-md shadow-purple-500/10'
+                  : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-purple-300">📦 Inventory Team</span>
+                {selectedRole === 'INVENTORY' && (
+                  <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                )}
+              </div>
+            </button>
+
+            {/* Finance Team Card */}
+            <button
+              type="button"
+              onClick={() => handleQuickRoleSelect('FINANCE', 'heap', 'ST-heap-2026')}
+              className={`p-3.5 rounded-xl border font-bold text-left transition-all ${
+                selectedRole === 'FINANCE'
                   ? 'bg-amber-500/20 border-amber-500/80 text-amber-400 shadow-md shadow-amber-500/10'
                   : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-amber-400">💳 Finance Team</span>
-                {selectedRole === 'FINANCE' && email === 'finance@ibisrice.com' && (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
+                {selectedRole === 'FINANCE' && (
+                  <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
                 )}
               </div>
-              <div className="text-[11px] text-slate-400 font-normal mt-0.5">finance@ibisrice.com</div>
             </button>
 
+            {/* System Admin Card */}
             <button
               type="button"
-              onClick={() => handleQuickRoleSelect('ADMIN', 'admin@ibisrice.com')}
-              className={`p-3 rounded-xl border font-bold text-left transition-all ${
-                selectedRole === 'ADMIN' && email === 'admin@ibisrice.com'
-                  ? 'bg-purple-500/20 border-purple-500/80 text-purple-400 shadow-md shadow-purple-500/10'
+              onClick={() => handleQuickRoleSelect('ADMIN', 'chansetha', 'ST-chansetha-2026')}
+              className={`p-3.5 rounded-xl border font-bold text-left transition-all col-span-2 ${
+                selectedRole === 'ADMIN'
+                  ? 'bg-rose-500/20 border-rose-500/80 text-rose-400 shadow-md shadow-rose-500/10'
                   : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-extrabold text-purple-400">⚙️ System Admin</span>
-                {selectedRole === 'ADMIN' && email === 'admin@ibisrice.com' && (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
+                <span className="font-extrabold text-rose-400">⚙️ System Admin</span>
+                {selectedRole === 'ADMIN' && (
+                  <CheckCircle2 className="w-4 h-4 text-rose-400 flex-shrink-0" />
                 )}
               </div>
-              <div className="text-[11px] text-slate-400 font-normal mt-0.5">admin@ibisrice.com</div>
             </button>
           </div>
         </div>

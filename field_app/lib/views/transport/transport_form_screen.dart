@@ -6,9 +6,12 @@ import '../../database/app_database.dart';
 import '../../database/config_dao.dart';
 import '../../models/purchase_record.dart';
 import '../../models/transport_record.dart';
+import '../../services/auth_service.dart';
+import '../../utils/app_notification.dart';
+import '../../widgets/searchable_village_select.dart';
 
 class TransportFormScreen extends StatefulWidget {
-  const TransportFormScreen({Key? key}) : super(key: key);
+  const TransportFormScreen({super.key});
 
   @override
   State<TransportFormScreen> createState() => _TransportFormScreenState();
@@ -51,8 +54,15 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
 
   Future<void> _loadAvailablePurchases() async {
     final allPurchases = await AppDatabase.instance.getAllPurchases();
+    final userProvinces = await AuthService.getAssignedProvinceList();
+    final allowedVillages = ConfigDao.instance.getVillagesForProvinces(userProvinces);
+
+    final filtered = (userProvinces.isEmpty || userProvinces.length >= 4)
+        ? allPurchases
+        : allPurchases.where((p) => allowedVillages.contains(p.village)).toList();
+
     setState(() {
-      _availablePurchases = allPurchases;
+      _availablePurchases = filtered;
     });
   }
 
@@ -68,13 +78,11 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     _plateNumberController.clear();
     _mobileNumberController.clear();
     _notesController.clear();
-    final stations = ConfigDao.instance.buyingStations;
-    final warehouses = ConfigDao.instance.destinationWarehouses;
 
     setState(() {
       _editingId = null;
-      _loadingLocation = stations.isNotEmpty ? stations.first : null;
-      _destinationWarehouse = warehouses.isNotEmpty ? warehouses.first : null;
+      _loadingLocation = null;
+      _destinationWarehouse = null;
       _truckCleaned = true;
       _selectedPurchases = [];
     });
@@ -128,22 +136,21 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: const [
-                            Icon(Icons.inventory_2, color: AppTheme.skyBlue, size: 22),
-                            SizedBox(width: 8),
-                            Text(
-                              'Select Paddy Purchase Records',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                            ),
-                          ],
+                        const Icon(Icons.inventory_2, color: AppTheme.skyBlue, size: 20),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Select Paddy Purchase Records',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close, color: AppTheme.textMuted),
                           onPressed: () => Navigator.pop(ctx),
-                          tooltip: 'Close Modal',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
                       ],
                     ),
@@ -327,29 +334,21 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
       await AppDatabase.instance.insertTransport(record);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_editingId != null ? '✅ Transport Dispatch Manifest updated!' : '✅ Transport Dispatch Manifest saved locally!'),
-            backgroundColor: AppTheme.emeraldPrimary,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        AppNotification.showSuccess(context, _editingId != null ? 'Updated' : 'Saved');
       }
 
       _resetForm();
       await _loadHistory();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error saving manifest: $e'), backgroundColor: AppTheme.errorRed),
-        );
+        AppNotification.showError(context, 'Error saving manifest: $e');
       }
     }
   }
 
   void _editRecord(TransportRecord item) {
-    if (item.isSynced) {
-      _showAlertDialog('Locked Manifest', 'This dispatch manifest has already been synchronized with the central PostgreSQL server and cannot be edited locally.');
+    if (item.status != 'EN_ROUTE' && item.status != 'REJECTED') {
+      _showAlertDialog('Locked Manifest', 'Cannot edit Transport Record. This shipment has already been received at the warehouse.');
       return;
     }
 
@@ -367,8 +366,8 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
   }
 
   Future<void> _deleteRecord(TransportRecord item) async {
-    if (item.isSynced) {
-      _showAlertDialog('Locked Manifest', 'Synchronized transport manifests cannot be deleted locally.');
+    if (item.status != 'EN_ROUTE' && item.status != 'REJECTED') {
+      _showAlertDialog('Locked Manifest', 'Cannot delete Transport Record. This shipment has already been received at the warehouse.');
       return;
     }
 
@@ -393,7 +392,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
       await AppDatabase.instance.deleteTransport(item.id);
       await _loadHistory();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transport manifest deleted.')));
+        AppNotification.showSuccess(context, 'Deleted');
       }
     }
   }
@@ -545,18 +544,9 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final buyingStations = ConfigDao.instance.buyingStations;
-    final destinationWarehouses = ConfigDao.instance.destinationWarehouses;
-
-    if (_loadingLocation == null && buyingStations.isNotEmpty) {
-      _loadingLocation = buyingStations.first;
-    }
-    if (_destinationWarehouse == null && destinationWarehouses.isNotEmpty) {
-      _destinationWarehouse = destinationWarehouses.first;
-    }
-
     final totalCargoWeight = _selectedPurchases.fold(0.0, (sum, p) => sum + p.totalWeight);
     final totalSacksCount = _selectedPurchases.fold(0, (sum, p) => sum + p.sackWeights.length);
+    final destinationWarehouses = ConfigDao.instance.destinationWarehouses;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -609,23 +599,24 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                           ? Row(
                               children: [
                                 Expanded(
-                                  child: DropdownButtonFormField<String>(
+                                  child: SearchableVillageSelect(
+                                    label: 'LOADING LOCATION *',
+                                    hint: 'Select Loading Village...',
                                     value: _loadingLocation,
-                                    decoration: const InputDecoration(labelText: 'LOADING LOCATION *', hintText: 'Select Loading Location'),
-                                    hint: const Text('Select Loading Location', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-                                    items: buyingStations
-                                        .map((loc) => DropdownMenuItem(value: loc, child: Text(loc, style: const TextStyle(fontSize: 12))))
-                                        .toList(),
-                                    validator: (v) => v == null ? 'Select Loading Location' : null,
                                     onChanged: (val) => setState(() => _loadingLocation = val),
+                                    validator: (v) => v == null || v.isEmpty ? 'Select Loading Village' : null,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
                                     value: _destinationWarehouse,
-                                    decoration: const InputDecoration(labelText: 'DESTINATION WAREHOUSE *', hintText: 'Select Destination Warehouse'),
-                                    hint: const Text('Select Destination Warehouse', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                                    decoration: const InputDecoration(
+                                      labelText: 'DESTINATION WAREHOUSE *',
+                                      hintText: 'Select Destination Warehouse...',
+                                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                                    ),
+                                    hint: const Text('Select Destination Warehouse...', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                                     items: destinationWarehouses
                                         .map((wh) => DropdownMenuItem(value: wh, child: Text(wh, style: const TextStyle(fontSize: 12))))
                                         .toList(),
@@ -637,20 +628,21 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                             )
                           : Column(
                               children: [
-                                DropdownButtonFormField<String>(
+                                SearchableVillageSelect(
+                                  label: 'LOADING LOCATION *',
+                                  hint: 'Select Loading Location...',
                                   value: _loadingLocation,
-                                  decoration: const InputDecoration(labelText: 'LOADING LOCATION *', hintText: 'Select Loading Location'),
-                                  hint: const Text('Select Loading Location', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-                                  items: buyingStations
-                                      .map((loc) => DropdownMenuItem(value: loc, child: Text(loc, style: const TextStyle(fontSize: 12))))
-                                      .toList(),
-                                  validator: (v) => v == null ? 'Select Loading Location' : null,
                                   onChanged: (val) => setState(() => _loadingLocation = val),
+                                  validator: (v) => v == null || v.isEmpty ? 'Select Loading Location' : null,
                                 ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(
                                   value: _destinationWarehouse,
-                                  decoration: const InputDecoration(labelText: 'DESTINATION WAREHOUSE *', hintText: 'Select Destination Warehouse'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'DESTINATION WAREHOUSE *',
+                                    hintText: 'Select Destination Warehouse',
+                                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                                  ),
                                   hint: const Text('Select Destination Warehouse', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                                   items: destinationWarehouses
                                       .map((wh) => DropdownMenuItem(value: wh, child: Text(wh, style: const TextStyle(fontSize: 12))))
@@ -865,6 +857,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                     itemCount: _localHistory.length,
                     itemBuilder: (context, index) {
                       final item = _localHistory[index];
+                      final isLocked = item.status != 'EN_ROUTE' && item.status != 'REJECTED';
                       return Card(
                         color: AppTheme.cardBackground,
                         margin: const EdgeInsets.only(bottom: 8),
@@ -901,8 +894,8 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                           ),
                           subtitle: Text('From: ${item.loadingLocation} → To: ${item.destinationWarehouse}\nCargo: ${item.totalFieldWeight} kg (${item.totalSacks} Bags)', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                           trailing: Icon(
-                            item.isSynced ? Icons.lock_outline : Icons.chevron_right,
-                            color: item.isSynced ? AppTheme.textMuted : AppTheme.skyBlue,
+                            isLocked ? Icons.lock_outline : Icons.chevron_right,
+                            color: isLocked ? AppTheme.textMuted : AppTheme.skyBlue,
                             size: 18,
                           ),
                         ),

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { isVillageAuthorized } from '@/lib/province-guard';
 
 export async function PUT(
   request: Request,
@@ -27,10 +28,30 @@ export async function PUT(
       return NextResponse.json({ error: 'Purchase record not found.' }, { status: 404 });
     }
 
-    // Locking check: Only allow editing if status is PENDING and not assigned to transport
-    if (existing.status !== 'PENDING' || existing.transportRecordId) {
+    if (session.user && !(await isVillageAuthorized(existing.village, session.user as any))) {
+      return NextResponse.json({ error: `Unauthorized. Record belongs to village '${existing.village}' which is outside your assigned province.` }, { status: 403 });
+    }
+
+    if (body.village && session.user && !(await isVillageAuthorized(body.village, session.user as any))) {
+      return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
+    }
+
+    // Locking check: Allow editing if status is PENDING OR if assigned to a transport record whose status is REJECTED
+    let isLocked = false;
+    if (existing.transportRecordId) {
+      const linkedTransport = await db.transportRecord.findUnique({
+        where: { id: existing.transportRecordId },
+      });
+      if (linkedTransport && linkedTransport.status !== 'REJECTED') {
+        isLocked = true;
+      }
+    } else if (existing.status !== 'PENDING') {
+      isLocked = true;
+    }
+
+    if (isLocked) {
       return NextResponse.json(
-        { error: 'Cannot edit purchase record. This record has already been assigned to transport or dispatched.' },
+        { error: 'Cannot edit purchase record. This record has already been assigned to an active transport dispatch or received by warehouse.' },
         { status: 400 }
       );
     }
@@ -141,23 +162,52 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const userRole = (session?.user as { role?: string })?.role;
     const userId = (session?.user as { id?: string })?.id;
 
-    if (!session || !userId || userRole !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized. Admin role required to delete purchase records.' }, { status: 403 });
+    if (!session || !userId) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const { id } = await params;
 
     const existing = await db.purchaseRecord.findUnique({
       where: { id },
+      include: { items: true },
     });
 
     if (!existing) {
       return NextResponse.json({ error: 'Purchase record not found.' }, { status: 404 });
     }
 
+    // Check village authorization for Field Staff / Province bounds
+    if (session.user && !(await isVillageAuthorized(existing.village, session.user as any))) {
+      return NextResponse.json(
+        { error: `Unauthorized. Record belongs to village '${existing.village}' which is outside your assigned province.` },
+        { status: 403 }
+      );
+    }
+
+    // Stage Locking check: Allow deletion ONLY if record is at Field stage (PENDING, DRAFT, REJECTED) or linked Transport is REJECTED
+    let isLocked = false;
+    if (existing.transportRecordId) {
+      const linkedTransport = await db.transportRecord.findUnique({
+        where: { id: existing.transportRecordId },
+      });
+      if (linkedTransport && linkedTransport.status !== 'REJECTED') {
+        isLocked = true;
+      }
+    } else if (existing.status !== 'PENDING' && existing.status !== 'REJECTED' && existing.status !== 'DRAFT') {
+      isLocked = true;
+    }
+
+    if (isLocked) {
+      return NextResponse.json(
+        { error: 'Cannot delete purchase record. This record has already been dispatched to an active truck or received/accepted by warehouse.' },
+        { status: 400 }
+      );
+    }
+
+    // Delete purchase record (PurchaseItem will be cascade deleted)
     await db.purchaseRecord.delete({
       where: { id },
     });
@@ -166,12 +216,18 @@ export async function DELETE(
     await db.auditLog.create({
       data: {
         userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
+        userName: session.user?.name || 'Field Staff',
+        userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
         action: 'DELETE',
         entityType: 'PurchaseRecord',
         entityId: id,
-        details: JSON.stringify({ familyCode: existing.familyCode, farmerName: existing.farmerName }),
+        details: JSON.stringify({
+          familyCode: existing.familyCode,
+          farmerName: existing.farmerName,
+          village: existing.village,
+          totalWeight: existing.totalWeight,
+          netPayment: existing.netPayment,
+        }),
       },
     });
 

@@ -7,9 +7,13 @@ import '../../config/theme.dart';
 import '../../database/app_database.dart';
 import '../../database/config_dao.dart';
 import '../../models/farmer_profile.dart';
+import '../../services/auth_service.dart';
+import '../../utils/app_notification.dart';
+import '../../widgets/searchable_village_select.dart';
+import '../../widgets/bank_document_preview.dart';
 
 class FarmerFormScreen extends StatefulWidget {
-  const FarmerFormScreen({Key? key}) : super(key: key);
+  const FarmerFormScreen({super.key});
 
   @override
   State<FarmerFormScreen> createState() => _FarmerFormScreenState();
@@ -22,6 +26,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   final _phoneController = TextEditingController();
   final _accountNumberController = TextEditingController();
   final _accountHolderController = TextEditingController();
+  final _customRelationshipController = TextEditingController();
   final _searchController = TextEditingController();
 
   final FocusNode _familyCodeFocusNode = FocusNode();
@@ -45,14 +50,22 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   @override
   void dispose() {
     _familyCodeFocusNode.dispose();
+    _customRelationshipController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadHistory() async {
     final list = await AppDatabase.instance.getAllFarmers();
+    final userProvinces = await AuthService.getAssignedProvinceList();
+    final allowedVillages = ConfigDao.instance.getVillagesForProvinces(userProvinces);
+
+    final filtered = (userProvinces.isEmpty || userProvinces.length >= 4)
+        ? list
+        : list.where((f) => allowedVillages.contains(f.village)).toList();
+
     setState(() {
-      _localHistory = list;
+      _localHistory = filtered;
     });
   }
 
@@ -62,6 +75,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
     _phoneController.clear();
     _accountNumberController.clear();
     _accountHolderController.clear();
+    _customRelationshipController.clear();
     setState(() {
       _editingId = null;
       _village = null;
@@ -102,12 +116,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           _farmerNameController.text = s.farmerName;
           _village = s.village;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚡ Auto-loaded Farmer (${s.familyCode} · ${s.farmerName} in ${s.village})'),
-            backgroundColor: AppTheme.emeraldPrimary,
-          ),
-        );
+        AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingSpecs.map((s) => {'code': s.familyCode, 'name': s.farmerName, 'village': s.village}).toList());
       }
@@ -131,12 +140,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           _farmerNameController.text = p.farmerName;
           _village = p.village;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚡ Auto-loaded Farmer (${p.familyCode} · ${p.farmerName} in ${p.village})'),
-            backgroundColor: AppTheme.emeraldPrimary,
-          ),
-        );
+        AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingPurchases.map((p) => {'code': p.familyCode, 'name': p.farmerName, 'village': p.village}).toList());
       }
@@ -144,9 +148,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No matching inspection or purchase record found for Family Code + Village.'), backgroundColor: AppTheme.skyBlue),
-      );
+      AppNotification.showInfo(context, 'No Match Found');
     }
   }
 
@@ -193,11 +195,44 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
 
   Future<void> _takePhoto() async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
-    if (image != null) {
-      setState(() {
-        _passbookPhotoPath = image.path;
-      });
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppTheme.cardBackground,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Attach Bank Passbook / Document Photo',
+                style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: AppTheme.skyBlue),
+                title: const Text('Take Photo with Camera', style: TextStyle(color: AppTheme.textWhite, fontSize: 13, fontWeight: FontWeight.bold)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: AppTheme.emeraldLight),
+                title: const Text('Choose from Gallery', style: TextStyle(color: AppTheme.textWhite, fontSize: 13, fontWeight: FontWeight.bold)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source != null) {
+      final image = await picker.pickImage(source: source, imageQuality: 75);
+      if (image != null) {
+        setState(() {
+          _passbookPhotoPath = image.path;
+        });
+      }
     }
   }
 
@@ -211,6 +246,10 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       return;
     }
 
+    final finalRelationship = _relationship == 'Other'
+        ? (_customRelationshipController.text.trim().isEmpty ? 'Other' : _customRelationshipController.text.trim())
+        : (_relationship ?? 'Self');
+
     final record = FarmerProfile(
       id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
       familyCode: _familyCodeController.text.trim(),
@@ -221,7 +260,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       bankName: _paymentMethod == 'Bank Transfer' ? (_bankName ?? 'ABA Bank') : 'Cash',
       accountNumber: _accountNumberController.text.trim(),
       accountHolder: _accountHolderController.text.trim().isEmpty ? _farmerNameController.text.trim() : _accountHolderController.text.trim(),
-      relationship: _relationship ?? 'Self',
+      relationship: finalRelationship,
       bankDocumentUrl: _passbookPhotoPath,
       createdAt: DateTime.now(),
       isSynced: false,
@@ -230,13 +269,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
     await AppDatabase.instance.insertFarmer(record);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_editingId != null ? '✅ Farmer Payment Profile updated!' : '✅ Farmer Profile saved locally! Form cleared for next farmer.'),
-          backgroundColor: AppTheme.emeraldPrimary,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      AppNotification.showSuccess(context, _editingId != null ? 'Updated' : 'Saved');
     }
 
     _resetForm();
@@ -244,10 +277,8 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   }
 
   void _editRecord(FarmerProfile item) {
-    if (item.isSynced) {
-      _showAlertDialog('Locked Record', 'This profile has already been synchronized with the central PostgreSQL server and cannot be edited locally.');
-      return;
-    }
+    final rel = item.relationship;
+    const stdValues = ['Self', 'Husband', 'Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother'];
 
     setState(() {
       _editingId = item.id;
@@ -259,7 +290,18 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       _bankName = item.bankName;
       _accountNumberController.text = item.accountNumber ?? '';
       _accountHolderController.text = item.accountHolder ?? '';
-      _relationship = item.relationship;
+      
+      if (stdValues.contains(rel)) {
+        _relationship = rel;
+        _customRelationshipController.clear();
+      } else if (rel.isNotEmpty && rel != 'Self') {
+        _relationship = 'Other';
+        _customRelationshipController.text = rel;
+      } else {
+        _relationship = 'Self';
+        _customRelationshipController.clear();
+      }
+
       _passbookPhotoPath = item.bankDocumentUrl;
     });
 
@@ -267,10 +309,6 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   }
 
   Future<void> _deleteRecord(FarmerProfile item) async {
-    if (item.isSynced) {
-      _showAlertDialog('Locked Record', 'Synchronized profiles cannot be deleted locally.');
-      return;
-    }
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -293,7 +331,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       await AppDatabase.instance.deleteFarmer(item.id);
       await _loadHistory();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile deleted successfully.')));
+        AppNotification.showSuccess(context, 'Deleted');
       }
     }
   }
@@ -347,7 +385,11 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: AppTheme.skyBlue.withOpacity(0.4)),
                     ),
-                    child: _buildPassbookThumbnail(item.bankDocumentUrl!, 150),
+                    child: BankDocumentPreview(
+                      imagePath: item.bankDocumentUrl!,
+                      size: 150,
+                      enableZoomOnClick: true,
+                    ),
                   ),
                 ),
               ],
@@ -607,7 +649,6 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Passbook Camera Capture Button Area
                   InkWell(
                     onTap: _takePhoto,
                     borderRadius: BorderRadius.circular(12),
@@ -620,10 +661,14 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                       ),
                       child: Row(
                         children: [
-                          _passbookPhotoPath != null
+                          _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: _buildPassbookThumbnail(_passbookPhotoPath!, 48),
+                                  child: BankDocumentPreview(
+                                    imagePath: _passbookPhotoPath!,
+                                    size: 48,
+                                    enableZoomOnClick: true,
+                                  ),
                                 )
                               : const Icon(Icons.camera_alt, color: AppTheme.skyBlue, size: 28),
                           const SizedBox(width: 12),
@@ -632,13 +677,30 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _passbookPhotoPath != null ? '✓ Bank Passbook Photo Selected' : 'Select / Snap Photo of Bank Passbook',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _passbookPhotoPath != null ? AppTheme.emeraldLight : AppTheme.textWhite),
+                                  _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
+                                      ? '✓ Bank Passbook Photo Attached'
+                                      : 'Select / Snap Photo of Bank Passbook',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
+                                        ? AppTheme.emeraldLight
+                                        : AppTheme.textWhite,
+                                  ),
                                 ),
-                                const Text('Tap to attach passbook photo to prevent account typos', style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+                                const Text(
+                                  'Tap to choose from Camera or Gallery. Tap thumbnail to expand.',
+                                  style: TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                                ),
                               ],
                             ),
                           ),
+                          if (_passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.clear, color: AppTheme.amberGold, size: 18),
+                              onPressed: () => setState(() => _passbookPhotoPath = null),
+                              tooltip: 'Remove attached photo',
+                            ),
                         ],
                       ),
                     ),
@@ -722,7 +784,11 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                           leading: item.bankDocumentUrl != null && item.bankDocumentUrl!.isNotEmpty
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: _buildPassbookThumbnail(item.bankDocumentUrl!, 40),
+                                  child: BankDocumentPreview(
+                                    imagePath: item.bankDocumentUrl!,
+                                    size: 40,
+                                    enableZoomOnClick: true,
+                                  ),
                                 )
                               : const Icon(Icons.account_balance, color: AppTheme.skyBlue),
                           title: Row(
@@ -755,9 +821,9 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                             ],
                           ),
                           subtitle: Text('${item.village} · ${item.bankName}\nAcc: ${item.accountNumber ?? 'N/A'} (${item.relationship})', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                          trailing: Icon(
-                            item.isSynced ? Icons.lock_outline : Icons.chevron_right,
-                            color: item.isSynced ? AppTheme.textMuted : AppTheme.skyBlue,
+                          trailing: const Icon(
+                            Icons.chevron_right,
+                            color: AppTheme.skyBlue,
                             size: 18,
                           ),
                         ),
@@ -811,22 +877,21 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   }
 
   Widget _buildVillageDropdown() {
-    return DropdownButtonFormField<String>(
+    return SearchableVillageSelect(
       value: _village,
-      decoration: const InputDecoration(labelText: 'VILLAGE *', hintText: 'Select Village'),
-      hint: const Text('Select Village', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-      items: ConfigDao.instance.villages
-          .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
-          .toList(),
-      validator: (v) => v == null ? 'Select Village' : null,
       onChanged: (val) => setState(() => _village = val),
+      validator: (v) => v == null || v.isEmpty ? 'Select Village' : null,
     );
   }
 
   Widget _buildPaymentMethodDropdown() {
     return DropdownButtonFormField<String>(
       value: _paymentMethod,
-      decoration: const InputDecoration(labelText: 'PAYMENT METHOD *', hintText: 'Select Method'),
+      decoration: const InputDecoration(
+        labelText: 'PAYMENT METHOD *',
+        hintText: 'Select Method',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
       hint: const Text('Select Method', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
       items: ['Bank Transfer', 'Cash']
           .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12))))
@@ -839,7 +904,11 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   Widget _buildBankDropdown() {
     return DropdownButtonFormField<String>(
       value: _bankName,
-      decoration: const InputDecoration(labelText: 'COMMERCIAL BANK', hintText: 'Select Bank'),
+      decoration: const InputDecoration(
+        labelText: 'COMMERCIAL BANK',
+        hintText: 'Select Bank',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+      ),
       hint: const Text('Select Bank', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
       items: ConfigDao.instance.banks
           .map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 12))))
@@ -862,14 +931,53 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
     );
   }
 
+  static const List<Map<String, String>> _relationshipOptions = [
+    {'value': 'Self', 'label': "Self (Farmer's Own Account)"},
+    {'value': 'Husband', 'label': 'Husband'},
+    {'value': 'Wife', 'label': 'Wife'},
+    {'value': 'Father', 'label': 'Father'},
+    {'value': 'Mother', 'label': 'Mother'},
+    {'value': 'Son', 'label': 'Son'},
+    {'value': 'Daughter', 'label': 'Daughter'},
+    {'value': 'Brother', 'label': 'Brother'},
+    {'value': 'Sister', 'label': 'Sister'},
+    {'value': 'Grandfather', 'label': 'Grandfather'},
+    {'value': 'Grandmother', 'label': 'Grandmother'},
+    {'value': 'Other', 'label': 'Other (Specify Below)'},
+  ];
+
   Widget _buildRelationshipDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _relationship,
-      decoration: const InputDecoration(labelText: 'RELATIONSHIP TO FARMER', hintText: 'Select Relationship'),
-      items: ['Self', 'Spouse', 'Child', 'Relative']
-          .map((r) => DropdownMenuItem(value: r, child: Text(r, style: const TextStyle(fontSize: 12))))
-          .toList(),
-      onChanged: (val) => setState(() => _relationship = val),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _relationship,
+          decoration: const InputDecoration(
+            labelText: 'RELATIONSHIP TO FARMER',
+            hintText: 'Select Relationship',
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+          ),
+          hint: const Text('Select Relationship', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+          items: _relationshipOptions
+              .map((r) => DropdownMenuItem(
+                    value: r['value'],
+                    child: Text(r['label']!, style: const TextStyle(fontSize: 12)),
+                  ))
+              .toList(),
+          onChanged: (val) => setState(() => _relationship = val),
+        ),
+        if (_relationship == 'Other') ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _customRelationshipController,
+            decoration: const InputDecoration(
+              labelText: 'SPECIFY OTHER RELATIONSHIP *',
+              hintText: 'e.g. Uncle / Legal Guardian',
+            ),
+            validator: (v) => _relationship == 'Other' && (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+        ],
+      ],
     );
   }
 }

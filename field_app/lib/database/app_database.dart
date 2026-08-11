@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -33,7 +32,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -54,6 +53,24 @@ class AppDatabase {
         await db.execute('ALTER TABLE transport_records ADD COLUMN status TEXT DEFAULT "EN_ROUTE"');
       } catch (e) {
         debugPrint('Migration v3 error or column exists: $e');
+      }
+    }
+    if (oldVersion < 4) {
+      try {
+        await db.execute('ALTER TABLE quality_specs ADD COLUMN impurity REAL');
+      } catch (e) {
+        debugPrint('Migration v4 error or column exists: $e');
+      }
+    }
+    if (oldVersion < 5) {
+      try {
+        await db.execute('DELETE FROM quality_specs');
+        await db.execute('DELETE FROM farmer_profiles');
+        await db.execute('DELETE FROM purchase_records');
+        await db.execute('DELETE FROM transport_records');
+        debugPrint('🧹 Migration v5: Purged old local test database records for clean fresh start.');
+      } catch (e) {
+        debugPrint('Migration v5 error: $e');
       }
     }
   }
@@ -77,8 +94,9 @@ class AppDatabase {
         isOrganic $intType,
         moisture $realType,
         foreignMatter $realType,
-        wholeGrain $realType,
-        brokenRice $realType,
+        wholeGrain REAL,
+        brokenRice REAL,
+        impurity REAL,
         isValid $intType,
         basePrice $realType,
         organicBonus $realType,
@@ -307,9 +325,27 @@ class AppDatabase {
     }
     final db = await instance.database;
     final s = Sqflite.firstIntValue(await db!.rawQuery('SELECT COUNT(*) FROM quality_specs WHERE isSynced = 0')) ?? 0;
-    final f = Sqflite.firstIntValue(await db!.rawQuery('SELECT COUNT(*) FROM farmer_profiles WHERE isSynced = 0')) ?? 0;
-    final p = Sqflite.firstIntValue(await db!.rawQuery('SELECT COUNT(*) FROM purchase_records WHERE isSynced = 0')) ?? 0;
-    final t = Sqflite.firstIntValue(await db!.rawQuery('SELECT COUNT(*) FROM transport_records WHERE isSynced = 0')) ?? 0;
+    final f = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM farmer_profiles WHERE isSynced = 0')) ?? 0;
+    final p = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM purchase_records WHERE isSynced = 0')) ?? 0;
+    final t = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM transport_records WHERE isSynced = 0')) ?? 0;
     return s + f + p + t;
+  }
+
+  /// Wipe all local SQLite table data (for fresh app initialization / testing)
+  Future<void> clearAllData() async {
+    if (kIsWeb) {
+      _webSpecs.clear();
+      _webFarmers.clear();
+      _webPurchases.clear();
+      _webTransports.clear();
+      return;
+    }
+    final db = await instance.database;
+    if (db != null) {
+      await db.delete('quality_specs');
+      await db.delete('farmer_profiles');
+      await db.delete('purchase_records');
+      await db.delete('transport_records');
+    }
   }
 }

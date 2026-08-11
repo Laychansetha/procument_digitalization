@@ -36,6 +36,7 @@ import {
   Package,
   Printer,
   Edit,
+  Pencil,
   Filter,
   XCircle,
   Clock,
@@ -46,8 +47,10 @@ import {
   ShieldCheck,
   User,
   Lock as LockIcon,
+  AlertOctagon,
 } from 'lucide-react';
 import SearchableBankSelect from '@/components/SearchableBankSelect';
+import SearchableVillageSelect from '@/components/SearchableVillageSelect';
 import SignaturePad from '@/components/SignaturePad';
 import SpecsSelectorModal from '@/components/SpecsSelectorModal';
 import PurchaseDetailsModal from '@/components/PurchaseDetailsModal';
@@ -61,6 +64,7 @@ import FinanceTruckDetailsModal from '@/components/FinanceTruckDetailsModal';
 import PrintFinanceReportModal from '@/components/PrintFinanceReportModal';
 import SpecsDetailsModal from '@/components/SpecsDetailsModal';
 import FarmerProfileDetailsModal from '@/components/FarmerProfileDetailsModal';
+import RejectionModal from '@/components/RejectionModal';
 import IbisLogo from '@/components/IbisLogo';
 
 export default function OperationsDashboard() {
@@ -70,9 +74,9 @@ export default function OperationsDashboard() {
   const currentUserRole = (session?.user as { role?: string })?.role || 'FIELD';
   const currentUserName = session?.user?.name || 'User';
 
-  const [activeModule, setActiveModule] = useState<'field' | 'warehouse' | 'finance' | 'admin'>('field');
+  const [activeModule, setActiveModule] = useState<'field' | 'warehouse' | 'inventory' | 'finance' | 'admin'>('field');
   const [fieldTab, setFieldTab] = useState<'specs' | 'payment' | 'purchase' | 'transport'>('specs');
-  const [adminTab, setAdminTab] = useState<'users' | 'villages' | 'banks' | 'prices' | 'tolerance' | 'audit'>('users');
+  const [adminTab, setAdminTab] = useState<'users' | 'villages' | 'banks' | 'prices' | 'tolerance' | 'audit' | 'backup'>('users');
 
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [successBanner, setSuccessBanner] = useState<string>('');
@@ -94,6 +98,37 @@ export default function OperationsDashboard() {
     };
   }, []);
 
+  // Role-Based Access Control: Automatically set initial module based on user account role
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user) {
+      const role = (session.user as { role?: string })?.role;
+      if (role === 'WAREHOUSE') {
+        setActiveModule('warehouse');
+      } else if (role === 'INVENTORY') {
+        setActiveModule('inventory');
+      } else if (role === 'FINANCE') {
+        setActiveModule('finance');
+      } else if (role === 'FIELD') {
+        setActiveModule('field');
+      }
+    }
+  }, [status, session]);
+
+  const handleSelectModule = (mod: 'field' | 'warehouse' | 'inventory' | 'finance' | 'admin') => {
+    if (currentUserRole !== 'ADMIN') {
+      if (
+        (currentUserRole === 'FIELD' && mod !== 'field') ||
+        (currentUserRole === 'WAREHOUSE' && mod !== 'warehouse') ||
+        (currentUserRole === 'INVENTORY' && mod !== 'inventory') ||
+        (currentUserRole === 'FINANCE' && mod !== 'finance')
+      ) {
+        alert(`🔒 Access Restricted: As a ${currentUserRole} Team member, you are only permitted to access your assigned module.`);
+        return;
+      }
+    }
+    setActiveModule(mod);
+  };
+
   // Modals state
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [selectedSpecsRecordId, setSelectedSpecsRecordId] = useState<string | null>(null);
@@ -112,6 +147,14 @@ export default function OperationsDashboard() {
   const [selectedIntakeForDetails, setSelectedIntakeForDetails] = useState<any>(null);
   const [selectedIntakeForPrint, setSelectedIntakeForPrint] = useState<any>(null);
   const [whSearchQuery, setWhSearchQuery] = useState('');
+
+  // Inventory Module State
+  const [invSearchQuery, setInvSearchQuery] = useState('');
+  const [invStatusFilter, setInvStatusFilter] = useState<'ALL' | 'WAITING_FOR_INVENTORY' | 'INVENTORY_RECORDED'>('ALL');
+  const [invConfirmModalIntake, setInvConfirmModalIntake] = useState<any>(null);
+  const [invLocationInput, setInvLocationInput] = useState('Silo 01 - Stack A');
+  const [invNotesInput, setInvNotesInput] = useState('');
+  const [isSubmittingInventory, setIsSubmittingInventory] = useState(false);
 
   // Finance Modals & Truck State
   const [financeTrucks, setFinanceTrucks] = useState<any[]>([]);
@@ -134,6 +177,7 @@ export default function OperationsDashboard() {
   const [uUsername, setUUsername] = useState('');
   const [uPassword, setUPassword] = useState('Ibis2026!');
   const [uRole, setURole] = useState<'FIELD' | 'WAREHOUSE' | 'FINANCE' | 'ADMIN'>('FIELD');
+  const [uAssignedProvince, setUAssignedProvince] = useState('Preah Vihear');
   const [uStatus, setUStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [resetPassInput, setResetPassInput] = useState('');
@@ -169,10 +213,11 @@ export default function OperationsDashboard() {
   const [spPaddyType, setSpPaddyType] = useState('');
   const [spSelectedGrade, setSpSelectedGrade] = useState('');
   const [spIsOrganic, setSpIsOrganic] = useState(true);
-  const [spMoisture, setSpMoisture] = useState(13.5);
-  const [spForeign, setSpForeign] = useState(4);
-  const [spWhole, setSpWhole] = useState(75);
-  const [spBroken, setSpBroken] = useState(25);
+  const [spWhole, setSpWhole] = useState<number | string>('');
+  const [spBroken, setSpBroken] = useState<number | string>('');
+  const [spImpurity, setSpImpurity] = useState<number | string>('');
+  const [spForeign, setSpForeign] = useState<number | string>('');
+  const [spMoisture, setSpMoisture] = useState<number | string>('');
   const [editingSpecsId, setEditingSpecsId] = useState<string | null>(null);
 
   // Form states - Farmer Payment
@@ -194,9 +239,9 @@ export default function OperationsDashboard() {
   const [pFamilyCode, setPFamilyCode] = useState('');
   const [pFarmerName, setPFarmerName] = useState('');
   const [pVillage, PVillage] = useState('');
-  const [pVariety, setPVariety] = useState('Red Jasmine');
-  const [pGrade, setPGrade] = useState('A1');
-  const [pStandardPrice, setPStandardPrice] = useState(1997.5);
+  const [pVariety, setPVariety] = useState('');
+  const [pGrade, setPGrade] = useState('');
+  const [pStandardPrice, setPStandardPrice] = useState(0);
 
   const [pAdditionalPriceInput, setPAdditionalPriceInput] = useState('0');
   const [pSeedBorrowedInput, setPSeedBorrowedInput] = useState('0');
@@ -225,8 +270,10 @@ export default function OperationsDashboard() {
   const [whTareWeight, setWhTareWeight] = useState('');
   const [whGrossPhotoUrl, setWhGrossPhotoUrl] = useState('');
   const [whTarePhotoUrl, setWhTarePhotoUrl] = useState('');
+  const [whInvoicePhotoUrl, setWhInvoicePhotoUrl] = useState('');
   const [uploadingGrossPhoto, setUploadingGrossPhoto] = useState(false);
   const [uploadingTarePhoto, setUploadingTarePhoto] = useState(false);
+  const [uploadingInvoicePhoto, setUploadingInvoicePhoto] = useState(false);
   const [whNotes, setWhNotes] = useState('');
   const [editingIntakeId, setEditingIntakeId] = useState<string | null>(null);
 
@@ -235,19 +282,35 @@ export default function OperationsDashboard() {
   const [scaleToleranceWarning, setScaleToleranceWarning] = useState<number>(500);
   const [scaleToleranceCritical, setScaleToleranceCritical] = useState<number>(500);
 
+  // Rejection Modal state
+  const [rejectionTarget, setRejectionTarget] = useState<{
+    isOpen: boolean;
+    title: string;
+    entityType: string;
+    entityId: string;
+    defaultTargetModule?: 'FIELD' | 'WAREHOUSE' | 'INVENTORY';
+    availableTargetModules?: Array<'FIELD' | 'WAREHOUSE' | 'INVENTORY'>;
+  } | null>(null);
+
+  // Warehouse receiving cargo breakdown expand state
+  const [showCargoBreakdown, setShowCargoBreakdown] = useState<boolean>(false);
+
   // Form states - Admin Settings
   const [newVillageName, setNewVillageName] = useState('');
-  const [newVillageDistrict, setNewVillageDistrict] = useState('Chhaeb');
+  const [newVillageProvince, setNewVillageProvince] = useState('Preah Vihear');
 
   const [newBankName, setNewBankName] = useState('');
   const [newBankCode, setNewBankCode] = useState('');
 
+  const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
   const [newSpecVariety, setNewSpecVariety] = useState('');
   const [newSpecGrade, setNewSpecGrade] = useState('A1');
   const [newSpecBasePrice, setNewSpecBasePrice] = useState(1650);
-  const [newSpecOrganicBonus, setNewSpecOrganicBonus] = useState(100);
-  const [newSpecMaxMoisture, setNewSpecMaxMoisture] = useState(14.0);
-  const [newSpecMaxForeign, setNewSpecMaxForeign] = useState(5.0);
+  const [newSpecMinWholeGrain, setNewSpecMinWholeGrain] = useState<number | string>(70);
+  const [newSpecMaxBrokenRice, setNewSpecMaxBrokenRice] = useState<number | string>(30);
+  const [newSpecImpurity, setNewSpecImpurity] = useState<number | string>(1);
+  const [newSpecMaxForeign, setNewSpecMaxForeign] = useState<number | string>(5.0);
+  const [newSpecMaxMoisture, setNewSpecMaxMoisture] = useState<number | string>(14.0);
 
   // ROLE-BASED ACCESS GUARD & INITIAL MODULE SETTING
   useEffect(() => {
@@ -284,11 +347,6 @@ export default function OperationsDashboard() {
       if (resVillages.ok) {
         const vData = await resVillages.json();
         setVillages(vData);
-        if (vData.length > 0) {
-          if (!spVillage) setSpVillage(vData[0].name);
-          if (!payVillage) setPayVillage(vData[0].name);
-          if (!pVillage) PVillage(vData[0].name);
-        }
       }
 
       if (resBanks.ok) {
@@ -302,10 +360,6 @@ export default function OperationsDashboard() {
       if (resPriceSpecs.ok) {
         const psData = await resPriceSpecs.json();
         setPriceSpecs(psData);
-        if (psData.length > 0) {
-          if (!spPaddyType) setSpPaddyType(psData[0].variety);
-          if (!spSelectedGrade) setSpSelectedGrade(psData[0].grade);
-        }
       }
 
       if (resSpecs.ok) setSpecsList(await resSpecs.json());
@@ -365,6 +419,11 @@ export default function OperationsDashboard() {
       return;
     }
 
+    if (uRole === 'FIELD' && !uAssignedProvince) {
+      alert('Please select an Assigned Province for Field Staff.');
+      return;
+    }
+
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -373,6 +432,7 @@ export default function OperationsDashboard() {
         email: uUsername,
         password: uPassword,
         role: uRole,
+        assignedProvinces: uRole === 'FIELD' ? uAssignedProvince : 'Preah Vihear,Stung Treng,Ratanakiri,Mondolkiri',
         status: uStatus,
       }),
     });
@@ -382,6 +442,7 @@ export default function OperationsDashboard() {
       setUFullName('');
       setUUsername('');
       setUPassword('Ibis2026!');
+      setUAssignedProvince('Preah Vihear');
       refreshAllData();
     } else {
       const err = await res.json();
@@ -439,6 +500,153 @@ export default function OperationsDashboard() {
     }
   };
 
+  // Cross Auto-Fill Helper: Search farmer details by Family Code across Farmer Profiles, Specs, and Purchases
+  const findFarmerByFamilyCode = (code: string) => {
+    const normalized = code.trim().toLowerCase();
+    if (!normalized) return null;
+
+    // 1. Search Farmer Payment Profiles
+    const profileMatch = farmerProfiles.find((f) => f.familyCode?.trim().toLowerCase() === normalized);
+    if (profileMatch) {
+      return {
+        farmerName: profileMatch.farmerName,
+        village: profileMatch.village,
+        phone: profileMatch.phone || '',
+        source: 'Farmer Payment Profile',
+      };
+    }
+
+    // 2. Search Specs Records
+    const specsMatch = specsList.find((s) => s.familyCode?.trim().toLowerCase() === normalized);
+    if (specsMatch) {
+      return {
+        farmerName: specsMatch.farmerName,
+        village: specsMatch.village,
+        source: 'Specs Record',
+      };
+    }
+
+    // 3. Search Purchase Records
+    const purchaseMatch = purchases.find((p) => p.familyCode?.trim().toLowerCase() === normalized);
+    if (purchaseMatch) {
+      return {
+        farmerName: purchaseMatch.farmerName,
+        village: purchaseMatch.village,
+        source: 'Purchase Record',
+      };
+    }
+
+    return null;
+  };
+
+  // Handlers for Family Code Auto-fill
+  const handlePayFamilyCodeChange = (codeVal: string) => {
+    setPayFamilyCode(codeVal);
+    const match = findFarmerByFamilyCode(codeVal);
+    if (match) {
+      if (match.farmerName) setPayFarmerName(match.farmerName);
+      if (match.village) setPayVillage(match.village);
+      if (match.phone && !payPhone) setPayPhone(match.phone);
+      if (payRelationship === 'Self' && match.farmerName) {
+        setPayAccountHolder(match.farmerName);
+      }
+    }
+  };
+
+  const handleSpFamilyCodeChange = (codeVal: string) => {
+    setSpFamilyCode(codeVal);
+    const match = findFarmerByFamilyCode(codeVal);
+    if (match) {
+      if (match.farmerName) setSpFarmerName(match.farmerName);
+      if (match.village) setSpVillage(match.village);
+    }
+  };
+
+  const handlePFamilyCodeChange = (codeVal: string) => {
+    setPFamilyCode(codeVal);
+    const match = findFarmerByFamilyCode(codeVal);
+    if (match) {
+      if (match.farmerName) setPFarmerName(match.farmerName);
+      if (match.village) PVillage(match.village);
+    }
+  };
+
+  // Delete Purchase Record Handler (2-Step Confirmation & Stage Guard)
+  const handleDeletePurchaseRecord = async (p: any) => {
+    const formattedId = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+
+    // Step 1 Confirmation
+    const step1 = window.confirm(
+      `⚠️ STEP 1 OF 2: Delete Purchase Record?\n\nAre you sure you want to delete Purchase Record ${formattedId} for ${p.farmerName} (${p.familyCode})?\n\nTotal Weight: ${p.totalWeight} kg | Net Payment: ${p.netPayment.toLocaleString()} KHR`
+    );
+    if (!step1) return;
+
+    // Step 2 Confirmation
+    const step2 = window.confirm(
+      `🚨 STEP 2 OF 2 (PERMANENT DELETION):\n\nThis action CANNOT be undone. Are you absolutely certain you want to PERMANENTLY DELETE Purchase Record ${formattedId}?`
+    );
+    if (!step2) return;
+
+    try {
+      const res = await fetch(`/api/purchases/${p.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncStatus(`✅ Purchase Record ${formattedId} deleted successfully.`);
+        // Clear from active truck loading list if present
+        setSelectedPurchasesForTruck((prev) => prev.filter((item) => item.id !== p.id));
+        refreshAllData();
+      } else {
+        alert(`Failed to delete Purchase Record: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting purchase record:', err);
+      alert('Network error while deleting Purchase Record.');
+    }
+  };
+
+  // Delete Specs Record Handler
+  const handleDeleteSpecsRecord = async (id: string, familyCode: string) => {
+    if (!window.confirm(`Are you sure you want to delete Specs Record for Family Code ${familyCode}? This action cannot be undone.`)) return;
+
+    try {
+      const res = await fetch(`/api/specs/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncStatus(`✅ Specs Record for ${familyCode} deleted successfully.`);
+        if (editingSpecsId === id) setEditingSpecsId(null);
+        refreshAllData();
+      } else {
+        alert(`Failed to delete Specs Record: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting specs record:', err);
+      alert('Network error while deleting Specs Record.');
+    }
+  };
+
+  // Delete Farmer Payment Profile Handler
+  const handleDeleteFarmerProfile = async (id: string, familyCode: string) => {
+    if (!window.confirm(`Are you sure you want to delete Farmer Payment Profile for Family Code ${familyCode}? This action cannot be undone.`)) return;
+
+    try {
+      const res = await fetch(`/api/farmers/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncStatus(`✅ Farmer Profile for ${familyCode} deleted successfully.`);
+        if (editingProfileId === id) setEditingProfileId(null);
+        refreshAllData();
+      } else {
+        alert(`Failed to delete Farmer Profile: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting farmer profile:', err);
+      alert('Network error while deleting Farmer Profile.');
+    }
+  };
+
   // ADMIN: Save Scale Weight Tolerance Configuration
   const handleSaveScaleToleranceConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -479,7 +687,7 @@ export default function OperationsDashboard() {
 
     const parsedWeights = pSackInput
       .split(/[\s,]+/)
-      .map((val) => parseFloat(val))
+      .map((val) => Math.round(parseFloat(val)))
       .filter((w) => !isNaN(w) && w > 0);
 
     if (parsedWeights.length > 0) {
@@ -503,10 +711,10 @@ export default function OperationsDashboard() {
     setEditingPurchaseId(null);
     setPFamilyCode('');
     setPFarmerName('');
-    PVillage(villages[0]?.name || '');
-    setPVariety(priceSpecs[0]?.variety || 'Red Jasmine');
-    setPGrade('A1');
-    setPStandardPrice(priceSpecs[0]?.basePrice || 1997.5);
+    PVillage('');
+    setPVariety('');
+    setPGrade('');
+    setPStandardPrice(0);
     setPAdditionalPriceInput('0');
     setPSackWeights([]);
     setPSackInput('');
@@ -560,13 +768,14 @@ export default function OperationsDashboard() {
     }
   };
 
-  // Upload Warehouse Scale Photo (Gross or Tare)
-  const handleScalePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'gross' | 'tare') => {
+  // Upload Warehouse Scale Photo (Gross, Tare, or Invoice)
+  const handleScalePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'gross' | 'tare' | 'invoice') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (type === 'gross') setUploadingGrossPhoto(true);
-    else setUploadingTarePhoto(true);
+    else if (type === 'tare') setUploadingTarePhoto(true);
+    else setUploadingInvoicePhoto(true);
 
     try {
       const formData = new FormData();
@@ -580,8 +789,9 @@ export default function OperationsDashboard() {
       const data = await res.json();
       if (data.success) {
         if (type === 'gross') setWhGrossPhotoUrl(data.url);
-        else setWhTarePhotoUrl(data.url);
-        setSyncStatus(`✅ ${type === 'gross' ? 'Gross' : 'Tare'} scale photo uploaded!`);
+        else if (type === 'tare') setWhTarePhotoUrl(data.url);
+        else setWhInvoicePhotoUrl(data.url);
+        setSyncStatus(`✅ ${type === 'gross' ? 'Gross scale' : type === 'tare' ? 'Tare scale' : 'Transport invoice'} photo uploaded!`);
       } else {
         alert('Photo upload failed: ' + data.error);
       }
@@ -589,7 +799,133 @@ export default function OperationsDashboard() {
       alert('Failed to upload photo.');
     } finally {
       if (type === 'gross') setUploadingGrossPhoto(false);
-      else setUploadingTarePhoto(false);
+      else if (type === 'tare') setUploadingTarePhoto(false);
+      else setUploadingInvoicePhoto(false);
+    }
+  };
+
+  const [payReceiptPhotoUrl, setPayReceiptPhotoUrl] = useState('');
+  const [uploadingPayReceipt, setUploadingPayReceipt] = useState(false);
+
+  // Upload Finance Payment Transfer Receipt Proof
+  const handlePaymentReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPayReceipt(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setPayReceiptPhotoUrl(data.url);
+        setSyncStatus('✅ Bank payment transfer receipt uploaded successfully!');
+      } else {
+        alert('Payment receipt upload failed: ' + data.error);
+      }
+    } catch (err) {
+      alert('Failed to upload payment receipt.');
+    } finally {
+      setUploadingPayReceipt(false);
+    }
+  };
+
+  const [restoringBackup, setRestoringBackup] = useState(false);
+
+  // Handle Database Backup Export (JSON file download)
+  const handleExportDatabaseBackup = async () => {
+    try {
+      const res = await fetch('/api/admin/backup');
+      if (!res.ok) {
+        const err = await res.json();
+        alert('Failed to export backup: ' + err.error);
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const fileName = `IBIS_Rice_Database_Backup_${new Date().toISOString().split('T')[0]}.json`;
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setSuccessBanner('✅ Database backup JSON file exported successfully!');
+    } catch (err) {
+      alert('Error downloading database backup file.');
+    }
+  };
+
+  // Handle Database Restore (JSON file upload)
+  const handleRestoreDatabaseBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm(`Are you sure you want to restore the database from "${file.name}"? This will update system settings and master records.`)) {
+      return;
+    }
+
+    setRestoringBackup(true);
+    try {
+      const text = await file.text();
+      const jsonPayload = JSON.parse(text);
+
+      const res = await fetch('/api/admin/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(jsonPayload),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSuccessBanner(`✅ Database restored successfully from backup! Master data synchronized.`);
+        refreshAllData();
+      } else {
+        const err = await res.json();
+        alert('Failed to restore database backup: ' + err.error);
+      }
+    } catch (err) {
+      alert('Invalid backup JSON file or file parsing error.');
+    } finally {
+      setRestoringBackup(false);
+    }
+  };
+
+  const applyMasterSpecsForGrade = (variety: string, grade: string) => {
+    const spec = priceSpecs.find((s: any) => s.variety === variety && s.grade === grade);
+    if (spec) {
+      setSpWhole(spec.minWholeGrain !== null && spec.minWholeGrain !== undefined ? spec.minWholeGrain : '');
+      setSpBroken(spec.maxBrokenRice !== null && spec.maxBrokenRice !== undefined ? spec.maxBrokenRice : '');
+      setSpImpurity(spec.impurity !== null && spec.impurity !== undefined ? spec.impurity : '');
+      setSpForeign(spec.maxForeignMatter !== null && spec.maxForeignMatter !== undefined ? spec.maxForeignMatter : 6);
+      setSpMoisture(spec.maxMoisture !== null && spec.maxMoisture !== undefined ? spec.maxMoisture : 13.5);
+    } else {
+      if (variety === 'Phka Rumduol') {
+        if (grade === 'A1') { setSpWhole(75); setSpBroken(25); setSpImpurity(2); setSpForeign(6); setSpMoisture(13.5); }
+        else if (grade === 'A2') { setSpWhole(70); setSpBroken(30); setSpImpurity(4); setSpForeign(6); setSpMoisture(14.0); }
+        else if (grade === 'B1') { setSpWhole(60); setSpBroken(40); setSpImpurity(2); setSpForeign(6); setSpMoisture(14.0); }
+        else if (grade === 'B2') { setSpWhole(50); setSpBroken(50); setSpImpurity(4); setSpForeign(6); setSpMoisture(14.0); }
+      } else if (variety === 'Red Jasmine') {
+        if (grade === 'A1') { setSpWhole(75); setSpBroken(25); setSpImpurity(''); setSpForeign(6); setSpMoisture(13.5); }
+        else if (grade === 'A2') { setSpWhole(70); setSpBroken(30); setSpImpurity(''); setSpForeign(6); setSpMoisture(14.0); }
+        else if (grade === 'B1') { setSpWhole(60); setSpBroken(40); setSpImpurity(''); setSpForeign(6); setSpMoisture(14.0); }
+        else if (grade === 'B2') { setSpWhole(50); setSpBroken(50); setSpImpurity(''); setSpForeign(6); setSpMoisture(14.0); }
+      } else if (variety.includes('Foundation Seed')) {
+        setSpWhole(98); setSpBroken(''); setSpImpurity(1); setSpForeign(1); setSpMoisture(12.0);
+      } else if (variety === 'Certified Seed') {
+        setSpWhole(96); setSpBroken(''); setSpImpurity(2); setSpForeign(2); setSpMoisture(12.0);
+      } else if (variety === 'White Rice') {
+        setSpWhole(''); setSpBroken(''); setSpImpurity('');
+        if (grade === 'B') setSpForeign(8); else setSpForeign(4);
+        setSpMoisture(13.5);
+      }
     }
   };
 
@@ -597,14 +933,15 @@ export default function OperationsDashboard() {
     setEditingSpecsId(null);
     setSpFamilyCode('');
     setSpFarmerName('');
-    setSpVillage(villages[0]?.name || '');
-    setSpPaddyType(priceSpecs[0]?.variety || 'Red Jasmine');
-    setSpSelectedGrade('A1');
+    setSpVillage('');
+    setSpPaddyType('');
+    setSpSelectedGrade('');
     setSpIsOrganic(true);
-    setSpMoisture(13.5);
-    setSpForeign(4);
-    setSpWhole(75);
-    setSpBroken(25);
+    setSpMoisture('');
+    setSpForeign('');
+    setSpWhole('');
+    setSpBroken('');
+    setSpImpurity('');
   };
 
   const handleEditSpecs = (spec: any) => {
@@ -617,14 +954,15 @@ export default function OperationsDashboard() {
     setEditingSpecsId(spec.id);
     setSpFamilyCode(spec.familyCode || '');
     setSpFarmerName(spec.farmerName || '');
-    setSpVillage(spec.village || villages[0]?.name || '');
-    setSpPaddyType(spec.paddyType || priceSpecs[0]?.variety || 'Red Jasmine');
+    setSpVillage(spec.village || '');
+    setSpPaddyType(spec.paddyType || '');
     setSpSelectedGrade(spec.selectedGrade || 'A1');
     setSpIsOrganic(spec.isOrganic ?? true);
-    setSpMoisture(spec.moisture ?? 13.5);
-    setSpForeign(spec.foreignMatter ?? 4);
-    setSpWhole(spec.wholeGrain ?? 75);
-    setSpBroken(spec.brokenRice ?? 25);
+    setSpMoisture(spec.moisture ?? '');
+    setSpForeign(spec.foreignMatter ?? '');
+    setSpWhole(spec.wholeGrain ?? '');
+    setSpBroken(spec.brokenRice ?? '');
+    setSpImpurity(spec.impurity ?? '');
 
     window.scrollTo({ top: 250, behavior: 'smooth' });
   };
@@ -632,14 +970,20 @@ export default function OperationsDashboard() {
   // Submit or Update Specs Record
   const handleSaveSpecs = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!spFamilyCode || !spFarmerName) {
-      alert('Please fill in Family Code and Farmer Name.');
+    if (!spFamilyCode || !spFarmerName || !spVillage || !spPaddyType) {
+      alert('Please fill in Family Code, Farmer Name, select Target Village, and choose Paddy Category.');
       return;
     }
 
     const currentSpec = priceSpecs.find((s) => s.variety === spPaddyType && s.grade === spSelectedGrade);
     const baseP = currentSpec ? currentSpec.basePrice : 1650;
     const bonusP = spIsOrganic ? (currentSpec ? currentSpec.organicBonus : 100) : 0;
+
+    const numMoisture = parseFloat(String(spMoisture)) || 0;
+    const numForeign = parseFloat(String(spForeign)) || 0;
+    const numWhole = spWhole !== '' && spWhole !== null && spWhole !== undefined ? parseFloat(String(spWhole)) : null;
+    const numBroken = spBroken !== '' && spBroken !== null && spBroken !== undefined ? parseFloat(String(spBroken)) : null;
+    const numImpurity = spImpurity !== '' && spImpurity !== null && spImpurity !== undefined ? parseFloat(String(spImpurity)) : null;
 
     const payload = {
       familyCode: spFamilyCode,
@@ -648,11 +992,12 @@ export default function OperationsDashboard() {
       paddyType: spPaddyType,
       selectedGrade: spSelectedGrade,
       isOrganic: spIsOrganic,
-      moisture: spMoisture,
-      foreignMatter: spForeign,
-      wholeGrain: spWhole,
-      brokenRice: spBroken,
-      isValid: spMoisture <= (currentSpec?.maxMoisture || 14.0) && spForeign <= (currentSpec?.maxForeignMatter || 5.0),
+      moisture: numMoisture,
+      foreignMatter: numForeign,
+      wholeGrain: numWhole,
+      brokenRice: numBroken,
+      impurity: numImpurity,
+      isValid: numMoisture <= (currentSpec?.maxMoisture || 15.5) && numForeign <= (currentSpec?.maxForeignMatter || 8.0),
       basePrice: baseP,
       organicBonus: bonusP,
       finalPrice: baseP + bonusP,
@@ -691,7 +1036,7 @@ export default function OperationsDashboard() {
     setEditingProfileId(null);
     setPayFamilyCode('');
     setPayFarmerName('');
-    setPayVillage(villages[0]?.name || '');
+    setPayVillage('');
     setPayPhone('');
     setPayMethod('Bank Transfer');
     setPayBankName(banks[0]?.name || 'ABA Bank');
@@ -706,7 +1051,7 @@ export default function OperationsDashboard() {
     setEditingProfileId(profile.id);
     setPayFamilyCode(profile.familyCode || '');
     setPayFarmerName(profile.farmerName || '');
-    setPayVillage(profile.village || villages[0]?.name || '');
+    setPayVillage(profile.village || '');
     setPayPhone(profile.phone || '');
     setPayMethod(profile.paymentMethod || 'Bank Transfer');
     setPayBankName(profile.bankName || banks[0]?.name || 'ABA Bank');
@@ -729,8 +1074,8 @@ export default function OperationsDashboard() {
   // Submit or Update Farmer Profile with Bank Photo
   const handleSaveFarmerProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payFamilyCode || !payFarmerName) {
-      alert('Family code and farmer name are required.');
+    if (!payFamilyCode || !payFarmerName || !payVillage) {
+      alert('Family Code, Farmer Name, and Target Village selection are required.');
       return;
     }
 
@@ -936,30 +1281,7 @@ export default function OperationsDashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // ADMIN DELETE HANDLERS
-  const handleDeleteSpecsRecord = async (id: string, familyCode: string) => {
-    if (!confirm(`Are you sure you want to delete Quality Specs Record for Family Code ${familyCode}?`)) return;
 
-    const res = await fetch(`/api/specs/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setSyncStatus(`✅ Specs Record deleted by Admin.`);
-      refreshAllData();
-    } else {
-      alert('Failed to delete specs record.');
-    }
-  };
-
-  const handleDeleteFarmerProfile = async (id: string, familyCode: string) => {
-    if (!confirm(`Are you sure you want to delete Payment Profile for Family Code ${familyCode}?`)) return;
-
-    const res = await fetch(`/api/farmers/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setSyncStatus(`✅ Farmer Payment Profile deleted by Admin.`);
-      refreshAllData();
-    } else {
-      alert('Failed to delete farmer profile.');
-    }
-  };
 
   const handleDeletePurchase = async (id: string, familyCode: string) => {
     if (!confirm(`Are you sure you want to delete Purchase Record for ${familyCode}?`)) return;
@@ -1075,8 +1397,8 @@ export default function OperationsDashboard() {
   };
 
   const handleEditTransport = (transport: any) => {
-    // Locking Rule: Only editable while in transit / before warehouse receiving intake
-    if (transport.intake || ['RECEIVED', 'VERIFIED', 'DISBURSED'].includes(transport.status)) {
+    // Locking Rule: Field Team can ONLY edit if TransportRecord status is REJECTED or EN_ROUTE before intake
+    if (transport.status !== 'REJECTED' && (transport.intake || transport.status !== 'EN_ROUTE')) {
       alert('This transport record has already been received by the warehouse and can no longer be edited.');
       return;
     }
@@ -1353,6 +1675,7 @@ export default function OperationsDashboard() {
     setWhTareWeight('');
     setWhGrossPhotoUrl('');
     setWhTarePhotoUrl('');
+    setWhInvoicePhotoUrl('');
     setWhNotes('');
   };
 
@@ -1371,10 +1694,11 @@ export default function OperationsDashboard() {
     setWhTareWeight(intake.warehouseTareWeight.toString());
     setWhGrossPhotoUrl(intake.grossScalePhotoUrl || '');
     setWhTarePhotoUrl(intake.tareScalePhotoUrl || '');
+    setWhInvoicePhotoUrl(intake.transportInvoiceUrl || '');
     setWhNotes(intake.notes || '');
 
     const wrIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
-    setSuccessBanner(`Editing Warehouse Receiving Record ${wrIdFormatted}. Update weights or scale photos above.`);
+    setSuccessBanner(`Editing Warehouse Receiving Record ${wrIdFormatted}. Update weights or photos above.`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1392,6 +1716,7 @@ export default function OperationsDashboard() {
       warehouseTareWeight: parseFloat(whTareWeight),
       grossScalePhotoUrl: whGrossPhotoUrl,
       tareScalePhotoUrl: whTarePhotoUrl,
+      transportInvoiceUrl: whInvoicePhotoUrl,
       notes: whNotes,
     };
 
@@ -1424,13 +1749,52 @@ export default function OperationsDashboard() {
         const data = await res.json();
         const wrIdFormatted = `WR-2026-${data.id.slice(-6).toUpperCase()}`;
 
-        setSuccessBanner(`Warehouse Receiving Record saved successfully. Warehouse ID: ${wrIdFormatted}.`);
+        setSuccessBanner(`Warehouse Receiving Record saved successfully. Warehouse ID: ${wrIdFormatted}. Status: Waiting for Inventory.`);
         resetWarehouseForm();
         refreshAllData();
       } else {
         const err = await res.json();
         alert('Failed to record intake: ' + err.error);
       }
+    }
+  };
+
+  // Submit Inventory Confirmation
+  const handleConfirmInventoryRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!invConfirmModalIntake) return;
+    if (!invLocationInput.trim()) {
+      alert('Please specify the Warehouse Storage Location (e.g. Silo 01 - Stack A).');
+      return;
+    }
+
+    setIsSubmittingInventory(true);
+    try {
+      const res = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intakeId: invConfirmModalIntake.id,
+          inventoryLocation: invLocationInput.trim(),
+          inventoryNotes: invNotesInput.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const wrIdFormatted = `WR-2026-${invConfirmModalIntake.id.slice(-6).toUpperCase()}`;
+        setSuccessBanner(`✅ Inventory confirmed & recorded for ${wrIdFormatted}! Storage Location: ${invLocationInput.trim()}. Record unlocked for Finance Verification.`);
+        setInvConfirmModalIntake(null);
+        setInvNotesInput('');
+        refreshAllData();
+      } else {
+        const err = await res.json();
+        alert('Failed to record inventory: ' + (err.error || 'Server error'));
+      }
+    } catch (err) {
+      alert('Error connecting to server.');
+    } finally {
+      setIsSubmittingInventory(false);
     }
   };
 
@@ -1457,6 +1821,7 @@ export default function OperationsDashboard() {
         'Receiving Staff',
         'Gross Scale Photo',
         'Tare Scale Photo',
+        'Truck Transport Invoice Photo',
       ],
     ];
 
@@ -1480,6 +1845,7 @@ export default function OperationsDashboard() {
         intake.receivingStaffName || 'Warehouse Staff',
         intake.grossScalePhotoUrl ? 'Yes' : 'No',
         intake.tareScalePhotoUrl ? 'Yes' : 'No',
+        intake.transportInvoiceUrl ? 'Yes' : 'No',
       ]);
     });
 
@@ -1523,12 +1889,15 @@ export default function OperationsDashboard() {
         transportId: paymentModalTruck.transport.id,
         paymentMethod: payMethodInput,
         paymentBatchNumber: payBatchInput,
+        paymentReceiptUrl: payReceiptPhotoUrl,
       }),
     });
 
     if (res.ok) {
-      setSyncStatus(`✅ Payment Completed for Truck ${paymentModalTruck.transport.plateNumber}! Status updated to DISBURSED.`);
+      setSuccessBanner(`✅ Payment Completed for Truck ${paymentModalTruck.transport.plateNumber}! Bank transfer receipt saved.`);
       setPaymentModalTruck(null);
+      setPayReceiptPhotoUrl('');
+      setPayBatchInput('');
       refreshAllData();
     } else {
       const err = await res.json();
@@ -1919,11 +2288,11 @@ export default function OperationsDashboard() {
     const res = await fetch('/api/admin/villages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newVillageName, district: newVillageDistrict }),
+      body: JSON.stringify({ name: newVillageName, province: newVillageProvince, district: 'Chhaeb' }),
     });
 
     if (res.ok) {
-      setSyncStatus(`✅ Village "${newVillageName}" added to target list!`);
+      setSyncStatus(`✅ Village "${newVillageName}" (${newVillageProvince}) added to target list!`);
       setNewVillageName('');
       refreshAllData();
     } else {
@@ -1984,6 +2353,31 @@ export default function OperationsDashboard() {
     }
   };
 
+  const resetPriceSpecForm = () => {
+    setEditingSpecId(null);
+    setNewSpecVariety('');
+    setNewSpecGrade('A1');
+    setNewSpecBasePrice(1650);
+    setNewSpecMinWholeGrain(70);
+    setNewSpecMaxBrokenRice(30);
+    setNewSpecImpurity(1);
+    setNewSpecMaxForeign(5.0);
+    setNewSpecMaxMoisture(14.0);
+  };
+
+  const handleEditPriceSpec = (spec: any) => {
+    setEditingSpecId(spec.id);
+    setNewSpecVariety(spec.variety || '');
+    setNewSpecGrade(spec.grade || 'A1');
+    setNewSpecBasePrice(spec.basePrice || 1650);
+    setNewSpecMinWholeGrain(spec.minWholeGrain ?? 70);
+    setNewSpecMaxBrokenRice(spec.maxBrokenRice ?? 30);
+    setNewSpecImpurity(spec.impurity ?? 1);
+    setNewSpecMaxForeign(spec.maxForeignMatter ?? 5.0);
+    setNewSpecMaxMoisture(spec.maxMoisture ?? 14.0);
+    window.scrollTo({ top: 400, behavior: 'smooth' });
+  };
+
   // ADMIN: Add / Update Paddy Price Spec
   const handleAddPriceSpec = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1992,25 +2386,31 @@ export default function OperationsDashboard() {
       return;
     }
 
+    const payload = {
+      id: editingSpecId || undefined,
+      variety: newSpecVariety,
+      grade: newSpecGrade,
+      basePrice: newSpecBasePrice,
+      minWholeGrain: newSpecMinWholeGrain !== '' ? parseFloat(String(newSpecMinWholeGrain)) : null,
+      maxBrokenRice: newSpecMaxBrokenRice !== '' ? parseFloat(String(newSpecMaxBrokenRice)) : null,
+      impurity: newSpecImpurity !== '' ? parseFloat(String(newSpecImpurity)) : null,
+      maxForeignMatter: newSpecMaxForeign !== '' ? parseFloat(String(newSpecMaxForeign)) : 5.0,
+      maxMoisture: newSpecMaxMoisture !== '' ? parseFloat(String(newSpecMaxMoisture)) : 14.0,
+    };
+
     const res = await fetch('/api/admin/price-specs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        variety: newSpecVariety,
-        grade: newSpecGrade,
-        basePrice: newSpecBasePrice,
-        organicBonus: newSpecOrganicBonus,
-        maxMoisture: newSpecMaxMoisture,
-        maxForeignMatter: newSpecMaxForeign,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (res.ok) {
       setSyncStatus(`✅ Paddy specification for ${newSpecVariety} (${newSpecGrade}) saved!`);
-      setNewSpecVariety('');
+      resetPriceSpecForm();
       refreshAllData();
     } else {
-      alert('Failed to save price specification.');
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || 'Failed to save price specification.');
     }
   };
 
@@ -2103,7 +2503,16 @@ export default function OperationsDashboard() {
       t.plateNumber.toLowerCase().includes(q) ||
       purchases.some((p: any) => p.farmerName.toLowerCase().includes(q) || p.familyCode.toLowerCase().includes(q));
 
-    const matchesStatus = finStatusFilter === 'ALL' || t.status === finStatusFilter;
+    const isWaitingInventory = t.status === 'RECEIVED' && intake.inventoryStatus !== 'INVENTORY_RECORDED';
+    const isInventoryRecorded = t.status === 'RECEIVED' && intake.inventoryStatus === 'INVENTORY_RECORDED';
+
+    const matchesStatus =
+      finStatusFilter === 'ALL' ||
+      (finStatusFilter === 'EN_ROUTE' && t.status === 'EN_ROUTE') ||
+      (finStatusFilter === 'WAITING_FOR_INVENTORY' && isWaitingInventory) ||
+      (finStatusFilter === 'INVENTORY_RECORDED' && isInventoryRecorded) ||
+      (finStatusFilter === 'VERIFIED' && t.status === 'VERIFIED') ||
+      (finStatusFilter === 'DISBURSED' && t.status === 'DISBURSED');
 
     return matchesSearch && matchesStatus;
   });
@@ -2136,7 +2545,12 @@ export default function OperationsDashboard() {
   });
 
   // DASHBOARD SUMMARY CALCULATIONS FOR FINANCE
-  const trucksAwaitingVerification = financeTrucks.filter((t) => t.transport.status === 'RECEIVED').length;
+  const trucksWaitingInventoryRecord = financeTrucks.filter(
+    (t) => t.transport.status === 'RECEIVED' && t.intake?.inventoryStatus !== 'INVENTORY_RECORDED'
+  ).length;
+  const trucksInventoryRecorded = financeTrucks.filter(
+    (t) => t.transport.status === 'RECEIVED' && t.intake?.inventoryStatus === 'INVENTORY_RECORDED'
+  ).length;
   const trucksVerified = financeTrucks.filter((t) => t.transport.status === 'VERIFIED').length;
   const trucksFullyPaid = financeTrucks.filter((t) => t.transport.status === 'DISBURSED').length;
 
@@ -2151,6 +2565,14 @@ export default function OperationsDashboard() {
   const tPurchasesCount = selectedPurchasesForTruck.length;
   const tTotalSacks = selectedPurchasesForTruck.reduce((sum, p) => sum + (p.items?.[0]?.sacks || 0), 0);
   const tTotalWeight = selectedPurchasesForTruck.reduce((sum, p) => sum + p.totalWeight, 0);
+
+  // Warehouse Dashboard Metrics
+  const enRouteTrucksCount = transports.filter((t) => t.status === 'EN_ROUTE').length;
+  const todayStr = new Date().toDateString();
+  const trucksReceivedTodayCount = warehouseIntakes.filter((wi) => {
+    const d = new Date(wi.arrivalTime || wi.createdAt);
+    return d.toDateString() === todayStr;
+  }).length;
 
   // Self Relationship Account Name Mismatch Warning
   const isAccountHolderNameMismatch =
@@ -2177,7 +2599,9 @@ export default function OperationsDashboard() {
           isOpen={isSpecsModalOpen}
           onClose={() => setIsSpecsModalOpen(false)}
           specsList={specsList}
+          purchases={purchases}
           onSelect={handleSelectSpecsRecord}
+          onViewDetails={(spec) => setSelectedSpecsForDetails(spec)}
         />
 
         <SpecsDetailsModal
@@ -2259,6 +2683,20 @@ export default function OperationsDashboard() {
           truckData={selectedFinanceTruckForPrint}
         />
 
+        <RejectionModal
+          isOpen={Boolean(rejectionTarget?.isOpen)}
+          onClose={() => setRejectionTarget(null)}
+          title={rejectionTarget?.title || 'Reject & Return Record'}
+          entityType={rejectionTarget?.entityType || ''}
+          entityId={rejectionTarget?.entityId || ''}
+          defaultTargetModule={rejectionTarget?.defaultTargetModule}
+          availableTargetModules={rejectionTarget?.availableTargetModules}
+          onSuccess={() => {
+            setSuccessBanner('Record rejected and returned for correction successfully.');
+            refreshAllData();
+          }}
+        />
+
         {/* Payment Confirmation Modal */}
         {paymentModalTruck && (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -2302,7 +2740,33 @@ export default function OperationsDashboard() {
                     value={payBatchInput}
                     onChange={(e) => setPayBatchInput(e.target.value)}
                     className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-mono"
+                    placeholder="e.g. BATCH-2026-001 or ABA Ref ID"
                   />
+                </div>
+
+                <div className="p-3.5 bg-white/5 border border-dashed border-amber-500/40 rounded-xl space-y-2">
+                  <label className="block text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileSpreadsheet className="w-4 h-4" /> Upload Bank Payment Transfer Receipt Proof (PDF or Image)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handlePaymentReceiptUpload}
+                    className="text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-[#0b0f19] hover:file:bg-amber-400 cursor-pointer"
+                  />
+                  {uploadingPayReceipt && <div className="text-[11px] text-amber-400">Uploading payment transfer receipt...</div>}
+                  {payReceiptPhotoUrl && (
+                    <div className="flex items-center gap-2 pt-1">
+                      {payReceiptPhotoUrl.endsWith('.pdf') ? (
+                        <a href={payReceiptPhotoUrl} target="_blank" rel="noreferrer" className="px-2 py-1 bg-amber-500/20 text-amber-300 rounded font-bold hover:bg-amber-500/30 flex items-center gap-1 text-[11px]">
+                          📄 Open PDF Receipt
+                        </a>
+                      ) : (
+                        <img src={formatImageSrc(payReceiptPhotoUrl)} alt="Payment Transfer Receipt" className="w-12 h-12 object-cover rounded-lg border border-amber-500/50" />
+                      )}
+                      <span className="text-[11px] text-emerald-400 font-bold">✓ Transfer Receipt Attached</span>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -2390,7 +2854,7 @@ export default function OperationsDashboard() {
         <div className="bg-[#141c2f] border border-white/10 rounded-xl p-1.5 flex flex-wrap gap-1">
           {(currentUserRole === 'FIELD' || currentUserRole === 'ADMIN') && (
             <button
-              onClick={() => setActiveModule('field')}
+              onClick={() => handleSelectModule('field')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
                 activeModule === 'field'
                   ? 'bg-[#10b981] text-[#0b0f19] shadow-md shadow-emerald-500/20'
@@ -2403,7 +2867,7 @@ export default function OperationsDashboard() {
 
           {(currentUserRole === 'WAREHOUSE' || currentUserRole === 'ADMIN') && (
             <button
-              onClick={() => setActiveModule('warehouse')}
+              onClick={() => handleSelectModule('warehouse')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
                 activeModule === 'warehouse'
                   ? 'bg-[#38bdf8] text-[#0b0f19] shadow-md shadow-sky-500/20'
@@ -2414,9 +2878,22 @@ export default function OperationsDashboard() {
             </button>
           )}
 
+          {(currentUserRole === 'INVENTORY' || currentUserRole === 'ADMIN') && (
+            <button
+              onClick={() => handleSelectModule('inventory')}
+              className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
+                activeModule === 'inventory'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              📦 Inventory Record
+            </button>
+          )}
+
           {(currentUserRole === 'FINANCE' || currentUserRole === 'ADMIN') && (
             <button
-              onClick={() => setActiveModule('finance')}
+              onClick={() => handleSelectModule('finance')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
                 activeModule === 'finance'
                   ? 'bg-[#f59e0b] text-[#0b0f19] shadow-md shadow-amber-500/20'
@@ -2429,10 +2906,10 @@ export default function OperationsDashboard() {
 
           {currentUserRole === 'ADMIN' && (
             <button
-              onClick={() => setActiveModule('admin')}
+              onClick={() => handleSelectModule('admin')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
                 activeModule === 'admin'
-                  ? 'bg-purple-500 text-white shadow-md shadow-purple-500/20'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -2440,6 +2917,36 @@ export default function OperationsDashboard() {
             </button>
           )}
         </div>
+
+        {/* ACCESS RESTRICTED FALLBACK BANNER */}
+        {currentUserRole !== 'ADMIN' && (
+          (activeModule === 'field' && currentUserRole !== 'FIELD') ||
+          (activeModule === 'warehouse' && currentUserRole !== 'WAREHOUSE') ||
+          (activeModule === 'inventory' && currentUserRole !== 'INVENTORY') ||
+          (activeModule === 'finance' && currentUserRole !== 'FINANCE') ||
+          (activeModule === 'admin')
+        ) && (
+          <div className="bg-[#141c2f] border border-red-500/40 rounded-2xl p-8 text-center space-y-4 shadow-2xl">
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto text-2xl">
+              🔒
+            </div>
+            <h2 className="text-xl font-black text-red-400">Access Restricted — Role Permission Required</h2>
+            <p className="text-xs text-slate-300 max-w-md mx-auto">
+              Your account ({currentUserName} · <strong className="text-white">{currentUserRole}</strong>) does not have access permissions for the selected section.
+            </p>
+            <button
+              onClick={() => {
+                if (currentUserRole === 'FIELD') setActiveModule('field');
+                else if (currentUserRole === 'WAREHOUSE') setActiveModule('warehouse');
+                else if (currentUserRole === 'INVENTORY') setActiveModule('inventory');
+                else if (currentUserRole === 'FINANCE') setActiveModule('finance');
+              }}
+              className="bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20"
+            >
+              Return to My Assigned Module ({currentUserRole})
+            </button>
+          </div>
+        )}
 
         {/* ═══════════════════════════════════════════════
             MODULE 1: FIELD OPERATIONS
@@ -2519,19 +3026,19 @@ export default function OperationsDashboard() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                         <div>
                           <label className="block text-slate-400 font-bold uppercase mb-1.5">Family Code *</label>
                           <input
                             type="text"
                             required
                             value={spFamilyCode}
-                            onChange={(e) => setSpFamilyCode(e.target.value)}
+                            onChange={(e) => handleSpFamilyCodeChange(e.target.value)}
                             placeholder="e.g. TB034"
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-extrabold focus:border-emerald-500"
                           />
                         </div>
-                        <div>
+                        <div className="lg:col-span-2">
                           <label className="block text-slate-400 font-bold uppercase mb-1.5">Farmer Name *</label>
                           <input
                             type="text"
@@ -2542,110 +3049,150 @@ export default function OperationsDashboard() {
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
                           />
                         </div>
-                        <div>
-                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Village (Dynamic)</label>
-                          <select
+                        <div className="sm:col-span-2 lg:col-span-2">
+                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Village (Searchable) *</label>
+                          <SearchableVillageSelect
+                            villages={villages}
                             value={spVillage}
-                            onChange={(e) => setSpVillage(e.target.value)}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
-                          >
-                            {villages.map((v) => (
-                              <option key={v.id} value={v.name}>
-                                {v.name}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(vName) => setSpVillage(vName)}
+                            placeholder="Select Target Village..."
+                          />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Paddy Category</label>
+                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Paddy Category *</label>
                           <select
+                            required
                             value={spPaddyType}
-                            onChange={(e) => setSpPaddyType(e.target.value)}
+                            onChange={(e) => {
+                              const newVariety = e.target.value;
+                              setSpPaddyType(newVariety);
+                              const validGrades = priceSpecs.filter((s) => s.variety === newVariety).map((s) => s.grade);
+                              const nextGrade = validGrades.includes(spSelectedGrade) ? spSelectedGrade : (validGrades[0] || '');
+                              setSpSelectedGrade(nextGrade);
+                              if (newVariety && nextGrade) {
+                                applyMasterSpecsForGrade(newVariety, nextGrade);
+                              }
+                            }}
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
                           >
-                            {uniqueVarieties.length > 0 ? (
-                              uniqueVarieties.map((v) => (
-                                <option key={v as string} value={v as string}>
-                                  {v as string}
-                                </option>
-                              ))
-                            ) : (
-                              <>
-                                <option>Phka Rumduol</option>
-                                <option>Red Jasmine</option>
-                                <option>White Rice</option>
-                              </>
-                            )}
+                            <option value="" disabled>Select Paddy Category...</option>
+                            {uniqueVarieties.map((v) => (
+                              <option key={v as string} value={v as string}>
+                                {v as string}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Grade</label>
+                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Grade *</label>
                           <select
+                            required
                             value={spSelectedGrade}
-                            onChange={(e) => setSpSelectedGrade(e.target.value)}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
+                            onChange={(e) => {
+                              const newGrade = e.target.value;
+                              setSpSelectedGrade(newGrade);
+                              if (spPaddyType && newGrade) {
+                                applyMasterSpecsForGrade(spPaddyType, newGrade);
+                              }
+                            }}
+                            disabled={!spPaddyType}
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 disabled:opacity-50"
                           >
-                            <option>A1</option>
-                            <option>A2</option>
-                            <option>B</option>
+                            <option value="" disabled>
+                              {spPaddyType ? 'Select Grade...' : 'Select Category First'}
+                            </option>
+                            {priceSpecs
+                              .filter((s) => s.variety === spPaddyType)
+                              .map((s) => (
+                                <option key={s.grade} value={s.grade}>
+                                  {s.grade} ({s.basePrice?.toLocaleString()} KHR/kg)
+                                </option>
+                              ))}
                           </select>
                         </div>
-                        <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg p-2.5">
-                          <div>
-                            <div className="font-bold text-white text-xs">Organic Paddy</div>
-                            <div className="text-[10px] text-emerald-400">
-                              +{priceSpecs.find((s) => s.variety === spPaddyType && s.grade === spSelectedGrade)?.organicBonus || 100} KHR Bonus
+                        <div>
+                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Organic Status</label>
+                          <div
+                            onClick={() => setSpIsOrganic(!spIsOrganic)}
+                            className={`h-[42px] px-3 border rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                              spIsOrganic
+                                ? 'bg-emerald-500/10 border-emerald-500/50 text-white'
+                                : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:border-slate-600'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span className="font-bold text-white text-xs truncate">Organic Paddy</span>
+                              <span className="text-[10px] text-slate-400 font-normal hidden xl:inline flex-shrink-0">(Certified)</span>
                             </div>
+                            <input
+                              type="checkbox"
+                              checked={spIsOrganic}
+                              onChange={(e) => setSpIsOrganic(e.target.checked)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 accent-emerald-500 cursor-pointer flex-shrink-0"
+                            />
                           </div>
-                          <input
-                            type="checkbox"
-                            checked={spIsOrganic}
-                            onChange={(e) => setSpIsOrganic(e.target.checked)}
-                            className="w-4 h-4 accent-emerald-500 cursor-pointer"
-                          />
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                      {/* Quality Specifications following Master Grading order */}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
                         <div>
-                          <label className="block text-slate-400 font-bold mb-1.5">Moisture (%)</label>
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Whole Grain (%)</label>
                           <input
                             type="number"
                             step="0.1"
-                            value={spMoisture}
-                            onChange={(e) => setSpMoisture(parseFloat(e.target.value))}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
+                            value={spWhole}
+                            onChange={(e) => setSpWhole(e.target.value)}
+                            placeholder="N/A"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-400 font-bold mb-1.5">Foreign Matter (%)</label>
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Broken Rice (%)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={spBroken}
+                            onChange={(e) => setSpBroken(e.target.value)}
+                            placeholder="N/A"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Impurity (%)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={spImpurity}
+                            onChange={(e) => setSpImpurity(e.target.value)}
+                            placeholder="N/A"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Foreign Matter (%)</label>
                           <input
                             type="number"
                             step="0.1"
                             value={spForeign}
-                            onChange={(e) => setSpForeign(parseFloat(e.target.value))}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
+                            onChange={(e) => setSpForeign(e.target.value)}
+                            placeholder="e.g. 6.0"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
                           />
                         </div>
-                        <div>
-                          <label className="block text-slate-400 font-bold mb-1.5">Whole Grain (%)</label>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Moisture (%)</label>
                           <input
                             type="number"
-                            value={spWhole}
-                            onChange={(e) => setSpWhole(parseFloat(e.target.value))}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 font-bold mb-1.5">Broken Rice (%)</label>
-                          <input
-                            type="number"
-                            value={spBroken}
-                            onChange={(e) => setSpBroken(parseFloat(e.target.value))}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
+                            step="0.1"
+                            value={spMoisture}
+                            onChange={(e) => setSpMoisture(e.target.value)}
+                            placeholder="e.g. 13.5"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
                           />
                         </div>
                       </div>
@@ -2735,7 +3282,7 @@ export default function OperationsDashboard() {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-slate-400">🌿 Organic Premium:</span>
-                          <strong className="text-emerald-400">+100 KHR Bonus</strong>
+                          <strong className="text-emerald-400">Managed by Finance</strong>
                         </div>
                       </div>
                     </div>
@@ -2800,29 +3347,30 @@ export default function OperationsDashboard() {
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${rec.isValid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                                     {rec.isValid ? 'Pass' : 'Fail'}
                                   </span>
-                                  <button
-                                    onClick={() => handleEditSpecs(rec)}
-                                    className={`p-1 rounded transition-colors ${
-                                      isUsedForPurchase
-                                        ? 'text-slate-600 cursor-not-allowed hover:bg-white/5'
-                                        : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10'
-                                    }`}
-                                    title={
-                                      isUsedForPurchase
-                                        ? 'This Specs Record has already been used for a purchase and can no longer be edited.'
-                                        : 'Edit Specs Record'
-                                    }
-                                  >
-                                    {isUsedForPurchase ? <LockIcon className="w-3.5 h-3.5" /> : <Edit className="w-3.5 h-3.5" />}
-                                  </button>
-                                  {currentUserRole === 'ADMIN' && (
-                                    <button
-                                      onClick={() => handleDeleteSpecsRecord(rec.id, rec.familyCode)}
-                                      className="text-red-400 hover:text-red-300 p-0.5 hover:bg-red-500/10 rounded"
-                                      title="Delete Specs Record (Admin)"
+                                  {!isUsedForPurchase ? (
+                                    <>
+                                      <button
+                                        onClick={() => handleEditSpecs(rec)}
+                                        className="p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
+                                        title="Edit Specs Record"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteSpecsRecord(rec.id, rec.familyCode)}
+                                        className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                        title="Delete Specs Record"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span
+                                      className="p-1 text-slate-500 inline-block text-[11px]"
+                                      title="Locked: This Specs Record has already been used for a purchase and cannot be edited or deleted."
                                     >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                      🔒
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -2875,15 +3423,15 @@ export default function OperationsDashboard() {
                         </div>
                       )}
 
-                      {/* Row 1: Code, Farmer Name, Village */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      {/* Row 1: Code, Farmer Name, Phone Number, Village */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                         <div>
                           <label className="block text-slate-400 font-bold uppercase mb-1.5">Family Code *</label>
                           <input
                             type="text"
                             required
                             value={payFamilyCode}
-                            onChange={(e) => setPayFamilyCode(e.target.value)}
+                            onChange={(e) => handlePayFamilyCodeChange(e.target.value)}
                             placeholder="e.g. TB034"
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-extrabold focus:border-emerald-500"
                           />
@@ -2900,18 +3448,23 @@ export default function OperationsDashboard() {
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Village (Dynamic)</label>
-                          <select
+                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Phone Number</label>
+                          <input
+                            type="tel"
+                            value={payPhone}
+                            onChange={(e) => setPayPhone(e.target.value)}
+                            placeholder="e.g. 012 345 678"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold font-mono focus:border-emerald-500"
+                          />
+                        </div>
+                        <div className="sm:col-span-2 lg:col-span-2">
+                          <label className="block text-slate-400 font-bold uppercase mb-1.5">Village (Searchable) *</label>
+                          <SearchableVillageSelect
+                            villages={villages}
                             value={payVillage}
-                            onChange={(e) => setPayVillage(e.target.value)}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500"
-                          >
-                            {villages.map((v) => (
-                              <option key={v.id} value={v.name}>
-                                {v.name}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(vName) => setPayVillage(vName)}
+                            placeholder="Select Target Village..."
+                          />
                         </div>
                       </div>
 
@@ -3055,7 +3608,7 @@ export default function OperationsDashboard() {
                         {uploadingPhoto && <div className="text-[11px] text-amber-400">Uploading photo...</div>}
                         {payBankPhotoUrl && (
                           <div className="flex items-center gap-3 pt-1">
-                            <img src={payBankPhotoUrl} alt="Bank Document" className="w-12 h-12 object-cover rounded-lg border border-emerald-500/50" />
+                            <img src={formatImageSrc(payBankPhotoUrl)} alt="Bank Document" className="w-12 h-12 object-cover rounded-lg border border-emerald-500/50" />
                             <span className="text-[11px] text-emerald-400 font-bold">✓ Bank document photo attached</span>
                           </div>
                         )}
@@ -3210,15 +3763,14 @@ export default function OperationsDashboard() {
                                 >
                                   <Edit className="w-3.5 h-3.5" />
                                 </button>
-                                {currentUserRole === 'ADMIN' && (
-                                  <button
-                                    onClick={() => handleDeleteFarmerProfile(p.id, p.familyCode)}
-                                    className="text-red-400 hover:text-red-300 p-0.5 hover:bg-red-500/10 rounded"
-                                    title="Delete Farmer Profile (Admin)"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteFarmerProfile(p.id, p.familyCode)}
+                                  className="text-red-400 hover:text-red-300 p-0.5 hover:bg-red-500/10 rounded transition-colors"
+                                  title="Delete Farmer Payment Profile"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
                             <div className="font-bold text-white">{p.farmerName} ({p.village})</div>
@@ -3289,7 +3841,7 @@ export default function OperationsDashboard() {
                           type="text"
                           required
                           value={pFamilyCode}
-                          onChange={(e) => setPFamilyCode(e.target.value)}
+                          onChange={(e) => handlePFamilyCodeChange(e.target.value)}
                           placeholder="e.g. TB034"
                           className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-extrabold"
                         />
@@ -3330,44 +3882,68 @@ export default function OperationsDashboard() {
                       {/* Row 1: Variety, Grade, Standard Price */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">VARIETY</label>
+                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">VARIETY *</label>
                           <select
                             value={pVariety}
-                            onChange={(e) => setPVariety(e.target.value)}
+                            onChange={(e) => {
+                              const newVar = e.target.value;
+                              setPVariety(newVar);
+                              const validGrades = priceSpecs.filter((s) => s.variety === newVar).map((s) => s.grade);
+                              const nextGrade = validGrades.includes(pGrade) ? pGrade : (validGrades[0] || '');
+                              setPGrade(nextGrade);
+                              const specMatch = priceSpecs.find((s) => s.variety === newVar && s.grade === nextGrade);
+                              if (specMatch) setPStandardPrice(specMatch.basePrice);
+                              else setPStandardPrice(0);
+                            }}
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
                           >
-                            <option>Red Jasmine</option>
-                            <option>Phka Rumduol</option>
-                            <option>White Rice</option>
+                            <option value="" disabled>Select Paddy Variety...</option>
+                            {uniqueVarieties.map((v) => (
+                              <option key={v as string} value={v as string}>
+                                {v as string}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">GRADE</label>
+                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">GRADE *</label>
                           <select
                             value={pGrade}
-                            onChange={(e) => setPGrade(e.target.value)}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
+                            onChange={(e) => {
+                              const newGrade = e.target.value;
+                              setPGrade(newGrade);
+                              const specMatch = priceSpecs.find((s) => s.variety === pVariety && s.grade === newGrade);
+                              if (specMatch) setPStandardPrice(specMatch.basePrice);
+                              else setPStandardPrice(0);
+                            }}
+                            disabled={!pVariety}
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold disabled:opacity-50"
                           >
-                            <option value="A1">A1 — {pStandardPrice.toLocaleString()} KHR/kg</option>
-                            <option value="A2">A2 — 1,750 KHR/kg</option>
-                            <option value="B">B — 1,600 KHR/kg</option>
+                            <option value="" disabled>{pVariety ? 'Select Grade...' : 'Select Variety First'}</option>
+                            {priceSpecs
+                              .filter((s) => s.variety === pVariety)
+                              .map((s) => (
+                                <option key={s.grade} value={s.grade}>
+                                  {s.grade} — {s.basePrice?.toLocaleString()} KHR/kg
+                                </option>
+                              ))}
                           </select>
                         </div>
 
                         <div>
                           <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">
-                            STANDARD PRICE (KHR/KG)
+                            STANDARD BASE PRICE (KHR/KG)
                           </label>
                           <input
-                            type="number"
-                            step="0.5"
-                            value={pStandardPrice}
-                            onChange={(e) => setPStandardPrice(parseFloat(e.target.value) || 0)}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-extrabold text-amber-400"
+                            type="text"
+                            readOnly
+                            value={pStandardPrice > 0 ? pStandardPrice.toLocaleString() : ''}
+                            placeholder="--"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-extrabold text-amber-400 placeholder:text-slate-500"
                           />
-                          <p className="text-[10px] text-emerald-400 mt-0.5">
-                            {(pStandardPrice - 100).toLocaleString()} base + 100 organic bonus = {pStandardPrice.toLocaleString()} KHR/kg
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Official Master Base Price: {pStandardPrice > 0 ? `${pStandardPrice.toLocaleString()} KHR/kg` : '--'}
                           </p>
                         </div>
                       </div>
@@ -3399,10 +3975,12 @@ export default function OperationsDashboard() {
                             FINAL PURCHASE PRICE (KHR/KG) (AUTO)
                           </label>
                           <div className="px-2.5 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-emerald-400 font-extrabold text-xs sm:text-sm">
-                            {finalPurchasePrice.toLocaleString()} KHR/kg
+                            {pStandardPrice > 0 ? `${finalPurchasePrice.toLocaleString()} KHR/kg` : '--'}
                           </div>
                           <p className="text-[10px] text-emerald-400 mt-0.5">
-                            {pStandardPrice.toLocaleString()} std + {pAdditionalPrice} premium = {finalPurchasePrice.toLocaleString()} KHR/kg
+                            {pStandardPrice > 0
+                              ? `${pStandardPrice.toLocaleString()} std + ${pAdditionalPrice} premium = ${finalPurchasePrice.toLocaleString()} KHR/kg`
+                              : 'Select a Spec or Variety/Grade first'}
                           </p>
                         </div>
                       </div>
@@ -3457,16 +4035,21 @@ export default function OperationsDashboard() {
                               {pSackWeights.map((w, idx) => (
                                 <div
                                   key={idx}
-                                  className="bg-[#1e293b] border border-emerald-500/40 text-emerald-300 px-2.5 py-1 rounded-full flex items-center gap-1.5 font-mono font-bold text-[11px] shadow-sm"
+                                  className="bg-[#1e293b] border border-emerald-500/40 text-emerald-300 px-2 py-1 rounded-lg flex items-center gap-1.5 font-mono text-xs shadow-sm"
                                 >
-                                  <span>#{idx + 1} {w.toFixed(1)} kg</span>
+                                  <span className="bg-emerald-500/20 text-emerald-300 font-extrabold px-1.5 py-0.5 rounded text-[10px] border border-emerald-500/30">
+                                    #{idx + 1}
+                                  </span>
+                                  <span className="font-extrabold text-white text-xs">
+                                    {Math.round(w)} kg
+                                  </span>
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveSackWeight(idx)}
-                                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-full p-0.5"
+                                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded p-0.5 ml-0.5 transition-colors"
                                     title="Remove sack"
                                   >
-                                    <X className="w-3 h-3" />
+                                    <X className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               ))}
@@ -3491,7 +4074,7 @@ export default function OperationsDashboard() {
                             TOTAL QUANTITY (KG) (AUTO)
                           </label>
                           <div className="px-2.5 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-emerald-400 font-extrabold text-sm sm:text-base font-mono">
-                            {totalWeightKg.toFixed(2)} kg
+                            {Math.round(totalWeightKg).toLocaleString()} kg
                           </div>
                         </div>
 
@@ -3602,41 +4185,22 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
-                    {/* DUAL ELECTRONIC SIGNATURES (Compact 90px Signature Height!) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-[11px] text-emerald-400 flex items-center gap-1.5 uppercase">
-                            <PenTool className="w-3.5 h-3.5" /> Farmer Signature (Seller) *
-                          </span>
-                          {pFarmerSignature && (
-                            <span className="text-[10px] text-emerald-400 font-bold">✓ Seller Signed</span>
-                          )}
-                        </div>
-                        <SignaturePad
-                          label="Farmer / Seller Signature (Draw on screen)"
-                          onSave={(dataUrl) => setPFarmerSignature(dataUrl)}
-                          clearKey={sigClearKey}
-                          height={90}
-                        />
+                    {/* FARMER ELECTRONIC SIGNATURE */}
+                    <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-[11px] text-emerald-400 flex items-center gap-1.5 uppercase">
+                          <PenTool className="w-3.5 h-3.5" /> Farmer Signature (Seller) *
+                        </span>
+                        {pFarmerSignature && (
+                          <span className="text-[10px] text-emerald-400 font-bold">✓ Seller Signed</span>
+                        )}
                       </div>
-
-                      <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-[11px] text-sky-400 flex items-center gap-1.5 uppercase">
-                            <PenTool className="w-3.5 h-3.5" /> Purchasing Staff Signature (Buyer) *
-                          </span>
-                          {pStaffSignature && (
-                            <span className="text-[10px] text-sky-400 font-bold">✓ Buyer Signed</span>
-                          )}
-                        </div>
-                        <SignaturePad
-                          label={`Purchaser: ${currentUserName} (Draw signature)`}
-                          onSave={(dataUrl) => setPStaffSignature(dataUrl)}
-                          clearKey={sigClearKey}
-                          height={90}
-                        />
-                      </div>
+                      <SignaturePad
+                        label="Farmer / Seller Signature (Draw on screen)"
+                        onSave={(dataUrl) => setPFarmerSignature(dataUrl)}
+                        clearKey={sigClearKey}
+                        height={90}
+                      />
                     </div>
 
                     <button
@@ -3650,7 +4214,7 @@ export default function OperationsDashboard() {
                       <CheckCircle2 className="w-5 h-5" />
                       {editingPurchaseId
                         ? `Update Purchase Record (PR-2026-${editingPurchaseId.slice(-6).toUpperCase()})`
-                        : 'Save Paddy Purchase Record & Dual Signatures'}
+                        : 'Save Paddy Purchase Record'}
                     </button>
                   </form>
                 </div>
@@ -3811,30 +4375,30 @@ export default function OperationsDashboard() {
                                   >
                                     <Printer className="w-3.5 h-3.5" />
                                   </button>
-                                  {p.status === 'PENDING' && !p.transportRecordId ? (
-                                    <button
-                                      onClick={() => handleEditPurchase(p)}
-                                      className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg transition-colors"
-                                      title="Edit Purchase Record"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </button>
+                                  {(p.status === 'PENDING' && !p.transportRecordId) || p.status === 'REJECTED' || p.status === 'DRAFT' || p.transportRecord?.status === 'REJECTED' ? (
+                                    <>
+                                      <button
+                                        onClick={() => handleEditPurchase(p)}
+                                        className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg transition-colors"
+                                        title="Edit Purchase Record"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeletePurchaseRecord(p)}
+                                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                                        title="Delete Purchase Record (2-Step Confirmation)"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
                                   ) : (
                                     <span
                                       className="p-1.5 text-slate-500 inline-block text-[11px]"
-                                      title="Record Locked: Purchase record is already assigned to a truck dispatch or received at warehouse."
+                                      title="Record Locked: Purchase record has already been dispatched to a truck or accepted at warehouse."
                                     >
                                       🔒
                                     </span>
-                                  )}
-                                  {currentUserRole === 'ADMIN' && (
-                                    <button
-                                      onClick={() => handleDeletePurchase(p.id, p.familyCode)}
-                                      className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
-                                      title="Delete Record (Admin)"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
                                   )}
                                 </td>
                               </tr>
@@ -3920,6 +4484,68 @@ export default function OperationsDashboard() {
                           <span className="font-black text-sky-400 text-xs sm:text-sm font-mono">{tTotalWeight.toFixed(2)} kg</span>
                         </div>
                       </div>
+
+                      {/* Variety Field Weight Summary */}
+                      {(() => {
+                        const varietySummary: Record<string, number> = {};
+                        selectedPurchasesForTruck.forEach((p: any) => {
+                          const item = p.items?.[0] || {};
+                          const varietyName = item.variety || 'Red Jasmine';
+                          varietySummary[varietyName] = (varietySummary[varietyName] || 0) + (p.totalWeight || 0);
+                        });
+
+                        const defaultVarietiesList = [
+                          'Phka Rumduol',
+                          'Red Jasmine',
+                          'Foundation Seed - Phka Rumduol',
+                          'Foundation Seed - Red Jasmine',
+                          'Certified Seed',
+                          'White Rice',
+                        ];
+                        const displayVarieties = Array.from(new Set([...defaultVarietiesList, ...Object.keys(varietySummary)]));
+                        const activeVarietyCount = Object.keys(varietySummary).length;
+
+                        return (
+                          <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2 text-xs">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                              <span className="flex items-center gap-1.5 text-sky-400">
+                                <Scale className="w-3.5 h-3.5" /> Paddy Variety Weight Summary
+                              </span>
+                              {activeVarietyCount > 1 ? (
+                                <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold text-[10px] flex items-center gap-1 border border-amber-500/30">
+                                  ⚠️ Mixed Cargo ({activeVarietyCount} Varieties)
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500">Auto-calculated from loaded purchases</span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                              {displayVarieties.map((vName) => {
+                                const weight = varietySummary[vName] || 0;
+                                const isLoaded = weight > 0;
+                                return (
+                                  <div
+                                    key={vName}
+                                    className={`p-2 rounded-lg border text-xs flex flex-col justify-between transition-all ${
+                                      isLoaded
+                                        ? 'bg-sky-500/10 border-sky-500/40 text-white shadow-sm'
+                                        : 'bg-white/[0.02] border-white/5 text-slate-500'
+                                    }`}
+                                  >
+                                    <span className="text-[10px] font-bold truncate block text-slate-300" title={vName}>
+                                      {vName}
+                                    </span>
+                                    <span className={`font-mono font-extrabold text-xs mt-1 block ${isLoaded ? 'text-sky-300' : 'text-slate-500'}`}>
+                                      {weight.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kg
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Table of Loaded Purchases */}
                       {selectedPurchasesForTruck.length > 0 ? (
@@ -4024,24 +4650,27 @@ export default function OperationsDashboard() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-slate-400 font-bold uppercase mb-1">Loading Location</label>
-                        <input
-                          type="text"
+                        <label className="block text-slate-400 font-bold uppercase mb-1">Loading Location (Searchable Village) *</label>
+                        <SearchableVillageSelect
+                          villages={villages}
                           value={tLoadingLocation}
-                          onChange={(e) => setTLoadingLocation(e.target.value)}
-                          placeholder="Enter the loading location"
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+                          onChange={(vName) => setTLoadingLocation(vName)}
+                          placeholder="Select Loading Village..."
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-400 font-bold uppercase mb-1">Destination Warehouse</label>
-                        <input
-                          type="text"
+                        <label className="block text-slate-400 font-bold uppercase mb-1">Destination Warehouse *</label>
+                        <select
+                          required
                           value={tDestinationWarehouse}
                           onChange={(e) => setTDestinationWarehouse(e.target.value)}
-                          placeholder="Enter destination warehouse"
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
-                        />
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-sky-500"
+                        >
+                          <option value="" disabled>Select Destination Warehouse...</option>
+                          <option value="CACC (KPT)">CACC (KPT)</option>
+                          <option value="Amru Nature (KPG)">Amru Nature (KPG)</option>
+                          <option value="Other">Other</option>
+                        </select>
                       </div>
                     </div>
 
@@ -4158,12 +4787,14 @@ export default function OperationsDashboard() {
                                   {t.totalFieldWeight.toFixed(2)} kg
                                 </td>
                                 <td className="p-3 text-center">
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                    t.status === 'ARRIVED' || t.status === 'RECEIVED'
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    t.status === 'REJECTED'
+                                      ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
+                                      : t.status === 'ARRIVED' || t.status === 'RECEIVED'
                                       ? 'bg-emerald-500/10 text-emerald-400'
                                       : 'bg-sky-500/10 text-sky-400 animate-pulse'
                                   }`}>
-                                    {t.status === 'EN_ROUTE' ? '🚛 IN TRANSIT' : t.status}
+                                    {t.status === 'EN_ROUTE' ? '🚛 IN TRANSIT' : t.status === 'REJECTED' ? '🔴 RETURNED FOR CORRECTION' : t.status}
                                   </span>
                                 </td>
                                 <td className="p-3 text-right space-x-1 whitespace-nowrap">
@@ -4188,7 +4819,16 @@ export default function OperationsDashboard() {
                                   >
                                     <FileSpreadsheet className="w-3.5 h-3.5" />
                                   </button>
-                                  {!(t.intake || ['RECEIVED', 'VERIFIED', 'DISBURSED'].includes(t.status)) ? (
+                                  {t.status === 'REJECTED' ? (
+                                    <button
+                                      onClick={() => handleEditTransport(t)}
+                                      className="p-1.5 rounded-lg transition-all inline-flex items-center gap-1 font-bold text-[10px] bg-amber-500 text-[#0b0f19] hover:bg-amber-400 shadow-md shadow-amber-500/20 px-2"
+                                      title="Edit rejected transport record and resubmit to Warehouse"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                      Edit & Resubmit
+                                    </button>
+                                  ) : !t.intake && t.status === 'EN_ROUTE' ? (
                                     <button
                                       onClick={() => handleEditTransport(t)}
                                       className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg transition-colors"
@@ -4257,6 +4897,30 @@ export default function OperationsDashboard() {
                     </button>
                   </div>
                 )}
+                {/* WAREHOUSE RECEIVING DASHBOARD METRICS CARD */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-[#0f172a] border border-white/10 rounded-2xl shadow-lg">
+                  <div className="p-3 bg-gradient-to-r from-sky-500/10 to-sky-500/5 border border-sky-500/30 rounded-xl flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 font-bold uppercase text-[10px] block">Trucks En Route</span>
+                      <span className="text-sm font-black text-sky-400 font-mono">🚚 Trucks En Route: <strong className="text-base text-white">{enRouteTrucksCount}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-xl flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 font-bold uppercase text-[10px] block">Trucks Received Today</span>
+                      <span className="text-sm font-black text-emerald-400 font-mono">📍 Trucks Received Today: <strong className="text-base text-white">{trucksReceivedTodayCount}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-xl flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 font-bold uppercase text-[10px] block">Waiting for Receiving</span>
+                      <span className="text-sm font-black text-amber-400 font-mono">⏳ Waiting for Receiving: <strong className="text-base text-white">{enRouteTrucksCount}</strong></span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Select En-Route Truck */}
                 <div>
                   <label className="block text-slate-400 font-bold uppercase mb-1">Select En-Route Truck *</label>
@@ -4279,13 +4943,50 @@ export default function OperationsDashboard() {
                 {/* READ-ONLY FIELD SUMMARY DISPLAY */}
                 {selectedEnRouteTransport && (
                   <div className="p-4 bg-[#0f172a] border border-sky-500/30 rounded-2xl space-y-3 shadow-xl animate-fade-in">
-                    <div className="flex items-center justify-between border-b border-sky-500/20 pb-2">
+                    <div className="flex flex-wrap items-center justify-between border-b border-sky-500/20 pb-2 gap-2">
                       <span className="font-extrabold text-xs text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
                         <Truck className="w-4 h-4" /> Dispatched Truck Field Summary (Read-Only)
                       </span>
-                      <span className="font-mono text-xs text-sky-300 font-extrabold">
-                        TR-2026-{selectedEnRouteTransport.id.slice(-6).toUpperCase()}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-xs text-sky-300 font-extrabold mr-1">
+                          TR-2026-{selectedEnRouteTransport.id.slice(-6).toUpperCase()}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTransportForDetails(selectedEnRouteTransport)}
+                          className="px-2.5 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold rounded-lg transition-colors flex items-center gap-1 text-[11px]"
+                          title="View Full Truck Cargo Manifest"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-sky-400" /> View Details
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => exportTransportTruckCSV(selectedEnRouteTransport)}
+                          className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold rounded-lg transition-colors flex items-center gap-1 text-[11px]"
+                          title="Download Truck Cargo Manifest CSV for Review"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Download Truck CSV
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRejectionTarget({
+                              isOpen: true,
+                              title: `Reject & Return Transport TR-2026-${selectedEnRouteTransport.id.slice(-6).toUpperCase()} to Field Team`,
+                              entityType: 'TransportRecord',
+                              entityId: selectedEnRouteTransport.id,
+                              defaultTargetModule: 'FIELD',
+                            })
+                          }
+                          className="px-2.5 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 font-bold rounded-lg transition-colors flex items-center gap-1 text-[11px]"
+                          title="Reject Truck Cargo Manifest & Return to Field Team for Correction"
+                        >
+                          <AlertOctagon className="w-3.5 h-3.5 text-red-400" /> Reject to Field
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -4311,6 +5012,69 @@ export default function OperationsDashboard() {
                           {whFieldWeight.toFixed(2)} kg
                         </span>
                       </div>
+                    </div>
+
+                    {/* EXPANDABLE FARMER INVOICES & SACK DETAILS TABLE */}
+                    <div className="pt-2 border-t border-sky-500/20">
+                      <button
+                        type="button"
+                        onClick={() => setShowCargoBreakdown(!showCargoBreakdown)}
+                        className="w-full py-1.5 px-3 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 font-extrabold rounded-lg text-xs flex items-center justify-between transition-colors border border-sky-500/20"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" />
+                          {showCargoBreakdown ? 'Hide Loaded Farmer Invoices & Sack Breakdown' : '📋 Inspect Loaded Farmer Invoices & Sack Weights Breakdown'}
+                        </span>
+                        <span>{showCargoBreakdown ? '▲' : '▼'}</span>
+                      </button>
+
+                      {showCargoBreakdown && (
+                        <div className="mt-3 overflow-x-auto border border-sky-500/20 rounded-xl bg-[#0b0f19]/90 p-2 animate-fade-in max-h-72">
+                          <table className="w-full text-left text-[11px]">
+                            <thead className="bg-sky-500/10 text-sky-300 uppercase font-bold border-b border-sky-500/20 sticky top-0 bg-[#0b0f19]">
+                              <tr>
+                                <th className="p-2">Invoice ID</th>
+                                <th className="p-2">Farmer Name & Code</th>
+                                <th className="p-2">Village</th>
+                                <th className="p-2">Variety & Grade</th>
+                                <th className="p-2 text-center">Sacks</th>
+                                <th className="p-2 text-right">Field Net (kg)</th>
+                                <th className="p-2">Sack Weights Breakdown</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {selectedTruckPurchases.map((p: any) => {
+                                const item = p.items?.[0] || {};
+                                const pId = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+                                const sackWeightsStr = Array.isArray(item.weights) && item.weights.length > 0
+                                  ? item.weights.join(', ') + ' kg'
+                                  : `${p.totalWeight.toFixed(2)} kg`;
+
+                                return (
+                                  <tr key={p.id} className="hover:bg-white/5">
+                                    <td className="p-2 font-mono font-bold text-emerald-400">{pId}</td>
+                                    <td className="p-2 font-bold text-white">
+                                      {p.farmerName}
+                                      <div className="text-[10px] text-slate-400 font-mono">{p.familyCode}</div>
+                                    </td>
+                                    <td className="p-2 text-slate-300">{p.village}</td>
+                                    <td className="p-2 font-bold text-amber-300">
+                                      {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
+                                    </td>
+                                    <td className="p-2 text-center font-bold text-white">{item.sacks || 0}</td>
+                                    <td className="p-2 text-right font-mono font-black text-sky-400">
+                                      {p.totalWeight.toFixed(2)} kg
+                                    </td>
+                                    <td className="p-2 font-mono text-[10px] text-slate-400 max-w-[200px] truncate" title={sackWeightsStr}>
+                                      {sackWeightsStr}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -4402,9 +5166,9 @@ export default function OperationsDashboard() {
                   </div>
                 )}
 
-                {/* SCALE DISPLAY INDICATOR PHOTO UPLOAD AREA */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div className="p-4 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
+                {/* SCALE DISPLAY INDICATOR & TRANSPORT INVOICE PHOTO UPLOAD AREA */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-2">
+                  <div className="p-3.5 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
                     <label className="block text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Camera className="w-4 h-4" /> Upload Gross Weight Scale Display Photo
                     </label>
@@ -4412,18 +5176,18 @@ export default function OperationsDashboard() {
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleScalePhotoUpload(e, 'gross')}
-                      className="text-xs text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
+                      className="text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
                     />
                     {uploadingGrossPhoto && <div className="text-[11px] text-amber-400">Uploading gross scale photo...</div>}
                     {whGrossPhotoUrl && (
-                      <div className="flex items-center gap-3 pt-2">
-                        <img src={whGrossPhotoUrl} alt="Gross Scale Display" className="w-16 h-16 object-cover rounded-lg border border-sky-500/50" />
-                        <span className="text-[11px] text-sky-400 font-bold">✓ Gross scale photo attached</span>
+                      <div className="flex items-center gap-2 pt-1">
+                        <img src={formatImageSrc(whGrossPhotoUrl)} alt="Gross Scale Display" className="w-12 h-12 object-cover rounded-lg border border-sky-500/50" />
+                        <span className="text-[11px] text-emerald-400 font-bold">✓ Gross Photo Attached</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="p-4 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
+                  <div className="p-3.5 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
                     <label className="block text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Camera className="w-4 h-4" /> Upload Tare Weight Scale Display Photo
                     </label>
@@ -4431,13 +5195,32 @@ export default function OperationsDashboard() {
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleScalePhotoUpload(e, 'tare')}
-                      className="text-xs text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
+                      className="text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
                     />
                     {uploadingTarePhoto && <div className="text-[11px] text-amber-400">Uploading tare scale photo...</div>}
                     {whTarePhotoUrl && (
-                      <div className="flex items-center gap-3 pt-2">
-                        <img src={whTarePhotoUrl} alt="Tare Scale Display" className="w-16 h-16 object-cover rounded-lg border border-sky-500/50" />
-                        <span className="text-[11px] text-sky-400 font-bold">✓ Tare scale photo attached</span>
+                      <div className="flex items-center gap-2 pt-1">
+                        <img src={formatImageSrc(whTarePhotoUrl)} alt="Tare Scale Display" className="w-12 h-12 object-cover rounded-lg border border-sky-500/50" />
+                        <span className="text-[11px] text-emerald-400 font-bold">✓ Tare Photo Attached</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-3.5 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
+                    <label className="block text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-4 h-4" /> Upload Truck Transport Invoice Photo
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleScalePhotoUpload(e, 'invoice')}
+                      className="text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
+                    />
+                    {uploadingInvoicePhoto && <div className="text-[11px] text-amber-400">Uploading transport invoice photo...</div>}
+                    {whInvoicePhotoUrl && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <img src={formatImageSrc(whInvoicePhotoUrl)} alt="Truck Transport Invoice" className="w-12 h-12 object-cover rounded-lg border border-sky-500/50" />
+                        <span className="text-[11px] text-emerald-400 font-bold">✓ Invoice Photo Attached</span>
                       </div>
                     )}
                   </div>
@@ -4533,7 +5316,14 @@ export default function OperationsDashboard() {
 
                         return (
                           <tr key={intake.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400">{receivingIdFormatted}</td>
+                            <td className="p-3 font-mono font-bold text-sky-400">
+                              {receivingIdFormatted}
+                              {(intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED') && (
+                                <div className="text-[10px] font-black text-red-400 animate-pulse flex items-center gap-1 mt-0.5">
+                                  <AlertOctagon className="w-3 h-3 text-red-400" /> Returned by Inventory
+                                </div>
+                              )}
+                            </td>
                             <td className="p-3 text-slate-400 text-[11px]">
                               {new Date(intake.createdAt).toLocaleDateString()}{' '}
                               <span className="text-slate-500">{new Date(intake.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -4582,13 +5372,42 @@ export default function OperationsDashboard() {
                                 <FileSpreadsheet className="w-3.5 h-3.5" />
                               </button>
                               {transport.status !== 'VERIFIED' && transport.status !== 'DISBURSED' ? (
-                                <button
-                                  onClick={() => handleEditWarehouseIntake(intake)}
-                                  className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg transition-colors"
-                                  title="Edit Warehouse Receiving Record"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleEditWarehouseIntake(intake)}
+                                    className={`p-1.5 rounded-lg transition-all inline-flex items-center gap-1 font-bold text-[10px] ${
+                                      intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED'
+                                        ? 'bg-amber-500 text-[#0b0f19] hover:bg-amber-400 shadow-md shadow-amber-500/20 px-2'
+                                        : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400'
+                                    }`}
+                                    title={
+                                      intake.inventoryStatus === 'REJECTED'
+                                        ? 'Edit rejected warehouse receiving record and resubmit to Inventory'
+                                        : 'Edit Warehouse Receiving Record'
+                                    }
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                    {intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED' ? 'Edit & Resubmit' : ''}
+                                  </button>
+
+                                  {(intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED') && transport.id && (
+                                    <button
+                                      onClick={() =>
+                                        setRejectionTarget({
+                                          isOpen: true,
+                                          title: `Reject & Return Transport TR-2026-${transport.id.slice(-6).toUpperCase()} to Field Team`,
+                                          entityType: 'TransportRecord',
+                                          entityId: transport.id,
+                                          defaultTargetModule: 'FIELD',
+                                        })
+                                      }
+                                      className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 font-bold rounded-lg transition-colors flex items-center gap-1 text-[10px]"
+                                      title="Error came from Field transport manifest. Reject to Field team for correction."
+                                    >
+                                      <AlertOctagon className="w-3.5 h-3.5 text-red-400" /> Reject to Field
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
                                 <span
                                   className="p-1.5 text-slate-500 inline-block text-[11px]"
@@ -4619,17 +5438,296 @@ export default function OperationsDashboard() {
         )}
 
         {/* ═══════════════════════════════════════════════
-            MODULE 3: TRUCK-LEVEL FINANCE VERIFICATION
+            MODULE 3: INVENTORY RECORD & VERIFICATION
         ══════════════════════════════════════════════════ */}
-        {activeModule === 'finance' && (currentUserRole === 'FINANCE' || currentUserRole === 'ADMIN') && (
+        {activeModule === 'inventory' && (
+          <div className="space-y-6">
+            {/* INVENTORY METRICS CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-[#141c2f] border border-amber-500/30 rounded-2xl space-y-1 shadow-lg">
+                <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" /> Waiting for Inventory Recording
+                </div>
+                <div className="text-2xl font-black text-amber-400">
+                  {warehouseIntakes.filter((i) => i.inventoryStatus !== 'INVENTORY_RECORDED').length} Records
+                </div>
+                <p className="text-[11px] text-slate-400">Warehouse intake completed, awaiting inventory staff confirmation.</p>
+              </div>
+
+              <div className="p-4 bg-[#141c2f] border border-purple-500/30 rounded-2xl space-y-1 shadow-lg">
+                <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" /> Inventory Recorded
+                </div>
+                <div className="text-2xl font-black text-purple-400">
+                  {warehouseIntakes.filter((i) => i.inventoryStatus === 'INVENTORY_RECORDED').length} Records
+                </div>
+                <p className="text-[11px] text-slate-400">Paddy officially logged into inventory. Unlocked for Finance.</p>
+              </div>
+
+              <div className="p-4 bg-[#141c2f] border border-emerald-500/30 rounded-2xl space-y-1 shadow-lg">
+                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Scale className="w-4 h-4" /> Total Received Net Weight
+                </div>
+                <div className="text-2xl font-black text-emerald-400">
+                  {(warehouseIntakes.reduce((sum, i) => sum + (i.warehouseNetWeight || 0), 0) / 1000).toFixed(2)} MT
+                </div>
+                <p className="text-[11px] text-slate-400">Total metric tons verified and stored in warehouse silos & stacks.</p>
+              </div>
+            </div>
+
+            {/* INVENTORY RECORDS TABLE CARD */}
+            <div className="bg-[#141c2f] border border-white/10 rounded-2xl p-6 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div>
+                  <h2 className="text-base font-extrabold text-purple-400 flex items-center gap-2">
+                    📦 Warehouse Inventory Recording & Verification ({
+                      warehouseIntakes.filter((intake) => {
+                        const transport = intake.transport || {};
+                        const matchesStatus =
+                          invStatusFilter === 'ALL' ||
+                          (invStatusFilter === 'WAITING_FOR_INVENTORY' && intake.inventoryStatus !== 'INVENTORY_RECORDED') ||
+                          (invStatusFilter === 'INVENTORY_RECORDED' && intake.inventoryStatus === 'INVENTORY_RECORDED');
+
+                        const q = invSearchQuery.trim().toLowerCase();
+                        if (!q) return matchesStatus;
+
+                        const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
+                        const trId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
+                        const driver = (transport.driverName || '').toLowerCase();
+                        const plate = (transport.plateNumber || '').toLowerCase();
+                        const location = (intake.inventoryLocation || '').toLowerCase();
+
+                        return matchesStatus && (wrId.includes(q) || trId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
+                      }).length
+                    })
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Verify received paddy from warehouse intake, assign storage silo/stack location, and confirm inventory records before Finance payment verification.
+                  </p>
+                </div>
+              </div>
+
+              {/* Controls & Search */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/5 border border-white/10 rounded-xl p-3 text-xs">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={invSearchQuery}
+                    onChange={(e) => setInvSearchQuery(e.target.value)}
+                    placeholder="Search Warehouse ID, Transport ID, Driver, Plate, Storage Location..."
+                    className="w-full bg-[#1e293b] border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <select
+                    value={invStatusFilter}
+                    onChange={(e) => setInvStatusFilter(e.target.value as any)}
+                    className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white font-bold"
+                  >
+                    <option value="ALL">All Inventory Statuses</option>
+                    <option value="WAITING_FOR_INVENTORY">⏳ Waiting for Inventory Recording</option>
+                    <option value="INVENTORY_RECORDED">📦 Inventory Recorded & Confirmed</option>
+                    <option value="REJECTED">🔴 Returned to Warehouse / Returned by Finance</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Inventory Table */}
+              <div className="overflow-x-auto border border-white/10 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+                    <tr>
+                      <th className="p-3">Receiving ID</th>
+                      <th className="p-3">Arrival Date</th>
+                      <th className="p-3">Truck Driver & Plate</th>
+                      <th className="p-3 text-right">Net Weight (kg)</th>
+                      <th className="p-3 text-center">Intake Proof Photos</th>
+                      <th className="p-3 text-center">Inventory Status</th>
+                      <th className="p-3 text-left">Storage Location</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {warehouseIntakes.filter((intake) => {
+                      const transport = intake.transport || {};
+                      const matchesStatus =
+                        invStatusFilter === 'ALL' ||
+                        (invStatusFilter === 'WAITING_FOR_INVENTORY' && intake.inventoryStatus !== 'INVENTORY_RECORDED') ||
+                        (invStatusFilter === 'INVENTORY_RECORDED' && intake.inventoryStatus === 'INVENTORY_RECORDED');
+
+                      const q = invSearchQuery.trim().toLowerCase();
+                      if (!q) return matchesStatus;
+
+                      const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
+                      const trId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
+                      const driver = (transport.driverName || '').toLowerCase();
+                      const plate = (transport.plateNumber || '').toLowerCase();
+                      const location = (intake.inventoryLocation || '').toLowerCase();
+
+                      return matchesStatus && (wrId.includes(q) || trId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
+                    }).length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-500 text-xs">
+                          No warehouse intake records found matching your filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      warehouseIntakes.filter((intake) => {
+                        const transport = intake.transport || {};
+                        const matchesStatus =
+                          invStatusFilter === 'ALL' ||
+                          (invStatusFilter === 'WAITING_FOR_INVENTORY' && intake.inventoryStatus !== 'INVENTORY_RECORDED') ||
+                          (invStatusFilter === 'INVENTORY_RECORDED' && intake.inventoryStatus === 'INVENTORY_RECORDED');
+
+                        const q = invSearchQuery.trim().toLowerCase();
+                        if (!q) return matchesStatus;
+
+                        const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
+                        const trId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
+                        const driver = (transport.driverName || '').toLowerCase();
+                        const plate = (transport.plateNumber || '').toLowerCase();
+                        const location = (intake.inventoryLocation || '').toLowerCase();
+
+                        return matchesStatus && (wrId.includes(q) || trId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
+                      }).map((intake) => {
+                        const transport = intake.transport || {};
+                        const wrIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
+                        const isRecorded = intake.inventoryStatus === 'INVENTORY_RECORDED';
+
+                        return (
+                          <tr key={intake.id} className="hover:bg-white/5 transition-colors">
+                            <td className="p-3 font-mono font-bold text-sky-400">{wrIdFormatted}</td>
+                            <td className="p-3 text-slate-300">{new Date(intake.createdAt).toLocaleString()}</td>
+                            <td className="p-3 font-bold text-white">
+                              {transport.driverName}
+                              <div className="font-mono text-sky-400 text-[11px]">{transport.plateNumber}</div>
+                            </td>
+                            <td className="p-3 text-right font-mono font-black text-emerald-400 text-sm">
+                              {intake.warehouseNetWeight.toFixed(2)} kg
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5 text-[10px]">
+                                {intake.grossScalePhotoUrl && (
+                                  <a href={intake.grossScalePhotoUrl} target="_blank" rel="noreferrer" className="px-1.5 py-0.5 bg-sky-500/20 text-sky-300 rounded font-bold hover:bg-sky-500/30">
+                                    Gross
+                                  </a>
+                                )}
+                                {intake.tareScalePhotoUrl && (
+                                  <a href={intake.tareScalePhotoUrl} target="_blank" rel="noreferrer" className="px-1.5 py-0.5 bg-sky-500/20 text-sky-300 rounded font-bold hover:bg-sky-500/30">
+                                    Tare
+                                  </a>
+                                )}
+                                {intake.transportInvoiceUrl && (
+                                  <a href={intake.transportInvoiceUrl} target="_blank" rel="noreferrer" className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded font-bold hover:bg-emerald-500/30">
+                                    Invoice
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 text-center">
+                              {intake.inventoryStatus === 'REJECTED' && intake.status === 'REJECTED' ? (
+                                <span className="bg-red-500/20 text-red-400 border border-red-500/40 px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1 justify-center animate-pulse" title="Returned to Warehouse team for scale or photo correction">
+                                  <AlertOctagon className="w-3.5 h-3.5 text-red-400" /> Returned to Warehouse
+                                </span>
+                              ) : intake.inventoryStatus === 'REJECTED' ? (
+                                <span className="bg-red-500/20 text-red-400 border border-red-500/40 px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1 justify-center animate-pulse" title="Returned by Finance team for inventory record correction">
+                                  <AlertOctagon className="w-3.5 h-3.5 text-red-400" /> Returned by Finance
+                                </span>
+                              ) : isRecorded ? (
+                                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Inventory Recorded
+                                </span>
+                              ) : (
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center animate-pulse">
+                                  <Clock className="w-3.5 h-3.5" /> Waiting for Inventory
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-left font-extrabold text-white">
+                              {intake.inventoryLocation || (isRecorded ? 'Main Warehouse' : '--')}
+                              {intake.inventoryStaffName && (
+                                <div className="text-[10px] text-slate-400 font-normal">By: {intake.inventoryStaffName}</div>
+                              )}
+                            </td>
+                            <td className="p-3 text-right whitespace-nowrap space-x-1">
+                              <button
+                                onClick={() => setSelectedIntakeForDetails(intake)}
+                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
+                                title="Inspect Warehouse Scale & Invoice Proof"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+
+                              {!isRecorded && (currentUserRole === 'INVENTORY' || currentUserRole === 'ADMIN') ? (
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      setInvConfirmModalIntake(intake);
+                                      setInvLocationInput('Silo 01 - Stack A');
+                                      setInvNotesInput('');
+                                    }}
+                                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-extrabold text-[10px] shadow-sm shadow-purple-600/30 transition-all"
+                                  >
+                                    Confirm Inventory Record
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setRejectionTarget({
+                                        isOpen: true,
+                                        title: `Reject & Return Warehouse Intake WR-2026-${intake.id.slice(-6).toUpperCase()} to Warehouse Team`,
+                                        entityType: 'WarehouseIntake',
+                                        entityId: intake.id,
+                                        defaultTargetModule: 'WAREHOUSE',
+                                      })
+                                    }
+                                    className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                                    title="Reject Warehouse Scale Intake & Return to Warehouse Receiver for Correction"
+                                  >
+                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject to Warehouse
+                                  </button>
+                                </div>
+                              ) : isRecorded ? (
+                                <span className="text-[10px] text-purple-400 font-bold px-2 py-1 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                                  ✓ Unlocked for Finance
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 italic">Inventory Staff Only</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════
+            MODULE 4: TRUCK-LEVEL FINANCE VERIFICATION
+        ══════════════════════════════════════════════════ */}
+        {activeModule === 'finance' && (
           <div className="space-y-6">
             {/* DASHBOARD SUMMARY STATS (TOP OF PAGE) */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <div className="p-4 bg-[#141c2f] border border-amber-500/30 rounded-2xl space-y-1 shadow-lg">
                 <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> Awaiting Verification
+                  <Clock className="w-3.5 h-3.5 text-amber-400" /> Waiting for Inventory
                 </div>
-                <div className="text-xl md:text-2xl font-black text-amber-400">{trucksAwaitingVerification} Trucks</div>
+                <div className="text-xl md:text-2xl font-black text-amber-400">{trucksWaitingInventoryRecord} Trucks</div>
+                <div className="text-[10px] text-slate-400">Pending Recording</div>
+              </div>
+
+              <div className="p-4 bg-[#141c2f] border border-purple-500/40 rounded-2xl space-y-1 shadow-lg">
+                <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" /> Inventory Recorded
+                </div>
+                <div className="text-xl md:text-2xl font-black text-purple-400">{trucksInventoryRecorded} Trucks</div>
+                <div className="text-[10px] text-slate-400">Ready for Finance</div>
               </div>
 
               <div className="p-4 bg-[#141c2f] border border-emerald-500/30 rounded-2xl space-y-1 shadow-lg">
@@ -4651,9 +5749,9 @@ export default function OperationsDashboard() {
                 <div className="text-xl md:text-2xl font-black text-white">{totalFarmersPaidCount} Farmers</div>
               </div>
 
-              <div className="p-4 bg-gradient-to-r from-amber-950/80 to-[#141c2f] border border-amber-500/50 rounded-2xl space-y-1 shadow-xl col-span-2 sm:col-span-1">
-                <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Total Disbursed (KHR)</div>
-                <div className="text-lg md:text-xl font-black text-amber-400">{totalAmountPaidKHR.toLocaleString()} KHR</div>
+              <div className="p-4 bg-gradient-to-r from-amber-950/80 to-[#141c2f] border border-amber-500/50 rounded-2xl space-y-1 shadow-xl col-span-2 sm:col-span-1 lg:col-span-1">
+                <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Total Disbursed</div>
+                <div className="text-base md:text-lg font-black text-amber-400">{totalAmountPaidKHR.toLocaleString()} KHR</div>
               </div>
             </div>
 
@@ -4690,7 +5788,7 @@ export default function OperationsDashboard() {
                   />
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <select
                     value={finStatusFilter}
                     onChange={(e) => setFinStatusFilter(e.target.value)}
@@ -4698,9 +5796,10 @@ export default function OperationsDashboard() {
                   >
                     <option value="ALL">All Truck Statuses</option>
                     <option value="EN_ROUTE">🚛 En Route</option>
-                    <option value="RECEIVED">🏬 Received at Warehouse / Awaiting Verification</option>
+                    <option value="WAITING_FOR_INVENTORY">⏳ Pending Inventory</option>
+                    <option value="INVENTORY_RECORDED">📦 Inventory Recorded</option>
                     <option value="VERIFIED">🟢 Verified</option>
-                    <option value="DISBURSED">💳 Payment Completed</option>
+                    <option value="DISBURSED">✅ Payment Complete</option>
                   </select>
                 </div>
               </div>
@@ -4720,7 +5819,7 @@ export default function OperationsDashboard() {
                       <th className="p-3 text-right">Absolute Diff (ABS)</th>
                       <th className="p-3 text-center">Tolerance Status</th>
                       <th className="p-3 text-right">Total Net Payment</th>
-                      <th className="p-3 text-center">Truck Status</th>
+                      <th className="p-3 text-center">Truck & Inventory Status</th>
                       <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -4764,27 +5863,61 @@ export default function OperationsDashboard() {
                         }
 
                         let statusBadge = (
-                          <span className="bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
+                          <span className="bg-sky-500/10 text-sky-400 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
                             🚛 En Route
                           </span>
                         );
 
-                        if (t.status === 'RECEIVED') {
+                        if (t.status === 'REJECTED') {
                           statusBadge = (
-                            <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center animate-pulse">
-                              <Clock className="w-3 h-3" /> Awaiting Verification
+                            <span
+                              className="bg-red-500/20 text-red-400 border border-red-500/40 px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1 justify-center animate-pulse"
+                              title="Record has been rejected and returned for correction."
+                            >
+                              <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
+                              🔴 Returned for Correction
                             </span>
                           );
+                        } else if (t.status === 'RECEIVED') {
+                          if (intake.inventoryStatus === 'INVENTORY_RECORDED') {
+                            statusBadge = (
+                              <span
+                                className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center shadow-sm"
+                                title="Inventory has confirmed and recorded the paddy. Finance can now start reviewing documents and preparing payment."
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
+                                📦 Inventory Recorded
+                              </span>
+                            );
+                          } else {
+                            statusBadge = (
+                              <span
+                                className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center animate-pulse"
+                                title="Warehouse has received the truck, but Inventory has not recorded it yet."
+                              >
+                                <Clock className="w-3.5 h-3.5" />
+                                ⏳ Pending Inventory
+                              </span>
+                            );
+                          }
                         } else if (t.status === 'VERIFIED') {
                           statusBadge = (
-                            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
-                              <CheckCircle2 className="w-3 h-3" /> Verified
+                            <span
+                              className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center"
+                              title="Finance has verified scale and invoice documents. Ready for payment disbursement."
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              🟢 Verified
                             </span>
                           );
                         } else if (t.status === 'DISBURSED') {
                           statusBadge = (
-                            <span className="bg-sky-500/10 text-sky-400 border border-sky-500/30 px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
-                              <CreditCard className="w-3 h-3" /> Payment Completed
+                            <span
+                              className="bg-sky-500/10 text-sky-400 border border-sky-500/30 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center"
+                              title="Finance has completed the payment."
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              ✅ Payment Complete
                             </span>
                           );
                         }
@@ -4848,21 +5981,66 @@ export default function OperationsDashboard() {
                               </button>
 
                               {t.status === 'RECEIVED' && (
-                                <button
-                                  onClick={() => handleVerifyTruckFinance(t.id)}
-                                  className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg font-extrabold text-[10px]"
-                                >
-                                  Verify Truck
-                                </button>
+                                intake.inventoryStatus === 'INVENTORY_RECORDED' ? (
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleVerifyTruckFinance(t.id)}
+                                      className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-[#0b0f19] rounded-lg font-black text-[10px] shadow-sm shadow-emerald-500/20 transition-all flex items-center gap-1"
+                                      title={`Inventory Confirmed by ${intake.inventoryStaffName || 'Inventory Staff'} (${intake.inventoryLocation || 'Main Warehouse'}). Ready for Finance Verification.`}
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" /> Verify
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        setRejectionTarget({
+                                          isOpen: true,
+                                          title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()} to Inventory Team`,
+                                          entityType: 'WarehouseIntake',
+                                          entityId: intake.id || t.id,
+                                          defaultTargetModule: 'INVENTORY',
+                                        })
+                                      }
+                                      className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                                      title="Reject Inventory Record & Return to Inventory Team for Correction"
+                                    >
+                                      <AlertOctagon className="w-3.5 h-3.5" /> Reject to Inventory
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    disabled
+                                    className="px-2.5 py-1 bg-slate-800 text-slate-500 border border-slate-700 rounded-lg font-bold text-[10px] cursor-not-allowed flex items-center gap-1 inline-flex"
+                                    title="Paddy must be confirmed & recorded into inventory system before Finance verification."
+                                  >
+                                    <Clock className="w-3 h-3 text-amber-500" /> Pending Inventory
+                                  </button>
+                                )
                               )}
 
                               {t.status === 'VERIFIED' && (
-                                <button
-                                  onClick={() => setPaymentModalTruck(truckData)}
-                                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg font-extrabold text-[10px]"
-                                >
-                                  Process Payment
-                                </button>
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    onClick={() => setPaymentModalTruck(truckData)}
+                                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg font-extrabold text-[10px]"
+                                  >
+                                    Process Payment
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setRejectionTarget({
+                                        isOpen: true,
+                                        title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()} to Inventory Team`,
+                                        entityType: 'WarehouseIntake',
+                                        entityId: intake.id || t.id,
+                                        defaultTargetModule: 'INVENTORY',
+                                      })
+                                    }
+                                    className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                                    title="Reject Verification & Return to Inventory Team for Correction"
+                                  >
+                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject to Inventory
+                                  </button>
+                                </div>
                               )}
 
                               {currentUserRole === 'ADMIN' && (
@@ -4892,10 +6070,10 @@ export default function OperationsDashboard() {
         {activeModule === 'admin' && currentUserRole === 'ADMIN' && (
           <div className="space-y-6">
             {/* Admin Sub-Tabs */}
-            <div className="bg-[#141c2f] border border-white/10 rounded-xl p-1 grid grid-cols-2 sm:grid-cols-6 gap-1">
+            <div className="bg-[#141c2f] border border-white/10 rounded-xl p-1 flex flex-wrap lg:flex-nowrap gap-1 overflow-x-auto">
               <button
                 onClick={() => setAdminTab('users')}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'users' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -4903,7 +6081,7 @@ export default function OperationsDashboard() {
               </button>
               <button
                 onClick={() => setAdminTab('villages')}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'villages' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -4911,7 +6089,7 @@ export default function OperationsDashboard() {
               </button>
               <button
                 onClick={() => setAdminTab('banks')}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'banks' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -4919,7 +6097,7 @@ export default function OperationsDashboard() {
               </button>
               <button
                 onClick={() => setAdminTab('prices')}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'prices' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -4927,7 +6105,7 @@ export default function OperationsDashboard() {
               </button>
               <button
                 onClick={() => setAdminTab('tolerance')}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'tolerance' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -4935,11 +6113,19 @@ export default function OperationsDashboard() {
               </button>
               <button
                 onClick={() => setAdminTab('audit')}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'audit' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <ShieldAlert className="w-3.5 h-3.5" /> Audit Log ({auditLogs.length})
+              </button>
+              <button
+                onClick={() => setAdminTab('backup')}
+                className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
+                  adminTab === 'backup' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" /> Backup & Restore
               </button>
             </div>
 
@@ -5017,6 +6203,22 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
+                    {uRole === 'FIELD' && (
+                      <div>
+                        <label className="block text-slate-400 font-bold uppercase mb-1">Assigned Province *</label>
+                        <select
+                          value={uAssignedProvince}
+                          onChange={(e) => setUAssignedProvince(e.target.value)}
+                          className="w-full bg-[#1e293b] border border-purple-500/50 rounded-lg p-2.5 text-white font-bold"
+                        >
+                          <option value="Preah Vihear">Preah Vihear</option>
+                          <option value="Stung Treng">Stung Treng</option>
+                          <option value="Ratanakiri">Ratanakiri</option>
+                          <option value="Mondolkiri">Mondolkiri</option>
+                        </select>
+                      </div>
+                    )}
+
                     <button
                       type="submit"
                       className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-2.5 rounded-lg shadow-md flex items-center justify-center gap-2"
@@ -5070,6 +6272,11 @@ export default function OperationsDashboard() {
                               >
                                 {u.role === 'FIELD' ? '🌾 FIELD' : u.role === 'WAREHOUSE' ? '🏬 WAREHOUSE' : u.role === 'FINANCE' ? '💳 FINANCE' : '⚙️ ADMIN'}
                               </span>
+                              {u.role === 'FIELD' && u.assignedProvinces && (
+                                <div className="text-[10px] text-emerald-400 font-mono mt-0.5">
+                                  📍 {u.assignedProvinces}
+                                </div>
+                              )}
                             </td>
                             <td className="p-3 text-center">
                               <button
@@ -5160,14 +6367,17 @@ export default function OperationsDashboard() {
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold uppercase mb-1">District</label>
-                      <input
-                        type="text"
-                        value={newVillageDistrict}
-                        onChange={(e) => setNewVillageDistrict(e.target.value)}
-                        placeholder="Chhaeb / Kulen"
-                        className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white"
-                      />
+                      <label className="block text-slate-400 font-bold uppercase mb-1">Province *</label>
+                      <select
+                        value={newVillageProvince}
+                        onChange={(e) => setNewVillageProvince(e.target.value)}
+                        className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold"
+                      >
+                        <option value="Preah Vihear">Preah Vihear</option>
+                        <option value="Stung Treng">Stung Treng</option>
+                        <option value="Ratanakiri">Ratanakiri</option>
+                        <option value="Mondolkiri">Mondolkiri</option>
+                      </select>
                     </div>
                     <button
                       type="submit"
@@ -5279,8 +6489,19 @@ export default function OperationsDashboard() {
             {adminTab === 'prices' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-[#141c2f] border border-white/10 rounded-2xl p-6 space-y-4">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-white/10 pb-3">
-                    <Plus className="w-4 h-4 text-purple-400" /> Add / Update Variety Pricing
+                  <h3 className="text-sm font-bold text-white flex items-center justify-between border-b border-white/10 pb-3">
+                    <span className="flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-purple-400" /> {editingSpecId ? 'Edit Variety Price Specification' : 'Add / Update Variety Pricing'}
+                    </span>
+                    {editingSpecId && (
+                      <button
+                        type="button"
+                        onClick={resetPriceSpecForm}
+                        className="text-[11px] text-slate-400 hover:text-white underline font-normal"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
                   </h3>
 
                   <form onSubmit={handleAddPriceSpec} className="space-y-3 text-xs">
@@ -5295,58 +6516,95 @@ export default function OperationsDashboard() {
                         className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white"
                       />
                     </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-slate-400 font-bold uppercase mb-1">Grade</label>
+                        <label className="block text-slate-400 font-bold uppercase mb-1">Grade *</label>
                         <select
                           value={newSpecGrade}
                           onChange={(e) => setNewSpecGrade(e.target.value)}
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white"
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white font-bold"
                         >
-                          <option>A1</option>
-                          <option>A2</option>
-                          <option>B</option>
+                          <option value="A1">A1</option>
+                          <option value="A2">A2</option>
+                          <option value="B1">B1</option>
+                          <option value="B2">B2</option>
+                          <option value="A">A</option>
+                          <option value="B">B</option>
                         </select>
                       </div>
+
                       <div>
-                        <label className="block text-slate-400 font-bold uppercase mb-1">Base Price (KHR/kg)</label>
+                        <label className="block text-slate-400 font-bold uppercase mb-1">Price (KHR/Kg) *</label>
                         <input
                           type="number"
                           required
                           value={newSpecBasePrice}
                           onChange={(e) => setNewSpecBasePrice(parseFloat(e.target.value) || 0)}
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white font-bold"
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-amber-400 font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-slate-400 font-bold mb-1">Whole Grain (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newSpecMinWholeGrain}
+                          onChange={(e) => setNewSpecMinWholeGrain(e.target.value)}
+                          placeholder="e.g. 70"
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 font-bold mb-1">Broken Rice (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newSpecMaxBrokenRice}
+                          onChange={(e) => setNewSpecMaxBrokenRice(e.target.value)}
+                          placeholder="e.g. 30"
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-slate-400 font-bold mb-1">Organic Bonus</label>
-                        <input
-                          type="number"
-                          value={newSpecOrganicBonus}
-                          onChange={(e) => setNewSpecOrganicBonus(parseFloat(e.target.value) || 0)}
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 font-bold mb-1">Max Moisture %</label>
+                        <label className="block text-slate-400 font-bold mb-1">Impurity (%)</label>
                         <input
                           type="number"
                           step="0.1"
-                          value={newSpecMaxMoisture}
-                          onChange={(e) => setNewSpecMaxMoisture(parseFloat(e.target.value) || 0)}
+                          value={newSpecImpurity}
+                          onChange={(e) => setNewSpecImpurity(e.target.value)}
+                          placeholder="e.g. 1.0"
                           className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white"
                         />
                       </div>
+
                       <div>
-                        <label className="block text-slate-400 font-bold mb-1">Max Foreign %</label>
+                        <label className="block text-slate-400 font-bold mb-1">Foreign Matter (%)</label>
                         <input
                           type="number"
                           step="0.1"
                           value={newSpecMaxForeign}
-                          onChange={(e) => setNewSpecMaxForeign(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => setNewSpecMaxForeign(e.target.value)}
+                          placeholder="e.g. 5.0"
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 font-bold mb-1">Moisture (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newSpecMaxMoisture}
+                          onChange={(e) => setNewSpecMaxMoisture(e.target.value)}
+                          placeholder="e.g. 14.0"
                           className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white"
                         />
                       </div>
@@ -5354,9 +6612,9 @@ export default function OperationsDashboard() {
 
                     <button
                       type="submit"
-                      className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-2.5 rounded-lg shadow-md"
+                      className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-2.5 rounded-lg shadow-md mt-2"
                     >
-                      Save Variety Price Specification
+                      {editingSpecId ? 'Update Variety Price Specification' : 'Save Variety Price Specification'}
                     </button>
                   </form>
                 </div>
@@ -5373,11 +6631,13 @@ export default function OperationsDashboard() {
                         <tr>
                           <th className="p-2.5">Paddy Variety</th>
                           <th className="p-2.5">Grade</th>
-                          <th className="p-2.5 text-right">Base Price</th>
-                          <th className="p-2.5 text-right">Organic Bonus</th>
-                          <th className="p-2.5 text-center">Max Moisture</th>
-                          <th className="p-2.5 text-center">Max Foreign</th>
-                          <th className="p-2.5 text-right">Action</th>
+                          <th className="p-2.5 text-right">Price (KHR/Kg)</th>
+                          <th className="p-2.5 text-center">Whole Grain %</th>
+                          <th className="p-2.5 text-center">Broken Rice %</th>
+                          <th className="p-2.5 text-center">Impurity %</th>
+                          <th className="p-2.5 text-center">Foreign Matter %</th>
+                          <th className="p-2.5 text-center">Moisture %</th>
+                          <th className="p-2.5 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
@@ -5386,13 +6646,23 @@ export default function OperationsDashboard() {
                             <td className="p-2.5 font-bold text-white">{s.variety}</td>
                             <td className="p-2.5 font-extrabold text-purple-400">{s.grade}</td>
                             <td className="p-2.5 text-right font-bold text-amber-400">{s.basePrice.toLocaleString()} KHR</td>
-                            <td className="p-2.5 text-right font-bold text-emerald-400">+{s.organicBonus} KHR</td>
-                            <td className="p-2.5 text-center">{s.maxMoisture}%</td>
-                            <td className="p-2.5 text-center">{s.maxForeignMatter}%</td>
-                            <td className="p-2.5 text-right">
+                            <td className="p-2.5 text-center text-slate-300">{s.minWholeGrain !== null && s.minWholeGrain !== undefined ? `${s.minWholeGrain}%` : '-'}</td>
+                            <td className="p-2.5 text-center text-slate-300">{s.maxBrokenRice !== null && s.maxBrokenRice !== undefined ? `${s.maxBrokenRice}%` : '-'}</td>
+                            <td className="p-2.5 text-center text-slate-300">{s.impurity !== null && s.impurity !== undefined ? `${s.impurity}%` : '-'}</td>
+                            <td className="p-2.5 text-center text-slate-300">{s.maxForeignMatter}%</td>
+                            <td className="p-2.5 text-center text-slate-300">{s.maxMoisture}%</td>
+                            <td className="p-2.5 text-right space-x-1 whitespace-nowrap">
+                              <button
+                                onClick={() => handleEditPriceSpec(s)}
+                                className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded transition-colors"
+                                title="Edit Specification"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={() => handleDeletePriceSpec(s.id, s.variety, s.grade)}
-                                className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded"
+                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-colors"
+                                title="Remove Specification"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -5526,6 +6796,151 @@ export default function OperationsDashboard() {
                 </div>
               </div>
             )}
+
+            {/* TAB 6: DATABASE BACKUP & RESTORE */}
+            {adminTab === 'backup' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Export Backup Card */}
+                <div className="bg-[#141c2f] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                    <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-center text-emerald-400 font-bold text-lg">
+                      📥
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-white">Export Full Database Backup (JSON)</h3>
+                      <p className="text-[11px] text-slate-400">Download a complete structured JSON snapshot of all system master data and transaction history.</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2 text-xs">
+                    <div className="font-bold text-slate-300">Backup Includes:</div>
+                    <ul className="list-disc list-inside text-slate-400 space-y-1 text-[11px]">
+                      <li>User accounts, Target Villages, Commercial Banks, Paddy Price Specs</li>
+                      <li>Farmer Profiles, Quality Specs, Farmer Purchase Invoices & Sack Weights</li>
+                      <li>Transport Dispatches, Warehouse Scale Intakes, Rejection Logs, Audit Logs</li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={handleExportDatabaseBackup}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-[#0b0f19] font-extrabold py-3 rounded-xl shadow-lg shadow-emerald-500/20 text-xs flex items-center justify-center gap-2 transition-all"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Export & Download JSON Backup File
+                  </button>
+                </div>
+
+                {/* Restore Backup Card */}
+                <div className="bg-[#141c2f] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                    <div className="w-10 h-10 bg-purple-500/10 border border-purple-500/30 rounded-xl flex items-center justify-center text-purple-400 font-bold text-lg">
+                      📤
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-white">Restore Database from Backup</h3>
+                      <p className="text-[11px] text-slate-400">Upload a previously exported JSON backup file to synchronize master data and configuration.</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2 text-xs">
+                    <div className="font-bold text-purple-300 flex items-center gap-1">
+                      <AlertTriangle className="w-4 h-4 text-purple-400" /> Restore Warning:
+                    </div>
+                    <p className="text-purple-200 text-[11px]">
+                      Importing a JSON backup will synchronize master settings, target villages, and price specifications into PostgreSQL.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Select JSON Backup File</label>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={handleRestoreDatabaseBackup}
+                      disabled={restoringBackup}
+                      className="w-full text-xs text-slate-300 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-purple-500 file:text-white hover:file:bg-purple-600 cursor-pointer bg-[#1e293b] border border-slate-700 rounded-xl p-2"
+                    />
+                    {restoringBackup && <div className="text-xs text-purple-400 font-bold animate-pulse">Restoring database backup, please wait...</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* INVENTORY CONFIRMATION MODAL */}
+        {invConfirmModalIntake && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-[#141c2f] border border-purple-500/30 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-scale-in text-xs">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-sm font-extrabold text-purple-400 flex items-center gap-2">
+                  📦 Confirm Paddy Inventory Record
+                </h3>
+                <button onClick={() => setInvConfirmModalIntake(null)} className="text-slate-400 hover:text-white font-bold">
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Warehouse Receiving ID:</span>
+                  <strong className="text-sky-400">WR-2026-{invConfirmModalIntake.id.slice(-6).toUpperCase()}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Truck Plate & Driver:</span>
+                  <strong className="text-white">{invConfirmModalIntake.transport?.driverName} ({invConfirmModalIntake.transport?.plateNumber})</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Delivered Net Weight:</span>
+                  <strong className="text-emerald-400 text-sm">{invConfirmModalIntake.warehouseNetWeight.toFixed(2)} kg</strong>
+                </div>
+              </div>
+
+              <form onSubmit={handleConfirmInventoryRecord} className="space-y-4">
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-1">
+                    Warehouse Storage Location (Silo / Stack / Bay) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={invLocationInput}
+                    onChange={(e) => setInvLocationInput(e.target.value)}
+                    placeholder="e.g. Silo 02 - Bay 4 / Stack A"
+                    className="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white font-bold focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-1">
+                    Inventory Inspection & Storage Notes (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={invNotesInput}
+                    onChange={(e) => setInvNotesInput(e.target.value)}
+                    placeholder="e.g. Paddy inspected, moisture content verified, stored in Silo 02."
+                    className="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white font-sans focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setInvConfirmModalIntake(null)}
+                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingInventory}
+                    className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingInventory ? 'Confirming...' : '✓ Confirm & Unlock for Finance'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
         </div>

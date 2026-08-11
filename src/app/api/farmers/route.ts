@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
 import { processAndSaveImage } from '@/lib/image-upload-server';
+import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    const allowedVillages = await getAllowedVillagesForSession(session?.user);
+
+    const whereClause = allowedVillages !== null ? { village: { in: allowedVillages } } : {};
+
     const profiles = await db.farmerProfile.findMany({
+      where: whereClause,
       orderBy: { updatedAt: 'desc' },
     });
     return NextResponse.json(profiles);
@@ -17,6 +26,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
     const { userId, userName, userRole } = await getResolvedUser();
 
     const body = await request.json();
@@ -40,6 +50,10 @@ export async function POST(request: Request) {
 
     const normCode = familyCode.toUpperCase().trim();
     const normVillage = (village || '').trim();
+
+    if (session?.user && !(await isVillageAuthorized(normVillage, session.user))) {
+      return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
+    }
 
     // Check if profile exists for composite key (Family Code + Village)
     const existing = await db.farmerProfile.findFirst({

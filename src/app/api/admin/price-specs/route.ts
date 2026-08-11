@@ -35,6 +35,8 @@ export async function POST(request: Request) {
       maxForeignMatter,
       minWholeGrain,
       maxBrokenRice,
+      impurity,
+      moistureRange,
       status,
     } = body;
 
@@ -58,6 +60,8 @@ export async function POST(request: Request) {
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
           minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
           maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
+          impurity: impurity !== undefined && impurity !== '' ? parseFloat(impurity) : null,
+          moistureRange: moistureRange || null,
           status: status || 'ACTIVE',
         },
       });
@@ -75,6 +79,8 @@ export async function POST(request: Request) {
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
           minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
           maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
+          impurity: impurity !== undefined && impurity !== '' ? parseFloat(impurity) : null,
+          moistureRange: moistureRange || null,
           status: status || 'ACTIVE',
         },
         create: {
@@ -85,6 +91,8 @@ export async function POST(request: Request) {
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
           minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
           maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
+          impurity: impurity !== undefined && impurity !== '' ? parseFloat(impurity) : null,
+          moistureRange: moistureRange || null,
           status: status || 'ACTIVE',
         },
       });

@@ -4,15 +4,18 @@ import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../config/theme.dart';
 import '../database/app_database.dart';
+import '../database/config_dao.dart';
+import '../services/auth_service.dart';
 import '../services/sync_service.dart';
+import '../utils/app_notification.dart';
+import 'auth/login_screen.dart';
 import 'specs/specs_form_screen.dart';
 import 'farmers/farmer_form_screen.dart';
 import 'purchases/purchase_form_screen.dart';
 import 'transport/transport_form_screen.dart';
-import '../database/config_dao.dart';
 
 class HomeDashboard extends StatefulWidget {
-  const HomeDashboard({Key? key}) : super(key: key);
+  const HomeDashboard({super.key});
 
   @override
   State<HomeDashboard> createState() => _HomeDashboardState();
@@ -23,40 +26,61 @@ class _HomeDashboardState extends State<HomeDashboard> {
   int _unsyncedCount = 0;
   bool _isSyncing = false;
   String _syncStatusMessage = '';
+  String _userName = '';
+  String _userRole = '';
 
   @override
   void initState() {
     super.initState();
+    _loadUserInfo();
     _loadUnsyncedCount();
     ConfigDao.instance.fetchRemoteConfig();
   }
 
+  Future<void> _loadUserInfo() async {
+    final info = await AuthService.getUserInfo();
+    if (mounted) {
+      setState(() {
+        _userName = info['name'] ?? 'Field Inspector';
+        _userRole = info['role'] ?? 'FIELD';
+      });
+    }
+  }
+
   Future<void> _loadUnsyncedCount() async {
     final count = await AppDatabase.instance.getUnsyncedCount();
-    setState(() {
-      _unsyncedCount = count;
-    });
+    if (mounted) {
+      setState(() {
+        _unsyncedCount = count;
+      });
+    }
   }
 
   Future<void> _triggerSync() async {
     setState(() {
       _isSyncing = true;
-      _syncStatusMessage = 'Connecting to central PostgreSQL server...';
+      _syncStatusMessage = 'Updating Master Config & Syncing Records...';
     });
+
+    await ConfigDao.instance.fetchRemoteConfig();
 
     final syncService = SyncService();
     final result = await syncService.syncAllOfflineRecords(
       onProgress: (status) {
-        setState(() {
-          _syncStatusMessage = status;
-        });
+        if (mounted) {
+          setState(() {
+            _syncStatusMessage = status;
+          });
+        }
       },
     );
 
-    setState(() {
-      _isSyncing = false;
-      _syncStatusMessage = result.message;
-    });
+    if (mounted) {
+      setState(() {
+        _isSyncing = false;
+        _syncStatusMessage = result.message;
+      });
+    }
 
     // Auto-dismiss sync status banner after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
@@ -70,12 +94,55 @@ class _HomeDashboardState extends State<HomeDashboard> {
     await _loadUnsyncedCount();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message),
-          backgroundColor: result.syncedCount > 0 ? AppTheme.emeraldPrimary : AppTheme.cardBackground,
+      if (result.syncedCount > 0) {
+        AppNotification.showSuccess(context, 'Synced');
+      } else {
+        AppNotification.showInfo(context, result.message.contains('No') ? 'Up to Date' : 'Synced');
+      }
+    }
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBackground,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: AppTheme.errorRed, size: 22),
+            SizedBox(width: 8),
+            Text('Log Out?', style: TextStyle(color: AppTheme.textWhite, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
         ),
-      );
+        content: Text(
+          'Are you sure you want to log out of account "$_userName"?\n\nYou will need to enter your password again to log back in.',
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.errorRed,
+            ),
+            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await AuthService.logout();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -104,8 +171,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: const [
+                        const Row(
+                          children: [
                             Icon(Icons.settings, color: AppTheme.skyBlue, size: 22),
                             SizedBox(width: 8),
                             Text(
@@ -122,7 +189,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Enter your central desktop server LAN IP address or Cloud URL (e.g. http://192.168.1.13:3000):',
+                      'Enter your central desktop server LAN IP address or Cloud URL (e.g. http://192.168.1.10:3000):',
                       style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                     ),
                     const SizedBox(height: 14),
@@ -131,7 +198,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       controller: urlController,
                       decoration: const InputDecoration(
                         labelText: 'SERVER BASE URL',
-                        hintText: 'http://192.168.1.13:3000',
+                        hintText: 'http://192.168.1.10:3000',
                         prefixIcon: Icon(Icons.lan, color: AppTheme.skyBlue, size: 18),
                       ),
                     ),
@@ -206,7 +273,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                                           testResult = '❌ Server returned HTTP ${res.statusCode}. Check URL.';
                                         });
                                       }
-                                    } on SocketException catch (se) {
+                                    } on SocketException {
                                       setModalState(() {
                                         isTesting = false;
                                         testSuccess = false;
@@ -277,34 +344,54 @@ class _HomeDashboardState extends State<HomeDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 12,
         title: Row(
-          children: const [
-            Icon(Icons.grass, color: AppTheme.emeraldPrimary, size: 22),
-            SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                'FIELD DEPARTMENT',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.textWhite),
+          children: [
+            const Icon(Icons.grass, color: AppTheme.emeraldPrimary, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'FIELD DEPARTMENT',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.textWhite, letterSpacing: 0.5),
+                  ),
+                  if (_userName.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1.0),
+                      child: Text(
+                        '👤 $_userName ($_userRole)',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10, color: AppTheme.skyBlue, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                ],
               ),
             ),
+            const SizedBox(width: 8),
           ],
         ),
         actions: [
           // Server Settings Icon (⚙️)
           IconButton(
-            icon: const Icon(Icons.settings, color: AppTheme.skyBlue, size: 20),
+            icon: const Icon(Icons.settings, color: AppTheme.skyBlue, size: 19),
             onPressed: _openServerSettingsModal,
             tooltip: 'Server Connection Settings',
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
           ),
+          const SizedBox(width: 4),
           // Sync Badge & Button
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 2),
             child: InkWell(
               onTap: _isSyncing ? null : _triggerSync,
               borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: _unsyncedCount > 0 ? AppTheme.amberGold.withOpacity(0.2) : Colors.white10,
                   borderRadius: BorderRadius.circular(20),
@@ -317,20 +404,20 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   children: [
                     _isSyncing
                         ? const SizedBox(
-                            width: 12,
-                            height: 12,
+                            width: 11,
+                            height: 11,
                             child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.skyBlue),
                           )
                         : Icon(
                             Icons.cloud_sync,
-                            size: 16,
+                            size: 14,
                             color: _unsyncedCount > 0 ? AppTheme.amberGold : AppTheme.emeraldLight,
                           ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                     Text(
                       _unsyncedCount > 0 ? '$_unsyncedCount Pending' : 'Synced',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
                         color: _unsyncedCount > 0 ? AppTheme.amberGold : AppTheme.emeraldLight,
                       ),
@@ -339,6 +426,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
               ),
             ),
+          ),
+          // Logout Icon (🚪)
+          IconButton(
+            icon: const Icon(Icons.logout, color: AppTheme.errorRed, size: 19),
+            onPressed: _confirmLogout,
+            tooltip: 'Log Out Account',
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: const EdgeInsets.only(right: 8),
           ),
         ],
       ),
@@ -397,6 +492,5 @@ class _HomeDashboardState extends State<HomeDashboard> {
 }
 
 class BottomNavigationBarViewItem extends BottomNavigationBarItem {
-  const BottomNavigationBarViewItem({required Widget icon, required String label})
-      : super(icon: icon, label: label);
+  const BottomNavigationBarViewItem({required super.icon, required String super.label});
 }

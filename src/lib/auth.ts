@@ -66,6 +66,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          assignedProvinces: user.assignedProvinces || 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri',
         };
       },
     }),
@@ -75,13 +76,15 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as unknown as { role: string }).role;
+        token.assignedProvinces = (user as unknown as { assignedProvinces?: string }).assignedProvinces;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as unknown as { id: string; role: string }).id = token.id as string;
-        (session.user as unknown as { id: string; role: string }).role = token.role as string;
+        (session.user as unknown as { id: string; role: string; assignedProvinces?: string }).id = token.id as string;
+        (session.user as unknown as { id: string; role: string; assignedProvinces?: string }).role = token.role as string;
+        (session.user as unknown as { id: string; role: string; assignedProvinces?: string }).assignedProvinces = token.assignedProvinces as string;
       }
       return session;
     },

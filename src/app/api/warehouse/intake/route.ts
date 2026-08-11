@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       warehouseTareWeight,
       grossScalePhotoUrl,
       tareScalePhotoUrl,
+      transportInvoiceUrl,
       notes,
     } = body;
 
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
         weightDiffPercent: diffPercent,
         grossScalePhotoUrl: grossScalePhotoUrl || null,
         tareScalePhotoUrl: tareScalePhotoUrl || null,
+        transportInvoiceUrl: transportInvoiceUrl || null,
         receivingStaffId: userId,
         receivingStaffName: session.user?.name || 'Warehouse Staff',
         notes: notes || null,

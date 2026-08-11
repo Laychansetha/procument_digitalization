@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 export default function AdminConfigPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const userRole = (session?.user as { role?: string })?.role;
+
   const [activeTab, setActiveTab] = useState<'master' | 'locations' | 'banks' | 'system' | 'users'>('master');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -498,6 +504,34 @@ export default function AdminConfigPage() {
       }
     });
   };
+
+  if (status === 'loading') {
+    return (
+      <div style={{ padding: '60px', textAlign: 'center', backgroundColor: '#0F172A', color: '#94A3B8', minHeight: '100vh' }}>
+        Verifying System Admin authorization...
+      </div>
+    );
+  }
+
+  if (userRole !== 'ADMIN') {
+    return (
+      <div style={{ padding: '40px 20px', backgroundColor: '#0F172A', color: '#FFF', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ padding: '32px', backgroundColor: '#1E293B', border: '1px solid #EF4444', borderRadius: '16px', maxWidth: '450px', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔒</div>
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#F87171', marginBottom: '8px' }}>Access Restricted — System Admin Only</h2>
+          <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '20px' }}>
+            Your account ({session?.user?.name || 'User'} · <strong>{userRole || 'FIELD'}</strong>) does not have authorization to view or edit System Master Configuration settings.
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            style={{ padding: '12px 24px', backgroundColor: '#10B981', color: '#0F172A', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+          >
+            Return to Operations Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '24px', backgroundColor: '#0F172A', color: '#F8FAFC', minHeight: '100vh', fontFamily: 'Inter, sans-serif' }}>

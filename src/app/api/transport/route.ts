@@ -1,10 +1,26 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
+import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    const allowedVillages = await getAllowedVillagesForSession(session?.user);
+
+    const whereClause = allowedVillages !== null
+      ? {
+          OR: [
+            { lots: { some: { village: { in: allowedVillages } } } },
+            { purchases: { some: { village: { in: allowedVillages } } } },
+          ],
+        }
+      : {};
+
     const transports = await db.transportRecord.findMany({
+      where: whereClause,
       include: {
         purchases: {
           include: {
@@ -28,6 +44,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
     const { userId, userName, userRole } = await getResolvedUser();
 
     const body = await request.json();

@@ -31,8 +31,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Transport record not found.' }, { status: 404 });
     }
 
-    // LOCKING RULE: Cannot edit transport record if warehouse intake has already been recorded
-    if (existing.intake || ['RECEIVED', 'VERIFIED', 'DISBURSED'].includes(existing.status)) {
+    // LOCKING RULE: Field Team can ONLY edit transport record if status is REJECTED or if EN_ROUTE before warehouse receiving
+    if (existing.status !== 'REJECTED' && (existing.intake || existing.status !== 'EN_ROUTE')) {
       return NextResponse.json(
         { error: 'This transport record has already been received by the warehouse and can no longer be edited.' },
         { status: 400 }
@@ -116,6 +116,7 @@ export async function PUT(
         notes: notes !== undefined ? notes : existing.notes,
         totalSacks,
         totalFieldWeight,
+        status: 'EN_ROUTE',
         lots: {
           create: purchasesToAssign.map((p) => ({
             variety: p.items?.[0]?.variety || 'Red Jasmine',
@@ -136,6 +137,29 @@ export async function PUT(
         },
         lots: true,
         intake: true,
+      },
+    });
+
+    // If an existing WarehouseIntake existed (from a secondary rejection), delete it so truck arrives fresh in Warehouse receiving queue
+    if (existing.intake) {
+      await db.warehouseIntake.delete({
+        where: { id: existing.intake.id },
+      });
+    }
+
+    // Resolve any active rejection logs for this transport record or intake
+    await db.rejectionLog.updateMany({
+      where: {
+        OR: [
+          { entityType: 'TransportRecord', entityId: id },
+          { entityType: 'WarehouseIntake', entityId: existing.intake?.id },
+        ],
+        status: 'REJECTED',
+      },
+      data: {
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        resolvedByName: session.user?.name || session.user?.email || 'Field Staff',
       },
     });
 

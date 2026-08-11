@@ -3,6 +3,8 @@
 import { X, Scale, Camera, CheckCircle2, AlertTriangle, XCircle, FileSpreadsheet } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
 
+import RejectionHistorySection from '@/components/RejectionHistorySection';
+
 interface FinanceTruckDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -34,57 +36,78 @@ export default function FinanceTruckDetailsModal({
   const diffKg = truckData.weightDiffKg !== undefined && truckData.weightDiffKg !== null ? truckData.weightDiffKg : (netWeight - fieldWeight);
   const absDiffKg = Math.abs(diffKg);
 
-  const acceptableKg = scaleToleranceConfig.acceptableKg ?? 300;
-  const warningKg = scaleToleranceConfig.warningKg ?? 500;
+  const acceptableKg = scaleToleranceConfig.acceptableKg;
+  const warningKg = scaleToleranceConfig.warningKg;
 
   let toleranceStatus: 'green' | 'yellow' | 'red' = 'green';
-  let toleranceText = `Within Tolerance ✓ (${absDiffKg.toFixed(2)} kg <= ${acceptableKg} kg)`;
+  let toleranceText = 'Within Acceptable Tolerance ✓';
 
   if (absDiffKg > warningKg) {
     toleranceStatus = 'red';
-    toleranceText = `Critical Exceeded (${absDiffKg.toFixed(2)} kg > ${warningKg} kg)`;
+    toleranceText = `Critical Discrepancy Exceeded (> ${warningKg} kg)!`;
   } else if (absDiffKg > acceptableKg) {
     toleranceStatus = 'yellow';
-    toleranceText = `Warning Exceeded (${absDiffKg.toFixed(2)} kg > ${acceptableKg} kg)`;
+    toleranceText = `Warning Discrepancy Exceeded (> ${acceptableKg} kg)`;
   }
 
-  // EXPORT ITEMISED TRUCK FARMER PAYMENTS TO CSV
-  const exportTruckPaymentCSV = () => {
+  // EXPORT SINGLE TRUCK FINANCE PAYMENT CSV
+  const exportTruckFinanceCSV = () => {
     if (!purchases || purchases.length === 0) {
-      alert('No farmer purchase invoices available for this truck.');
+      alert('No purchase records associated with this truck.');
       return;
     }
 
-    const hasGrossPhoto = intake.grossScalePhotoUrl ? 'Yes' : 'No';
-    const hasTarePhoto = intake.tareScalePhotoUrl ? 'Yes' : 'No';
+    const rows: any[][] = [];
 
-    const headers = [
+    rows.push(['=== TRUCK DISBURSEMENT & BANK PAYMENT REPORT ===']);
+    rows.push([
       'Transport ID',
-      'Warehouse Receiving ID',
+      'Warehouse Intake ID',
+      'Driver Name',
+      'Truck Plate Number',
+      'Total Farmers',
+      'Total Purchase Invoices',
+      'Field Total Weight (Kg)',
+      'Warehouse Net Weight (Kg)',
+      'Scale Weight Variance (Kg)',
+      'Absolute Variance (Kg)',
+      'Tolerance Status',
+      'Total Truck Net Payment (KHR)',
+    ]);
+    rows.push([
+      transportIdFormatted,
+      intakeIdFormatted,
+      transport.driverName || 'N/A',
+      transport.plateNumber || 'N/A',
+      truckData.totalFarmersCount || 0,
+      purchases.length,
+      fieldWeight.toFixed(2),
+      netWeight.toFixed(2),
+      `${diffKg >= 0 ? '+' : ''}${diffKg.toFixed(2)}`,
+      absDiffKg.toFixed(2),
+      toleranceText,
+      truckData.totalTruckNetPayment || 0,
+    ]);
+
+    rows.push([]);
+    rows.push(['--- FARMER BANK DISBURSEMENT DETAILS ---']);
+    rows.push([
       'Purchase ID',
       'Family Code',
       'Farmer Name',
       'Village',
       'Paddy Variety',
       'Grade',
-      'Number of Sacks',
-      'Total Weight (Kg)',
-      'Final Purchase Price (KHR/Kg)',
-      'Gross Payment (KHR)',
-      'Seed Return Deduction (KHR)',
-      'Net Payment (KHR)',
+      'Sacks',
+      'Field Net Weight (Kg)',
+      'Total Net Payment (KHR)',
       'Bank Name',
-      'Bank Account Number',
-      'Account Holder Name',
-      'Relationship to Farmer',
-      'Purchasing Staff',
-      'Purchase Date',
+      'Account Number',
+      'Account Holder',
+      'Relationship',
+      'Bank Document Proof Attached',
       'Farmer Signed',
-      'Gross Weight Photo Available',
-      'Tare Weight Photo Available',
-    ];
-
-    const rows = [headers];
+    ]);
 
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
@@ -92,8 +115,6 @@ export default function FinanceTruckDetailsModal({
       const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
 
       rows.push([
-        transportIdFormatted,
-        intakeIdFormatted,
         pIdFormatted,
         p.familyCode || '',
         p.farmerName || '',
@@ -102,19 +123,13 @@ export default function FinanceTruckDetailsModal({
         item.grade || 'A1',
         item.sacks || 0,
         p.totalWeight || 0,
-        item.finalPrice || 0,
-        p.totalPayment || 0,
-        p.seedDeduction || 0,
         p.netPayment || 0,
-        f.bankName || 'Direct Cash',
+        f.bankName || 'N/A',
         f.accountNumber || 'N/A',
         f.accountHolder || p.farmerName,
         f.relationship || 'Self',
-        p.purchasingStaffName || 'Field Staff',
-        new Date(p.createdAt).toLocaleDateString(),
-        p.signatureFarmer ? 'Yes' : 'No',
-        hasGrossPhoto,
-        hasTarePhoto,
+        f.bankDocumentUrl ? 'YES' : 'NO',
+        p.signatureFarmer ? 'YES' : 'NO',
       ]);
     });
 
@@ -128,15 +143,15 @@ export default function FinanceTruckDetailsModal({
     const safeTrId = transportIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
 
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Finance_Truck_${safeTrId}_${dateStr}.csv`);
+    link.setAttribute('download', `Finance_Payment_Report_${safeTrId}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141c2f] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-[#141c2f] border border-white/10 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -145,7 +160,7 @@ export default function FinanceTruckDetailsModal({
             </div>
             <div>
               <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                Truck 360° Finance Audit & Payment Manifest
+                Truck Payment Authorization & Verification Details
                 <span className="bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
                   {transportIdFormatted}
                 </span>
@@ -154,20 +169,21 @@ export default function FinanceTruckDetailsModal({
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Driver: {transport.driverName} ({transport.plateNumber}) · {purchases.length} Farmer Invoices Loaded
+                Review weighbridge scale proof photos, truck manifest, and farmer bank accounts before authorizing payment disbursement.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={exportTruckPaymentCSV}
+              onClick={exportTruckFinanceCSV}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1.5 shadow-md transition-colors"
-              title="Export Truck Payment Details to CSV for Bank Transfer Processing"
+              title="Export Truck Farmer Payment CSV for Bank Transfers"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-              <span>Export Truck Payment Details (CSV)</span>
+              <span>Export Payment CSV</span>
             </button>
+
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg">
               <X className="w-5 h-5" />
             </button>
@@ -176,6 +192,10 @@ export default function FinanceTruckDetailsModal({
 
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto space-y-5 text-xs">
+          {/* Rejection Audit History */}
+          <RejectionHistorySection entityType="TransportRecord" entityId={transport.id} />
+          {intake?.id && <RejectionHistorySection entityType="WarehouseIntake" entityId={intake.id} />}
+
           {/* 2. WEIGHT VERIFICATION BOX */}
           <div className="p-4 bg-[#0f172a] border border-amber-500/30 rounded-2xl space-y-3 shadow-xl">
             <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
@@ -226,17 +246,41 @@ export default function FinanceTruckDetailsModal({
                 </span>
               </div>
             </div>
+
+            {/* Inventory Confirmation Status Banner */}
+            {intake && (
+              <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-purple-400">📦 Inventory Recording Status:</span>
+                  {intake.inventoryStatus === 'INVENTORY_RECORDED' ? (
+                    <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-purple-500/40">
+                      ✓ INVENTORY RECORDED (UNLOCKED FOR FINANCE)
+                    </span>
+                  ) : (
+                    <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-amber-500/40 animate-pulse">
+                      ⏳ WAITING FOR INVENTORY TEAM CONFIRMATION
+                    </span>
+                  )}
+                </div>
+
+                {intake.inventoryStatus === 'INVENTORY_RECORDED' && (
+                  <div className="text-slate-300 text-[11px] font-mono">
+                    Recorded by: <strong className="text-white">{intake.inventoryStaffName || 'Inventory Staff'}</strong> · Storage: <strong className="text-purple-300">{intake.inventoryLocation || 'Main Warehouse'}</strong>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Scale Display Photos & Documents */}
+          {/* Scale Display Photos & Transport Invoice Document */}
           {intake && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-sky-400 uppercase block">Gross Weight Scale Photo</span>
                   {intake.grossScalePhotoUrl ? (
                     <a href={intake.grossScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 mt-1">
-                      <Camera className="w-3.5 h-3.5" /> View Gross Scale Display Photo
+                      <Camera className="w-3.5 h-3.5" /> View Gross Photo
                     </a>
                   ) : (
                     <span className="text-slate-500 text-[10px]">No Photo Attached</span>
@@ -249,10 +293,70 @@ export default function FinanceTruckDetailsModal({
                   <span className="text-[10px] font-bold text-sky-400 uppercase block">Tare Weight Scale Photo</span>
                   {intake.tareScalePhotoUrl ? (
                     <a href={intake.tareScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 mt-1">
-                      <Camera className="w-3.5 h-3.5" /> View Tare Scale Display Photo
+                      <Camera className="w-3.5 h-3.5" /> View Tare Photo
                     </a>
                   ) : (
                     <span className="text-slate-500 text-[10px]">No Photo Attached</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-sky-400 uppercase block">Transport Invoice Photo</span>
+                  {intake.transportInvoiceUrl ? (
+                    <a href={intake.transportInvoiceUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 mt-1">
+                      <FileSpreadsheet className="w-3.5 h-3.5" /> View Transport Invoice
+                    </a>
+                  ) : (
+                    <span className="text-slate-500 text-[10px]">No Invoice Photo Attached</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Completed Payment Transfer Receipt Proof Box */}
+          {(transport.status === 'DISBURSED' || transport.paymentReceiptUrl) && (
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl space-y-2 shadow-xl">
+              <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                <span className="font-extrabold text-xs text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Completed Payment & Bank Transfer Receipt Proof
+                </span>
+                <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full text-[10px] font-black border border-emerald-500/40">
+                  ✅ DISBURSED
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs pt-1">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Payment Method</span>
+                  <span className="font-bold text-white">{transport.paymentMethod || 'ABA Bulk Transfer'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Batch Ref Number</span>
+                  <span className="font-mono font-bold text-amber-300">{transport.paymentBatchNumber || 'BATCH-2026'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Paid Date & Officer</span>
+                  <span className="font-bold text-slate-200">
+                    {transport.paidAt ? new Date(transport.paidAt).toLocaleDateString() : 'N/A'}{' '}
+                    <span className="text-slate-400">({transport.paidByStaffName || 'Finance Officer'})</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Bank Transfer Receipt Proof</span>
+                  {transport.paymentReceiptUrl ? (
+                    <a
+                      href={transport.paymentReceiptUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-emerald-400 font-extrabold underline text-xs flex items-center gap-1 mt-0.5 hover:text-emerald-300"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" /> View / Download Bank Receipt
+                    </a>
+                  ) : (
+                    <span className="text-slate-500 text-[10px] italic">No Receipt Uploaded</span>
                   )}
                 </div>
               </div>
@@ -266,7 +370,7 @@ export default function FinanceTruckDetailsModal({
                 🌾 Farmer Purchase Invoices & Commercial Bank Account Verification ({purchases.length} Invoices)
               </h4>
               <button
-                onClick={exportTruckPaymentCSV}
+                onClick={exportTruckFinanceCSV}
                 className="bg-emerald-600/90 hover:bg-emerald-600 text-white px-3 py-1 rounded-lg font-extrabold text-[11px] flex items-center gap-1.5 self-start sm:self-auto transition-colors"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" /> Export {transportIdFormatted} CSV

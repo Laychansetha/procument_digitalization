@@ -88,24 +88,28 @@ export default function SpecsDetailsModal({
               <div className="p-2 bg-white/5 rounded-lg">
                 <span className="text-slate-400 block text-[10px]">Organic Status</span>
                 <strong className={spec.isOrganic ? 'text-emerald-400' : 'text-amber-400'}>
-                  {spec.isOrganic ? 'Organic Paddy (+100 Bonus)' : 'Conventional Paddy'}
+                  {spec.isOrganic ? 'Organic Paddy' : 'Conventional Paddy'}
                 </strong>
               </div>
               <div className="p-2 bg-white/5 rounded-lg">
-                <span className="text-slate-400 block text-[10px]">Moisture Content</span>
-                <strong className="font-mono text-white">{spec.moisture}%</strong>
+                <span className="text-slate-400 block text-[10px]">Whole Grain</span>
+                <strong className="font-mono text-white">{spec.wholeGrain != null ? `${spec.wholeGrain}%` : 'N/A'}</strong>
+              </div>
+              <div className="p-2 bg-white/5 rounded-lg">
+                <span className="text-slate-400 block text-[10px]">Broken Rice</span>
+                <strong className="font-mono text-white">{spec.brokenRice != null ? `${spec.brokenRice}%` : 'N/A'}</strong>
+              </div>
+              <div className="p-2 bg-white/5 rounded-lg">
+                <span className="text-slate-400 block text-[10px]">Impurity</span>
+                <strong className="font-mono text-white">{spec.impurity != null ? `${spec.impurity}%` : 'N/A'}</strong>
               </div>
               <div className="p-2 bg-white/5 rounded-lg">
                 <span className="text-slate-400 block text-[10px]">Foreign Matter</span>
                 <strong className="font-mono text-white">{spec.foreignMatter}%</strong>
               </div>
-              <div className="p-2 bg-white/5 rounded-lg">
-                <span className="text-slate-400 block text-[10px]">Whole Grain</span>
-                <strong className="font-mono text-white">{spec.wholeGrain ?? 'N/A'}%</strong>
-              </div>
-              <div className="p-2 bg-white/5 rounded-lg">
-                <span className="text-slate-400 block text-[10px]">Broken Rice</span>
-                <strong className="font-mono text-white">{spec.brokenRice ?? 'N/A'}%</strong>
+              <div className="p-2 bg-white/5 rounded-lg col-span-2 sm:col-span-1">
+                <span className="text-slate-400 block text-[10px]">Moisture Content</span>
+                <strong className="font-mono text-white">{spec.moisture}%</strong>
               </div>
             </div>
           </div>
