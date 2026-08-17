@@ -71,8 +71,15 @@ export async function PUT(
     const item = items?.[0] || {};
     const sacksCount = item.sacks || 0;
     const totalWeightKg = item.quantity || 0;
-    const totalPaddyValue = item.totalValue || 0;
-    const seedDeductionVal = seedDeduction || 0;
+    const stdPrice = parseFloat(item.standardPrice) || (existing.items?.[0]?.standardPrice || 0);
+    const addPrice = parseFloat(item.additionalPrice) || 0;
+    const finPrice = stdPrice + addPrice;
+    const totalPaddyValue = item.totalValue || (totalWeightKg * finPrice);
+
+    const sBorrowed = parseFloat(seedBorrowed) || 0;
+    const sRepayment = sBorrowed * 1.1; // 10% seed interest
+    const calculatedSeedDeduction = sRepayment * finPrice;
+    const seedDeductionVal = seedDeduction !== undefined && !isNaN(parseFloat(seedDeduction)) ? parseFloat(seedDeduction) : calculatedSeedDeduction;
     const netPaymentToFarmer = Math.max(0, totalPaddyValue - seedDeductionVal);
 
     // Update Purchase Record
@@ -84,8 +91,10 @@ export async function PUT(
         village: village || existing.village,
         totalWeight: totalWeightKg,
         totalPayment: totalPaddyValue,
-        seedBorrowed: parseFloat(seedBorrowed) || 0,
+        seedBorrowed: sBorrowed,
+        seedRepayment: sRepayment,
         seedDeduction: seedDeductionVal,
+        additionalPremium: addPrice,
         netPayment: netPaymentToFarmer,
         signatureFarmer: signatureFarmer || existing.signatureFarmer,
         signatureStaff: signatureStaff || existing.signatureStaff,
@@ -98,11 +107,11 @@ export async function PUT(
       await db.purchaseItem.update({
         where: { id: existing.items[0].id },
         data: {
-          variety: item.variety || 'Red Jasmine',
-          grade: item.grade || 'A1',
-          standardPrice: item.standardPrice || 1997.5,
-          additionalPrice: item.additionalPrice || 0,
-          finalPrice: item.finalPrice || 1997.5,
+          variety: item.variety || existing.items[0].variety || 'Red Jasmine',
+          grade: item.grade || existing.items[0].grade || 'A1',
+          standardPrice: stdPrice,
+          additionalPrice: addPrice,
+          finalPrice: finPrice,
           sacks: sacksCount,
           quantity: totalWeightKg,
           totalValue: totalPaddyValue,
@@ -115,9 +124,9 @@ export async function PUT(
           purchaseId: id,
           variety: item.variety || 'Red Jasmine',
           grade: item.grade || 'A1',
-          standardPrice: item.standardPrice || 1997.5,
-          additionalPrice: item.additionalPrice || 0,
-          finalPrice: item.finalPrice || 1997.5,
+          standardPrice: stdPrice,
+          additionalPrice: addPrice,
+          finalPrice: finPrice,
           sacks: sacksCount,
           quantity: totalWeightKg,
           totalValue: totalPaddyValue,

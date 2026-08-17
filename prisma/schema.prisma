@@ -224,6 +224,8 @@ model TransportRecord {
   totalSacks           Int
   totalFieldWeight     Float
   status               String           @default("EN_ROUTE") // EN_ROUTE, ARRIVED, RECEIVED, VERIFIED, DISBURSED, REJECTED
+  truckPhotoUrl        String?          // Photo of the fully loaded truck with plate number visible
+  driverSignature      String?          // Digital electronic signature of driver
   paymentReceiptUrl    String?          // Photo or PDF proof of bank transfer receipt
   paymentMethod        String?          // ABA Bulk Transfer, Acleda, etc.
   paymentBatchNumber   String?          // Payment batch number / Reference ID

@@ -125,13 +125,26 @@ class SyncService {
     }
 
     // 3. SYNC PURCHASE INVOICES
+    final allSpecs = await db.getAllSpecs();
+    final specsServerMap = <String, String>{};
+    for (var s in allSpecs) {
+      if (s.serverRecordId != null && s.serverRecordId!.isNotEmpty) {
+        specsServerMap[s.id] = s.serverRecordId!;
+      }
+    }
+
     final purchasesList = await db.getAllPurchases();
     final unsyncedPurchases = purchasesList.where((p) => !p.isSynced).toList();
 
     for (var purchase in unsyncedPurchases) {
       if (onProgress != null) onProgress('Syncing Purchase Invoice for ${purchase.familyCode} (${purchase.village})...');
       try {
-        final res = await _apiService.postData('/api/purchases', purchase.toPostJson());
+        final payload = purchase.toPostJson();
+        if (purchase.specsRecordId != null && specsServerMap.containsKey(purchase.specsRecordId)) {
+          payload['specsRecordId'] = specsServerMap[purchase.specsRecordId];
+        }
+
+        final res = await _apiService.postData('/api/purchases', payload);
         if (res.statusCode == 200 || res.statusCode == 201) {
           final data = jsonDecode(res.body);
           final updated = PurchaseRecord(
@@ -155,7 +168,7 @@ class SyncService {
             netPayment: purchase.netPayment,
             signatureFarmer: purchase.signatureFarmer,
             signatureStaff: purchase.signatureStaff,
-            specsRecordId: purchase.specsRecordId,
+            specsRecordId: payload['specsRecordId']?.toString() ?? purchase.specsRecordId,
             transportRecordId: purchase.transportRecordId,
             status: purchase.status,
             createdAt: purchase.createdAt,
@@ -172,13 +185,43 @@ class SyncService {
     }
 
     // 4. SYNC TRANSPORT DISPATCHES
+    final updatedPurchases = await db.getAllPurchases();
+    final purchaseServerMap = <String, String>{};
+    for (var p in updatedPurchases) {
+      if (p.serverRecordId != null && p.serverRecordId!.isNotEmpty) {
+        purchaseServerMap[p.id] = p.serverRecordId!;
+      }
+    }
+
     final transportList = await db.getAllTransports();
     final unsyncedTransport = transportList.where((t) => !t.isSynced).toList();
 
     for (var transport in unsyncedTransport) {
       if (onProgress != null) onProgress('Syncing Transport Dispatch for ${transport.plateNumber}...');
       try {
-        final res = await _apiService.postData('/api/transport', transport.toPostJson());
+        String? remotePhotoUrl;
+        if (!kIsWeb && transport.truckPhotoUrl != null && transport.truckPhotoUrl!.isNotEmpty) {
+          try {
+            final file = File(transport.truckPhotoUrl!);
+            if (file.existsSync()) {
+              remotePhotoUrl = await _apiService.uploadPhoto(file);
+              if (remotePhotoUrl == null) {
+                final bytes = await file.readAsBytes();
+                remotePhotoUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+              }
+            } else if (transport.truckPhotoUrl!.startsWith('data:image/') || transport.truckPhotoUrl!.startsWith('/uploads/') || transport.truckPhotoUrl!.startsWith('http')) {
+              remotePhotoUrl = transport.truckPhotoUrl;
+            }
+          } catch (e) {
+            debugPrint('Error preparing truck photo for upload: $e');
+          }
+        }
+
+        final payload = transport.toPostJson(uploadedPhotoUrl: remotePhotoUrl);
+        final resolvedIds = transport.selectedPurchaseIds.map((id) => purchaseServerMap[id] ?? id).toList();
+        payload['selectedPurchaseIds'] = resolvedIds;
+
+        final res = await _apiService.postData('/api/transport', payload);
         if (res.statusCode == 200 || res.statusCode == 201) {
           final data = jsonDecode(res.body);
           final updated = TransportRecord(
@@ -188,12 +231,14 @@ class SyncService {
             plateNumber: transport.plateNumber,
             mobileNumber: transport.mobileNumber,
             truckCleaned: transport.truckCleaned,
+            truckPhotoUrl: remotePhotoUrl ?? transport.truckPhotoUrl,
+            driverSignature: transport.driverSignature,
             loadingLocation: transport.loadingLocation,
             destinationWarehouse: transport.destinationWarehouse,
             notes: transport.notes,
             totalSacks: transport.totalSacks,
             totalFieldWeight: transport.totalFieldWeight,
-            selectedPurchaseIds: transport.selectedPurchaseIds,
+            selectedPurchaseIds: resolvedIds,
             status: transport.status,
             createdAt: transport.createdAt,
             isSynced: true,

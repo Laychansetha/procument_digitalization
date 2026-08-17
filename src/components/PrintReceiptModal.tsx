@@ -98,8 +98,8 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
                       {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
                     </td>
                     <td className="p-2.5 text-center font-bold">{purchase.items?.[0]?.sacks || sackWeightsList.length}</td>
-                    <td className="p-2.5 text-right font-mono font-bold">{purchase.totalWeight.toFixed(2)} kg</td>
-                    <td className="p-2.5 text-right font-mono">{(item.finalPrice || 2047.5).toLocaleString()}</td>
+                    <td className="p-2.5 text-right font-mono font-bold">{Math.round(purchase.totalWeight).toLocaleString()} kg</td>
+                    <td className="p-2.5 text-right font-mono">{(item.finalPrice || item.standardPrice || 0).toLocaleString()}</td>
                     <td className="p-2.5 text-right font-mono font-bold text-slate-900">
                       {purchase.totalPayment.toLocaleString()} KHR
                     </td>
@@ -199,8 +199,8 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
                 {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
               </td>
               <td className="p-2.5 text-center font-bold border-r border-slate-200">{purchase.items?.[0]?.sacks || sackWeightsList.length}</td>
-              <td className="p-2.5 text-right font-mono font-bold border-r border-slate-200">{purchase.totalWeight.toFixed(2)} kg</td>
-              <td className="p-2.5 text-right font-mono border-r border-slate-200">{(item.finalPrice || 2047.5).toLocaleString()}</td>
+              <td className="p-2.5 text-right font-mono font-bold border-r border-slate-200">{Math.round(purchase.totalWeight).toLocaleString()} kg</td>
+              <td className="p-2.5 text-right font-mono border-r border-slate-200">{(item.finalPrice || item.standardPrice || 0).toLocaleString()}</td>
               <td className="p-2.5 text-right font-mono font-bold text-slate-900">
                 {purchase.totalPayment.toLocaleString()} KHR
               </td>

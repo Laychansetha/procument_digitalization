@@ -262,6 +262,10 @@ export default function OperationsDashboard() {
   const [tLoadingLocation, setTLoadingLocation] = useState('');
   const [tDestinationWarehouse, setTDestinationWarehouse] = useState('');
   const [tNotes, setTNotes] = useState('');
+  const [tTruckPhotoUrl, setTTruckPhotoUrl] = useState('');
+  const [uploadingTruckPhoto, setUploadingTruckPhoto] = useState(false);
+  const [tDriverSignature, setTDriverSignature] = useState('');
+  const [tSigClearKey, setTSigClearKey] = useState(0);
   const [editingTransportId, setEditingTransportId] = useState<string | null>(null);
 
   // Form states - Warehouse Intake Scale
@@ -680,15 +684,20 @@ export default function OperationsDashboard() {
     setSyncStatus(`✓ Loaded Approved Specs for Family Code ${spec.familyCode} (${spec.farmerName})`);
   };
 
-  // Add Sack Weight(s) to Array
+  // Add Sack Weight(s) to Array (Integer Kg up to 3 digits only: 1 - 999 kg)
   const handleAddSackWeight = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!pSackInput.trim()) return;
 
     const parsedWeights = pSackInput
       .split(/[\s,]+/)
-      .map((val) => Math.round(parseFloat(val)))
-      .filter((w) => !isNaN(w) && w > 0);
+      .map((val) => {
+        const clean = val.replace(/[^0-9]/g, '');
+        if (!clean) return NaN;
+        const bounded = clean.length > 3 ? clean.substring(0, 3) : clean;
+        return parseInt(bounded, 10);
+      })
+      .filter((w) => !isNaN(w) && w > 0 && w <= 999);
 
     if (parsedWeights.length > 0) {
       setPSackWeights((prev) => [...prev, ...parsedWeights]);
@@ -726,17 +735,17 @@ export default function OperationsDashboard() {
   };
 
   // Calculated values for Purchase Section
-  const pAdditionalPrice = parseFloat(pAdditionalPriceInput) || 0;
-  const pSeedBorrowed = parseFloat(pSeedBorrowedInput) || 0;
+  const pAdditionalPrice = Math.min(999, Math.max(0, parseInt(pAdditionalPriceInput.replace(/[^0-9]/g, '') || '0', 10)));
+  const pSeedBorrowed = Math.min(999, Math.max(0, parseInt(pSeedBorrowedInput.replace(/[^0-9]/g, '') || '0', 10)));
 
   const finalPurchasePrice = pStandardPrice + pAdditionalPrice;
   const totalSacksCount = pSackWeights.length;
   const totalWeightKg = pSackWeights.reduce((sum, w) => sum + w, 0);
   const totalPaddyValue = totalWeightKg * finalPurchasePrice;
 
-  // Seed Return Deduction Calculations
+  // Seed Return Deduction Calculations: 10% Interest, deducted at final purchase price (Standard Base Price + Additional Premium)
   const seedRepaymentQty = pSeedBorrowed * 1.1; // 10% interest
-  const seedDeductionTotal = seedRepaymentQty * pStandardPrice;
+  const seedDeductionTotal = Math.round(seedRepaymentQty * finalPurchasePrice);
   const netPaymentToFarmer = Math.max(0, totalPaddyValue - seedDeductionTotal);
 
   // Upload Bank Paper Document Photo
@@ -765,6 +774,35 @@ export default function OperationsDashboard() {
       alert('Failed to upload photo.');
     } finally {
       setUploadingPhoto(false);
+    }
+  };
+
+  // Upload Loaded Truck Photo (Plate & Cargo Verification)
+  const handleTruckPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingTruckPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setTTruckPhotoUrl(data.url);
+        setSyncStatus('✅ Loaded truck photo attached successfully!');
+      } else {
+        alert('Photo upload failed: ' + data.error);
+      }
+    } catch (err) {
+      alert('Failed to upload truck photo.');
+    } finally {
+      setUploadingTruckPhoto(false);
     }
   };
 
@@ -977,7 +1015,6 @@ export default function OperationsDashboard() {
 
     const currentSpec = priceSpecs.find((s) => s.variety === spPaddyType && s.grade === spSelectedGrade);
     const baseP = currentSpec ? currentSpec.basePrice : 1650;
-    const bonusP = spIsOrganic ? (currentSpec ? currentSpec.organicBonus : 100) : 0;
 
     const numMoisture = parseFloat(String(spMoisture)) || 0;
     const numForeign = parseFloat(String(spForeign)) || 0;
@@ -999,8 +1036,7 @@ export default function OperationsDashboard() {
       impurity: numImpurity,
       isValid: numMoisture <= (currentSpec?.maxMoisture || 15.5) && numForeign <= (currentSpec?.maxForeignMatter || 8.0),
       basePrice: baseP,
-      organicBonus: bonusP,
-      finalPrice: baseP + bonusP,
+      finalPrice: baseP,
     };
 
     let res;
@@ -1394,6 +1430,9 @@ export default function OperationsDashboard() {
     setTLoadingLocation('');
     setTDestinationWarehouse('');
     setTNotes('');
+    setTTruckPhotoUrl('');
+    setTDriverSignature('');
+    setTSigClearKey((k) => k + 1);
   };
 
   const handleEditTransport = (transport: any) => {
@@ -1411,6 +1450,8 @@ export default function OperationsDashboard() {
     setTLoadingLocation(transport.loadingLocation || '');
     setTDestinationWarehouse(transport.destinationWarehouse || '');
     setTNotes(transport.notes || '');
+    setTTruckPhotoUrl(transport.truckPhotoUrl || '');
+    setTDriverSignature(transport.driverSignature || '');
 
     // Set assigned purchase records
     const assignedPurchases = transport.purchases || [];
@@ -1441,6 +1482,8 @@ export default function OperationsDashboard() {
       loadingLocation: tLoadingLocation,
       destinationWarehouse: tDestinationWarehouse,
       notes: tNotes,
+      truckPhotoUrl: tTruckPhotoUrl,
+      driverSignature: tDriverSignature,
       selectedPurchaseIds: selectedPurchasesForTruck.map((p) => p.id),
     };
 
@@ -2189,7 +2232,6 @@ export default function OperationsDashboard() {
       'Broken Rice (%)',
       'Inspection Result',
       'Base Price (KHR)',
-      'Organic Bonus (KHR)',
       'Final Price (KHR/kg)',
     ];
 
@@ -2210,7 +2252,6 @@ export default function OperationsDashboard() {
         rec.brokenRice !== undefined ? rec.brokenRice : '',
         rec.isValid ? 'Pass' : 'Fail',
         rec.basePrice || 0,
-        rec.organicBonus || 0,
         rec.finalPrice || 0,
       ];
     });
@@ -2991,9 +3032,9 @@ export default function OperationsDashboard() {
 
             {/* TAB 1: SPECS RECORD */}
             {fieldTab === 'specs' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
-                {/* Left Column: Quality Specs Inspection Entry Form & Live Metrics */}
-                <div className="lg:col-span-7 bg-[#141c2f] border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-stretch">
+                {/* Left Column: Quality Specs Inspection Entry Form */}
+                <div className="lg:col-span-7 bg-[#141c2f] border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4 flex flex-col">
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3.5">
                       <h2 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
@@ -3217,76 +3258,6 @@ export default function OperationsDashboard() {
                       </div>
                     </form>
                   </div>
-
-                  {/* BOTTOM DASHBOARD WIDGET: Today's Live Quality Summary & Standards */}
-                  <div className="pt-4 border-t border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Today's Inspection Summary & Field Standards
-                      </span>
-                      <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                        Live Metrics
-                      </span>
-                    </div>
-
-                    {/* Live Metrics Grid */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-white/5 border border-white/10 p-2.5 rounded-xl">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Total Inspected</div>
-                        <div className="text-xs sm:text-sm font-extrabold text-white font-mono mt-0.5">
-                          {specsList.length} Records
-                        </div>
-                      </div>
-                      <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                        <div className="text-[10px] text-emerald-400 font-bold uppercase">Pass Rate</div>
-                        <div className="text-xs sm:text-sm font-extrabold text-emerald-300 font-mono mt-0.5">
-                          {specsList.length > 0
-                            ? `${Math.round((specsList.filter((s: any) => s.isValid).length / specsList.length) * 100)}%`
-                            : '100%'}
-                          <span className="text-[10px] text-slate-400 font-normal ml-1 hidden sm:inline">
-                            ({specsList.filter((s: any) => s.isValid).length} Pass / {specsList.filter((s: any) => !s.isValid).length} Fail)
-                          </span>
-                        </div>
-                      </div>
-                      <div className="bg-sky-500/10 border border-sky-500/20 p-2.5 rounded-xl">
-                        <div className="text-[10px] text-sky-400 font-bold uppercase">Avg Final Price</div>
-                        <div className="text-xs sm:text-sm font-extrabold text-sky-300 font-mono mt-0.5">
-                          {specsList.length > 0
-                            ? Math.round(
-                                specsList.reduce((sum: number, s: any) => sum + (s.finalPrice || 0), 0) / specsList.length
-                              ).toLocaleString()
-                            : '0'}{' '}
-                          <span className="text-[10px] text-slate-400 font-normal">KHR/kg</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Quality Standards Thresholds */}
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 text-[11px] text-slate-300">
-                      <div className="font-bold text-slate-200 uppercase text-[10px] tracking-wider mb-1.5 flex items-center justify-between">
-                        <span>📋 Standard Quality Specs Thresholds (IBIS Rice Standard)</span>
-                        <span className="text-[10px] text-slate-400 font-normal">Official Guidelines</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">💧 Moisture Target:</span>
-                          <strong className="text-emerald-400">≤ 14.0%</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">🌾 Whole Grain Target:</span>
-                          <strong className="text-emerald-400">≥ 70.0%</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">🍂 Foreign Matter Limit:</span>
-                          <strong className="text-emerald-400">≤ 4.0%</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">🌿 Organic Premium:</span>
-                          <strong className="text-emerald-400">Managed by Finance</strong>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Right Column: Saved Specs History Sidebar */}
@@ -3321,7 +3292,7 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 min-h-[360px] lg:min-h-[440px] max-h-[520px] overflow-y-auto pr-1">
+                    <div className="space-y-2.5 h-[320px] overflow-y-auto pr-1">
                       {filteredSpecsList.length === 0 ? (
                         <div className="text-center py-8 text-slate-500 text-xs">
                           {specsSearchQuery
@@ -3389,7 +3360,7 @@ export default function OperationsDashboard() {
             {/* TAB 2: FARMER PAYMENT INFO */}
             {fieldTab === 'payment' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
-                {/* Left Column: Farmer Payment Profile Registration & Live Registry Metrics */}
+                {/* Left Column: Farmer Payment Profile Registration */}
                 <div className="lg:col-span-7 bg-[#141c2f] border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
@@ -3634,69 +3605,6 @@ export default function OperationsDashboard() {
                       </div>
                     </form>
                   </div>
-
-                  {/* BOTTOM DASHBOARD WIDGET: Registration Statistics & Verified Tracking */}
-                  <div className="pt-4 border-t border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-sky-400" /> Payment Registration Statistics & Verification Tracking
-                      </span>
-                      <span className="text-[10px] font-bold bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full border border-sky-500/20">
-                        Live Registry
-                      </span>
-                    </div>
-
-                    {/* Live Metrics Grid */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-white/5 border border-white/10 p-2.5 rounded-xl">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Registered Profiles</div>
-                        <div className="text-xs sm:text-sm font-extrabold text-white font-mono mt-0.5">
-                          {farmerProfiles.length} Profiles
-                        </div>
-                      </div>
-                      <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                        <div className="text-[10px] text-emerald-400 font-bold uppercase">Verified Passbooks</div>
-                        <div className="text-xs sm:text-sm font-extrabold text-emerald-300 font-mono mt-0.5">
-                          {farmerProfiles.filter((p: any) => p.bankDocumentUrl).length} Verified
-                          <span className="text-[10px] text-slate-400 font-normal ml-1 hidden sm:inline">
-                            ({farmerProfiles.length > 0 ? Math.round((farmerProfiles.filter((p: any) => p.bankDocumentUrl).length / farmerProfiles.length) * 100) : 0}% With Photo)
-                          </span>
-                        </div>
-                      </div>
-                      <div className="bg-purple-500/10 border border-purple-500/20 p-2.5 rounded-xl">
-                        <div className="text-[10px] text-purple-300 font-bold uppercase">Bank Transfers</div>
-                        <div className="text-xs sm:text-sm font-extrabold text-purple-200 font-mono mt-0.5">
-                          {farmerProfiles.filter((p: any) => p.paymentMethod !== 'Direct Cash').length} Accounts
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Verification Protocol Guidelines */}
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 text-[11px] text-slate-300">
-                      <div className="font-bold text-slate-200 uppercase text-[10px] tracking-wider mb-1.5 flex items-center justify-between">
-                        <span>🛡️ Bank Account Verification Protocol (Finance Standard)</span>
-                        <span className="text-[10px] text-slate-400 font-normal">Audit Ready</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">📄 Passbook Photo Status:</span>
-                          <strong className="text-sky-400">Required for Wire</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">👥 Family Member Account:</span>
-                          <strong className="text-sky-400">Relationship Required</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">🏦 Major Banks Supported:</span>
-                          <strong className="text-sky-400">ABA / ACLEDA / AMK / Canadia</strong>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">💵 Cash Fallback:</span>
-                          <strong className="text-sky-400">Direct Cash Payment</strong>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Profiles Database Sidebar */}
@@ -3731,7 +3639,7 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 min-h-[320px] max-h-[460px] xl:max-h-[475px] overflow-y-auto pr-1">
+                    <div className="space-y-2 h-[455px] xl:h-[460px] overflow-y-auto pr-1">
                       {filteredFarmerProfiles.length === 0 ? (
                         <div className="text-center py-8 text-slate-500 text-xs">
                           {farmerProfileSearchQuery
@@ -4137,7 +4045,7 @@ export default function OperationsDashboard() {
                             REPAYMENT QTY (110%) (KG)
                           </label>
                           <div className="px-2.5 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-slate-200 font-bold font-mono">
-                            {seedRepaymentQty.toFixed(2)} kg
+                            {seedRepaymentQty % 1 === 0 ? seedRepaymentQty.toString() : seedRepaymentQty.toFixed(1)} kg
                           </div>
                         </div>
 
@@ -4146,7 +4054,7 @@ export default function OperationsDashboard() {
                             UNIT PRICE (KHR/KG)
                           </label>
                           <div className="px-2.5 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-slate-200 font-bold font-mono">
-                            {pStandardPrice.toLocaleString()}
+                            {finalPurchasePrice.toLocaleString()}
                           </div>
                         </div>
 
@@ -4674,6 +4582,92 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
+                    {/* TWO-COLUMN: LOADED TRUCK PHOTO (LEFT) & DRIVER SIGNATURE (RIGHT) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* LEFT COLUMN: COMPACT LOADED TRUCK PHOTO */}
+                      <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-2 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-slate-300 font-extrabold uppercase text-[11px] flex items-center gap-1.5">
+                            <Camera className="w-3.5 h-3.5 text-sky-400" /> Loaded Truck Photo
+                          </label>
+                          <span className="text-[10px] text-slate-400">Plate & load visible</span>
+                        </div>
+
+                        {tTruckPhotoUrl ? (
+                          <div className="relative group rounded-lg overflow-hidden border border-sky-500/40 bg-black/40 p-1.5 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <img
+                                src={tTruckPhotoUrl}
+                                alt="Loaded Truck"
+                                className="w-12 h-12 object-cover rounded-md border border-white/20 flex-shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <span className="text-[11px] font-bold text-emerald-400 block truncate">
+                                  ✓ Photo Attached
+                                </span>
+                                <span className="text-[9px] text-slate-400 truncate block">
+                                  {tTruckPhotoUrl.split('/').pop()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <a
+                                href={tTruckPhotoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] bg-white/10 hover:bg-white/20 text-sky-300 px-2.5 py-1 rounded-md font-bold transition-colors border border-white/10"
+                              >
+                                Preview
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => setTTruckPhotoUrl('')}
+                                className="text-[10px] bg-red-500/20 hover:bg-red-500/30 text-red-400 p-1.5 rounded-md transition-colors"
+                                title="Remove Photo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <label className="border-2 border-dashed border-sky-500/30 hover:border-sky-400 rounded-lg p-2.5 flex flex-col items-center justify-center cursor-pointer hover:bg-sky-500/5 transition-all text-center group min-h-[64px]">
+                            <div className="flex items-center gap-1.5">
+                              <Camera className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
+                              <span className="text-[11px] font-extrabold text-white">
+                                {uploadingTruckPhoto ? 'Uploading...' : 'Attach Loaded Truck Photo'}
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-slate-400 mt-0.5">
+                              Take or select photo of loaded truck
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={handleTruckPhotoUpload}
+                              className="hidden"
+                              disabled={uploadingTruckPhoto}
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      {/* RIGHT COLUMN: DRIVER ELECTRONIC TOUCH SIGNATURE */}
+                      <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-1.5">
+                        <SignaturePad
+                          label="✍️ Driver Electronic Signature"
+                          onSave={(dataUrl) => setTDriverSignature(dataUrl)}
+                          clearKey={tSigClearKey}
+                          height={68}
+                        />
+                        {tDriverSignature && (
+                          <div className="text-[9px] text-emerald-400 flex items-center gap-1 font-bold">
+                            <span>✓ Driver Signature Recorded</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs">
                       <div className="flex items-center gap-2">
                         <input
@@ -4777,7 +4771,20 @@ export default function OperationsDashboard() {
                                 </td>
                                 <td className="p-3 font-bold text-white">
                                   {t.driverName}
-                                  <div className="font-mono text-sky-400 text-[11px]">{t.plateNumber}</div>
+                                  <div className="font-mono text-sky-400 text-[11px] flex items-center gap-1.5">
+                                    <span>{t.plateNumber}</span>
+                                    {t.truckPhotoUrl && (
+                                      <a
+                                        href={t.truckPhotoUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded border border-sky-500/30 hover:bg-sky-500/30"
+                                        title="View Loaded Truck Photo"
+                                      >
+                                        📷 Photo
+                                      </a>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="p-3 text-slate-300">{t.loadingLocation || 'Chhaeb Buying Station'}</td>
                                 <td className="p-3 text-slate-300">{t.destinationWarehouse || 'Central Mill Warehouse'}</td>
@@ -5013,6 +5020,35 @@ export default function OperationsDashboard() {
                         </span>
                       </div>
                     </div>
+
+                    {/* FIELD LOADED TRUCK PHOTO VERIFICATION FOR WAREHOUSE */}
+                    {selectedEnRouteTransport.truckPhotoUrl && (
+                      <div className="p-2.5 bg-white/5 border border-sky-500/30 rounded-xl flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={selectedEnRouteTransport.truckPhotoUrl}
+                            alt="Loaded Truck"
+                            className="w-12 h-12 object-cover rounded-lg border border-white/20 flex-shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span className="font-bold text-white block text-xs truncate">
+                              📷 Loaded Truck Photo (Field Dispatch)
+                            </span>
+                            <span className="text-[10px] text-emerald-400 block">
+                              Plate: {selectedEnRouteTransport.plateNumber} · {selectedEnRouteTransport.driverName}
+                            </span>
+                          </div>
+                        </div>
+                        <a
+                          href={selectedEnRouteTransport.truckPhotoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 font-bold rounded-lg transition-colors text-[11px] flex-shrink-0"
+                        >
+                          View Photo ↗
+                        </a>
+                      </div>
+                    )}
 
                     {/* EXPANDABLE FARMER INVOICES & SACK DETAILS TABLE */}
                     <div className="pt-2 border-t border-sky-500/20">

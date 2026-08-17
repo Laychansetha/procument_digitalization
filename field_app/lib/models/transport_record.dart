@@ -7,6 +7,8 @@ class TransportRecord {
   final String plateNumber;
   final String? mobileNumber;
   final bool truckCleaned;
+  final String? truckPhotoUrl;
+  final String? driverSignature;
   final String loadingLocation;
   final String destinationWarehouse;
   final String? notes;
@@ -25,6 +27,8 @@ class TransportRecord {
     required this.plateNumber,
     this.mobileNumber,
     this.truckCleaned = true,
+    this.truckPhotoUrl,
+    this.driverSignature,
     this.loadingLocation = 'Chhaeb Buying Station',
     this.destinationWarehouse = 'Central Mill Warehouse, Preah Vihear',
     this.notes,
@@ -45,6 +49,8 @@ class TransportRecord {
       'plateNumber': plateNumber,
       'mobileNumber': mobileNumber,
       'truckCleaned': truckCleaned ? 1 : 0,
+      'truckPhotoUrl': truckPhotoUrl,
+      'driverSignature': driverSignature,
       'loadingLocation': loadingLocation,
       'destinationWarehouse': destinationWarehouse,
       'notes': notes,
@@ -74,6 +80,8 @@ class TransportRecord {
       plateNumber: map['plateNumber'],
       mobileNumber: map['mobileNumber'],
       truckCleaned: map['truckCleaned'] == 1 || map['truckCleaned'] == true,
+      truckPhotoUrl: map['truckPhotoUrl'],
+      driverSignature: map['driverSignature'],
       loadingLocation: map['loadingLocation'] ?? 'Chhaeb Buying Station',
       destinationWarehouse: map['destinationWarehouse'] ?? 'Central Mill Warehouse',
       notes: map['notes'],
@@ -87,12 +95,14 @@ class TransportRecord {
     );
   }
 
-  Map<String, dynamic> toPostJson() {
+  Map<String, dynamic> toPostJson({String? uploadedPhotoUrl}) {
     return {
       'driverName': driverName,
       'plateNumber': plateNumber,
       'mobileNumber': mobileNumber ?? '',
       'truckCleaned': truckCleaned,
+      'truckPhotoUrl': uploadedPhotoUrl ?? truckPhotoUrl ?? '',
+      'driverSignature': driverSignature ?? '',
       'loadingLocation': loadingLocation,
       'destinationWarehouse': destinationWarehouse,
       'notes': notes ?? '',

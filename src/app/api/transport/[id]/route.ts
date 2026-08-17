@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { processAndSaveImage } from '@/lib/image-upload-server';
 
 export async function PUT(
   request: Request,
@@ -47,6 +48,8 @@ export async function PUT(
       destinationWarehouse,
       notes,
       truckCleaned,
+      truckPhotoUrl,
+      driverSignature,
       selectedPurchaseIds,
     } = body;
 
@@ -75,6 +78,8 @@ export async function PUT(
     // Calculate totals
     const totalSacks = purchasesToAssign.reduce((sum, p) => sum + (p.items?.[0]?.sacks || 0), 0);
     const totalFieldWeight = purchasesToAssign.reduce((sum, p) => sum + p.totalWeight, 0);
+
+    const savedTruckPhoto = truckPhotoUrl !== undefined ? await processAndSaveImage(truckPhotoUrl, 'truck_loading') : existing.truckPhotoUrl;
 
     // 1. Unlink purchases that were removed from this truck
     await db.purchaseRecord.updateMany({
@@ -111,6 +116,8 @@ export async function PUT(
         plateNumber,
         mobileNumber: mobileNumber !== undefined ? mobileNumber : existing.mobileNumber,
         truckCleaned: truckCleaned !== undefined ? Boolean(truckCleaned) : existing.truckCleaned,
+        truckPhotoUrl: savedTruckPhoto !== undefined ? savedTruckPhoto : existing.truckPhotoUrl,
+        driverSignature: driverSignature !== undefined ? driverSignature : existing.driverSignature,
         loadingLocation: loadingLocation || existing.loadingLocation,
         destinationWarehouse: destinationWarehouse || existing.destinationWarehouse,
         notes: notes !== undefined ? notes : existing.notes,

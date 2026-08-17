@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const { userId, userName, userRole } = await getResolvedUser();
+    const { userId, userName, userRole } = await getResolvedUser(request);
 
     const body = await request.json();
     const {

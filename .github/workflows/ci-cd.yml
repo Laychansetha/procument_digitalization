@@ -1,0 +1,80 @@
+name: 🚀 IBIS RICE — CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+# Cancel any in-progress run if a newer push arrives on the same branch
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 1: CI — Code Quality & Build Verification
+  # Runs on every push to main. The deploy job will NOT run if this fails.
+  # ─────────────────────────────────────────────────────────────────────────────
+  ci:
+    name: ✅ Code Quality & Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      # TypeScript type-check — catches type errors before they reach production
+      - name: 🔎 TypeScript type-check
+        run: npm run typecheck
+
+      # ESLint — enforces code quality rules
+      - name: 🧹 ESLint
+        run: npm run lint
+
+      # Build the Next.js app — proves it compiles without errors
+      # Uses a dummy DATABASE_URL so Prisma client generation does not fail
+      - name: 🏗️ Next.js build
+        env:
+          DATABASE_URL: "postgresql://ci_user:ci_pass@localhost:5432/ci_db?schema=public"
+          NEXTAUTH_SECRET: "ci-dummy-secret-not-used-in-production"
+          NEXTAUTH_URL: "http://localhost:3000"
+        run: npm run build
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2: DEPLOY — Auto-deploy to Lightsail App Server
+  # Runs only AFTER the ci job passes successfully.
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: 🚢 Deploy to Production VPS
+    runs-on: ubuntu-latest
+    needs: ci # only runs if ci passes
+
+    environment:
+      name: production
+      url: http://13.251.56.200:3000
+
+    steps:
+      - name: 🔑 Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          known_hosts: unnecessary
+          if_key_exists: replace
+
+      - name: 📡 Add VPS to known_hosts (prevent host key prompt)
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 🚀 Run deploy script on VPS
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "bash ${{ secrets.VPS_APP_DIR }}/scripts/deploy.sh"

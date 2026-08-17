@@ -8,6 +8,7 @@ async function main() {
   console.log('Village:', await prisma.village.count());
   console.log('Bank:', await prisma.bank.count());
   console.log('LocationRegistry:', await prisma.locationRegistry.count());
+  console.log('FleetVehicle:', await prisma.fleetVehicle.count());
   console.log('PaddyPriceSpec:', await prisma.paddyPriceSpec.count());
   console.log('SystemSetting:', await prisma.systemSetting.count());
   console.log('---------------------------');
@@ -18,6 +19,7 @@ async function main() {
   console.log('TransportRecord (Transaction):', await prisma.transportRecord.count());
   console.log('TransportLot (Transaction):', await prisma.transportLot.count());
   console.log('WarehouseIntake (Transaction):', await prisma.warehouseIntake.count());
+  console.log('RejectionLog (Transaction):', await prisma.rejectionLog.count());
   console.log('AuditLog (Transaction):', await prisma.auditLog.count());
 }
 

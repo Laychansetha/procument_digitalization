@@ -1,7 +1,7 @@
 # IBIS Rice Digitalization & Payment System — PROJECT MEMORY & DEVELOPER GUIDE
 
-> **Last Updated**: August 5, 2026  
-> **Status**: Production Ready & Reset to Fresh State  
+> **Last Updated**: August 17, 2026  
+> **Status**: Production Ready & Reset to Clean Fresh State (Accepted UI Baseline)  
 > **Repository Root**: `c:\Users\laych\Documents\digitalization_payment_dev`  
 > **Local Server URL**: `http://localhost:3000` (or `http://0.0.0.0:3000`)
 
@@ -260,13 +260,50 @@ cmd.exe /c "npm run start"
 
 ---
 
-## 9. Future Roadmap & Developer Next Steps
+## 9. Official Business Rules & Calculation Formulas (Field Pilot Standard)
 
-1. **Offline Sync & PWA Storage**:
-   - Implement IndexedDB offline queue in `field_app` for field staff capturing purchases without internet connectivity.
-2. **Mobile APK Build Automation**:
-   - Build Android APK via `build-android-apk.bat` for field mobile testing.
-3. **Automated Export & PDF Reports**:
-   - Enhance PDF print receipts (`PrintReceiptModal.tsx`, `PrintManifestModal.tsx`) for thermal Bluetooth printer compatibility.
-4. **Multi-Tenant Province Scope**:
-   - Scope viewable purchase records automatically based on `user.assignedProvinces`.
+### A. Price Specification & Grading:
+- **Base Price Lookup**: Price is automatically resolved from `PaddyPriceSpec` based on `variety` + `grade`.
+- **Zero Organic Bonus**: The legacy `+100 KHR` bonus is completely removed across all web and mobile calculations.
+- **Additional Premium**: Transport/ferry/distance compensation entered at purchase time as a separate 3-digit integer (0–999 KHR/kg).
+- **Final Purchase Price**:
+  $$\text{Final Purchase Price (KHR/kg)} = \text{Standard Base Price} + \text{Additional Premium}$$
+
+### B. Weighing & Financial Payouts:
+- **Sack Weights**: Integer kilograms only (e.g. 85, 100, 105 kg) up to 3 digits (1–999 kg). No decimal weights.
+- **Gross Paddy Value**:
+  $$\text{Gross Total (KHR)} = \text{Total Weight (kg)} \times \text{Final Purchase Price (KHR/kg)}$$
+- **Borrowed Seed Repayment (10% Interest)**:
+  $$\text{Seed Repayment (kg)} = \text{Seed Borrowed (kg)} \times 1.10$$
+  $$\text{Seed Deduction (KHR)} = \text{Seed Repayment (kg)} \times \text{Final Purchase Price (KHR/kg)}$$
+- **Net Payout to Farmer**:
+  $$\text{Net Payout (KHR)} = \max(0, \text{Gross Total} - \text{Seed Deduction})$$
+
+### C. Offline Sync & Attribution Integrity:
+- Mobile HTTP requests send user identity headers (`x-user-id`, `x-user-name`, `x-user-email`, `x-user-role`) to preserve author audit logs in PostgreSQL.
+- Transport sync resolves local purchase IDs to their server CUIDs (`serverRecordId`), ensuring cargo manifests link directly to farmer purchases.
+
+---
+
+## 10. Accepted UI Layout Baseline & Strict Front-End Rules
+
+> [!IMPORTANT]
+> The current interface layout is the **ACCEPTED BASELINE**. Future agents MUST NOT redesign or change layout heights/spacing unless explicitly instructed by the user.
+
+### A. Field Operations Tab Layout Rules:
+1. **Specs Record Tab (`fieldTab === 'specs'`)**:
+   - **Quality Specs Inspection Entry** (Left card): Compact content height.
+   - **Saved Specs History** (Right card): Compact list with `h-[320px] overflow-y-auto`.
+   - Grid uses `items-stretch` with `flex flex-col` on left card to guarantee equal bottom alignment.
+   - The *"Today’s Inspection Summary & Field Standards"* widget has been permanently removed.
+2. **Farmer Payment Info Tab (`fieldTab === 'payment'`)**:
+   - **Farmer Payment Profile Registration** (Left card): Compact natural height (`items-start`), ending cleanly below the *Save Farmer Payment Profile* button with zero dead space.
+   - **Registered Payment Profiles** (Right card): List container set to `h-[455px] xl:h-[460px] overflow-y-auto pr-1` to align with the left card's bottom edge while keeping the list scrollable.
+   - Do NOT stretch the left card vertically.
+3. **Transport Dispatch Tab (`fieldTab === 'transport'`)**:
+   - 2-Column layout: Left = Loaded Truck Photo (with Preview/Delete buttons), Right = Driver Touch Signature.
+4. **Database & Master Data Invariant**:
+   - PostgreSQL (`ibis_db`) on port 5432.
+   - 31 official accounts, 61 registered villages, 13 price specs.
+   - Clean reset script: `npx tsx scripts/clean-database.ts`.
+   - Database backup script: `npx tsx scripts/backup-database.ts`.

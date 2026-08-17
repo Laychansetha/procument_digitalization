@@ -200,7 +200,17 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
 
           <div className="flex flex-col items-center">
             <p className="font-bold text-slate-800 text-xs mb-2">Truck Driver Acceptance</p>
-            <div className="w-full h-20" />
+            <div className="w-full h-20 flex items-center justify-center">
+              {transport.driverSignature ? (
+                <img
+                  src={transport.driverSignature}
+                  alt="Driver Signature"
+                  className="max-h-16 max-w-[160px] object-contain"
+                />
+              ) : (
+                <div className="w-full h-full" />
+              )}
+            </div>
             <div className="w-full border-b border-slate-400 my-1" />
             <p className="text-[11px] text-slate-700 font-bold">{transport.driverName}</p>
             <p className="text-[10px] text-slate-500 italic">Signature & Date</p>

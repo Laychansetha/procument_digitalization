@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const { userId, userName, userRole } = await getResolvedUser();
+    const { userId, userName, userRole } = await getResolvedUser(request);
 
     const body = await request.json();
     const {
@@ -60,25 +60,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
     }
 
+    const firstItem = items[0] || {};
+    const stdPrice = parseFloat(firstItem.standardPrice) || 0;
+    const addPrice = parseFloat(firstItem.additionalPrice ?? additionalPremium) || 0;
+    const finPrice = stdPrice + addPrice;
+
     const totalWeight = items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
-    const grossPayment = items.reduce((sum, item) => sum + (parseFloat(item.totalValue) || 0), 0);
+    const grossPayment = items.reduce((sum, item) => sum + (parseFloat(item.totalValue) || (parseFloat(item.quantity) * finPrice)), 0);
 
     const sBorrowed = parseFloat(seedBorrowed) || 0;
-    const sDeduction = parseFloat(seedDeduction) || 0;
     const sRepayment = sBorrowed * 1.1; // 10% seed interest
+    const calculatedSeedDeduction = sRepayment * finPrice; // Repayment kg * final purchase price
+    const sDeduction = seedDeduction !== undefined && !isNaN(parseFloat(seedDeduction)) ? parseFloat(seedDeduction) : calculatedSeedDeduction;
     const netPayment = Math.max(0, grossPayment - sDeduction);
 
-    const addPremium = parseFloat(additionalPremium) || 0;
+    const addPremium = addPrice;
 
     // Resolve specs record by ID or composite key (familyCode + village)
     let linkedSpecsId = specsRecordId || null;
-    if (!linkedSpecsId) {
+    if (!linkedSpecsId || linkedSpecsId.startsWith('offline_')) {
       const foundSpecs = await db.specsRecord.findFirst({
-        where: { familyCode: normCode, village: normVillage },
+        where: {
+          familyCode: normCode,
+          village: normVillage,
+          paddyType: firstItem.variety ? firstItem.variety.trim() : undefined,
+        },
         orderBy: { createdAt: 'desc' },
       });
       if (foundSpecs) {
         linkedSpecsId = foundSpecs.id;
+      } else if (linkedSpecsId?.startsWith('offline_')) {
+        linkedSpecsId = null;
       }
     }
 
@@ -105,17 +117,23 @@ export async function POST(request: Request) {
         status: 'PENDING',
         createdBy: userId,
         items: {
-          create: items.map((item) => ({
-            variety: item.variety,
-            grade: item.grade || '',
-            standardPrice: parseFloat(item.standardPrice) || 0,
-            additionalPrice: parseFloat(item.additionalPrice) || 0,
-            finalPrice: parseFloat(item.finalPrice) || 0,
-            sacks: parseInt(item.sacks, 10) || 0,
-            quantity: parseFloat(item.quantity) || 0,
-            totalValue: parseFloat(item.totalValue) || 0,
-            sackWeights: Array.isArray(item.sackWeights) ? JSON.stringify(item.sackWeights) : item.sackWeights || null,
-          })),
+          create: items.map((item) => {
+            const itemStd = parseFloat(item.standardPrice) || stdPrice;
+            const itemAdd = parseFloat(item.additionalPrice ?? addPremium) || 0;
+            const itemFin = itemStd + itemAdd;
+            const itemQty = parseFloat(item.quantity) || 0;
+            return {
+              variety: item.variety,
+              grade: item.grade || '',
+              standardPrice: itemStd,
+              additionalPrice: itemAdd,
+              finalPrice: itemFin,
+              sacks: parseInt(item.sacks, 10) || 0,
+              quantity: itemQty,
+              totalValue: parseFloat(item.totalValue) || (itemQty * itemFin),
+              sackWeights: Array.isArray(item.sackWeights) ? JSON.stringify(item.sackWeights) : item.sackWeights || null,
+            };
+          }),
         },
       },
       include: {

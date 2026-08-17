@@ -1,6 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:signature/signature.dart';
 import 'package:uuid/uuid.dart';
+import '../../config/app_config.dart';
 import '../../config/theme.dart';
 import '../../database/app_database.dart';
 import '../../database/config_dao.dart';
@@ -25,9 +31,17 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
   final _notesController = TextEditingController();
   final _modalSearchController = TextEditingController();
 
+  final SignatureController _driverSignatureController = SignatureController(
+    penStrokeWidth: 3,
+    penColor: AppTheme.emeraldLight,
+    exportBackgroundColor: Colors.transparent,
+  );
+  String? _existingDriverSignatureBase64;
+
   String? _editingId;
   String? _loadingLocation;
   String? _destinationWarehouse;
+  String? _truckPhotoPath;
   bool _truckCleaned = true;
 
   List<PurchaseRecord> _availablePurchases = [];
@@ -42,6 +56,55 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     ConfigDao.instance.fetchRemoteConfig();
   }
 
+  Future<void> _takeTruckPhoto() async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppTheme.cardBackground,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Attach Loaded Truck Photo',
+                style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Please take a photo showing the fully loaded truck with license plate visible.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: AppTheme.skyBlue),
+                title: const Text('Take Photo with Camera', style: TextStyle(color: AppTheme.textWhite, fontSize: 13, fontWeight: FontWeight.bold)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: AppTheme.emeraldLight),
+                title: const Text('Choose from Gallery', style: TextStyle(color: AppTheme.textWhite, fontSize: 13, fontWeight: FontWeight.bold)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source != null) {
+      final image = await picker.pickImage(source: source, imageQuality: 75);
+      if (image != null) {
+        setState(() {
+          _truckPhotoPath = image.path;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     _driverNameController.dispose();
@@ -49,6 +112,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     _mobileNumberController.dispose();
     _notesController.dispose();
     _modalSearchController.dispose();
+    _driverSignatureController.dispose();
     super.dispose();
   }
 
@@ -78,12 +142,15 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     _plateNumberController.clear();
     _mobileNumberController.clear();
     _notesController.clear();
+    _driverSignatureController.clear();
 
     setState(() {
       _editingId = null;
       _loadingLocation = null;
       _destinationWarehouse = null;
       _truckCleaned = true;
+      _truckPhotoPath = null;
+      _existingDriverSignatureBase64 = null;
       _selectedPurchases = [];
     });
   }
@@ -315,12 +382,24 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
       final totalFieldWeight = _selectedPurchases.fold(0.0, (sum, p) => sum + p.totalWeight);
       final totalSacks = _selectedPurchases.fold(0, (sum, p) => sum + p.sackWeights.length);
 
+      String? driverSigBase64;
+      if (_driverSignatureController.isNotEmpty) {
+        final sigBytes = await _driverSignatureController.toPngBytes();
+        if (sigBytes != null) {
+          driverSigBase64 = 'data:image/png;base64,${base64Encode(sigBytes)}';
+        }
+      } else if (_existingDriverSignatureBase64 != null) {
+        driverSigBase64 = _existingDriverSignatureBase64;
+      }
+
       final record = TransportRecord(
         id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
         driverName: driver,
         plateNumber: plate,
         mobileNumber: _mobileNumberController.text.trim(),
         truckCleaned: _truckCleaned,
+        truckPhotoUrl: _truckPhotoPath,
+        driverSignature: driverSigBase64,
         loadingLocation: _loadingLocation!,
         destinationWarehouse: _destinationWarehouse!,
         notes: _notesController.text.trim(),
@@ -361,6 +440,9 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
       _loadingLocation = item.loadingLocation;
       _destinationWarehouse = item.destinationWarehouse;
       _truckCleaned = item.truckCleaned;
+      _truckPhotoPath = item.truckPhotoUrl;
+      _existingDriverSignatureBase64 = item.driverSignature;
+      _driverSignatureController.clear();
       _selectedPurchases = _availablePurchases.where((p) => item.selectedPurchaseIds.contains(p.id)).toList();
     });
   }
@@ -439,6 +521,85 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
               const SizedBox(height: 6),
               Text('Loaded Cargo Weight: ${item.totalFieldWeight} kg (${item.totalSacks} Bags)', style: const TextStyle(color: AppTheme.emeraldLight, fontSize: 13, fontWeight: FontWeight.bold)),
               Text('Purchase Invoices: ${item.selectedPurchaseIds.length} Records', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              if (item.truckPhotoUrl != null && item.truckPhotoUrl!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.inputBackground,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.skyBlue.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.camera_alt, color: AppTheme.skyBlue, size: 14),
+                          SizedBox(width: 6),
+                          Text('Loaded Truck Photo (Plate Visible)', style: TextStyle(color: AppTheme.skyBlue, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          height: 120,
+                          width: double.infinity,
+                          color: Colors.black26,
+                          child: item.truckPhotoUrl!.startsWith('data:image/')
+                              ? Image.memory(base64Decode(item.truckPhotoUrl!.split(',')[1]), fit: BoxFit.cover)
+                              : item.truckPhotoUrl!.startsWith('http://') || item.truckPhotoUrl!.startsWith('https://') || item.truckPhotoUrl!.startsWith('/uploads/')
+                                  ? Image.network(
+                                      item.truckPhotoUrl!.startsWith('/uploads/') ? '${AppConfig.baseUrl}${item.truckPhotoUrl}' : item.truckPhotoUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (ctx, _, __) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                                    )
+                                  : !kIsWeb && File(item.truckPhotoUrl!).existsSync()
+                                      ? Image.file(File(item.truckPhotoUrl!), fit: BoxFit.cover)
+                                      : const Center(child: Icon(Icons.image, color: AppTheme.skyBlue, size: 32)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (item.driverSignature != null && item.driverSignature!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.inputBackground,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.emeraldPrimary.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.draw, color: AppTheme.emeraldLight, size: 14),
+                          SizedBox(width: 6),
+                          Text('Driver Signature Acceptance', style: TextStyle(color: AppTheme.emeraldLight, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          height: 80,
+                          width: double.infinity,
+                          color: Colors.black26,
+                          child: Image.memory(
+                            base64Decode(item.driverSignature!.contains(',') ? item.driverSignature!.split(',')[1] : item.driverSignature!),
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Divider(color: Colors.white24, height: 16),
 
               const Text('📦 LOADED PURCHASE INVOICES (ITEMIZED)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
@@ -705,6 +866,220 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                                   controller: _mobileNumberController,
                                   decoration: const InputDecoration(labelText: 'DRIVER MOBILE NUMBER', hintText: '012 999 888'),
                                 ),
+                              ],
+                            );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // TWO-COLUMN: LOADED TRUCK PHOTO (LEFT) & DRIVER SIGNATURE (RIGHT)
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      bool isDesktop = constraints.maxWidth > 600;
+
+                      final truckPhotoWidget = Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.inputBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.borderLight),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.camera_alt, color: AppTheme.skyBlue, size: 15),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'LOADED TRUCK PHOTO *',
+                                      style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                                if (_truckPhotoPath != null)
+                                  InkWell(
+                                    onTap: _takeTruckPhoto,
+                                    child: const Text('Retake', style: TextStyle(fontSize: 10, color: AppTheme.skyBlue, fontWeight: FontWeight.bold)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            if (_truckPhotoPath != null && _truckPhotoPath!.isNotEmpty)
+                              Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      height: 75,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black26,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppTheme.skyBlue.withOpacity(0.3)),
+                                      ),
+                                      child: _truckPhotoPath!.startsWith('data:image/')
+                                          ? Image.memory(
+                                              base64Decode(_truckPhotoPath!.split(',')[1]),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : _truckPhotoPath!.startsWith('http://') || _truckPhotoPath!.startsWith('https://') || _truckPhotoPath!.startsWith('/uploads/')
+                                              ? Image.network(
+                                                  _truckPhotoPath!.startsWith('/uploads/')
+                                                      ? '${AppConfig.baseUrl}$_truckPhotoPath'
+                                                      : _truckPhotoPath!,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (ctx, _, __) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                                                )
+                                              : !kIsWeb && File(_truckPhotoPath!).existsSync()
+                                                  ? Image.file(
+                                                      File(_truckPhotoPath!),
+                                                      fit: BoxFit.cover,
+                                                    )
+                                                  : const Center(child: Icon(Icons.image, color: AppTheme.skyBlue, size: 30)),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const CircleAvatar(
+                                      radius: 10,
+                                      backgroundColor: AppTheme.errorRed,
+                                      child: Icon(Icons.close, size: 12, color: Colors.white),
+                                    ),
+                                    onPressed: () => setState(() => _truckPhotoPath = null),
+                                  ),
+                                ],
+                              )
+                            else
+                              InkWell(
+                                onTap: _takeTruckPhoto,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  height: 75,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.cardBackground,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppTheme.skyBlue.withOpacity(0.4)),
+                                  ),
+                                  child: const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add_a_photo, color: AppTheme.skyBlue, size: 20),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'Attach Truck Photo',
+                                        style: TextStyle(color: AppTheme.skyBlue, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+
+                      final driverSignatureWidget = Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.inputBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.borderLight),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.draw, color: AppTheme.emeraldLight, size: 15),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'DRIVER SIGNATURE',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                    ),
+                                  ],
+                                ),
+                                InkWell(
+                                  onTap: () {
+                                    _driverSignatureController.clear();
+                                    setState(() {
+                                      _existingDriverSignatureBase64 = null;
+                                    });
+                                  },
+                                  child: const Text('Clear', style: TextStyle(fontSize: 10, color: AppTheme.amberGold, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 75,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppTheme.borderLight),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Stack(
+                                  children: [
+                                    Signature(
+                                      controller: _driverSignatureController,
+                                      height: 75,
+                                      backgroundColor: Colors.transparent,
+                                    ),
+                                    if (_existingDriverSignatureBase64 != null &&
+                                        _existingDriverSignatureBase64!.isNotEmpty &&
+                                        _driverSignatureController.isEmpty)
+                                      Positioned.fill(
+                                        child: Container(
+                                          color: const Color(0xFF0F172A),
+                                          padding: const EdgeInsets.all(6),
+                                          child: Image.memory(
+                                            base64Decode(_existingDriverSignatureBase64!.contains(',')
+                                                ? _existingDriverSignatureBase64!.split(',')[1]
+                                                : _existingDriverSignatureBase64!),
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                      ),
+                                    if (_existingDriverSignatureBase64 == null && _driverSignatureController.isEmpty)
+                                      const Center(
+                                        child: Text(
+                                          'Sign with finger / stylus',
+                                          style: TextStyle(color: AppTheme.textMuted, fontSize: 10, fontStyle: FontStyle.italic),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      return isDesktop
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: truckPhotoWidget),
+                                const SizedBox(width: 12),
+                                Expanded(child: driverSignatureWidget),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                truckPhotoWidget,
+                                const SizedBox(height: 12),
+                                driverSignatureWidget,
                               ],
                             );
                     },

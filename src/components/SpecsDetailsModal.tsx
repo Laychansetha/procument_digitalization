@@ -120,12 +120,8 @@ export default function SpecsDetailsModal({
               <span className="text-slate-400">Base Paddy Price:</span>
               <span className="font-mono text-white">{spec.basePrice.toLocaleString()} KHR/kg</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Organic Premium Bonus:</span>
-              <span className="font-mono text-emerald-400">+{spec.organicBonus} KHR/kg</span>
-            </div>
             <div className="flex justify-between border-t border-emerald-500/30 pt-1.5 font-bold text-sm text-emerald-300">
-              <span>Final Purchasing Price:</span>
+              <span>Standard Purchase Price:</span>
               <span className="font-mono">{spec.finalPrice.toLocaleString()} KHR/kg</span>
             </div>
           </div>

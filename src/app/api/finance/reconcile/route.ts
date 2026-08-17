@@ -21,22 +21,29 @@ export async function GET() {
       },
     });
 
-    // Match each purchase record with farmer profile & transport intakes
+    // Match each purchase record with farmer profile & transport warehouse intake
     const reconciledData = purchases.map((purchase) => {
       const profile = farmerProfiles.find(
         (p) => p.familyCode.toUpperCase() === purchase.familyCode.toUpperCase()
       ) || null;
 
-      // Find matching transport lot
-      const matchedLot = transportRecs.flatMap((t) =>
-        t.lots.map((lot) => ({ ...lot, transport: t }))
-      ).find((lot) => lot.familyCode.toUpperCase() === purchase.familyCode.toUpperCase());
+      // Find matching transport record by explicit transportRecordId or fallback to familyCode
+      let matchedTransport = null;
+      if (purchase.transportRecordId) {
+        matchedTransport = transportRecs.find((t) => t.id === purchase.transportRecordId) || null;
+      }
+      if (!matchedTransport) {
+        const matchedLot = transportRecs.flatMap((t) =>
+          t.lots.map((lot) => ({ ...lot, transport: t }))
+        ).find((lot) => lot.purchaseRecordId === purchase.id || lot.familyCode.toUpperCase() === purchase.familyCode.toUpperCase());
+        if (matchedLot) matchedTransport = matchedLot.transport;
+      }
 
       return {
         purchase,
         farmerProfile: profile,
-        transport: matchedLot ? matchedLot.transport : null,
-        warehouseIntake: matchedLot && matchedLot.transport ? matchedLot.transport.intake : null,
+        transport: matchedTransport,
+        warehouseIntake: matchedTransport ? matchedTransport.intake : null,
       };
     });
 

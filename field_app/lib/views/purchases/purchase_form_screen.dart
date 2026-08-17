@@ -132,10 +132,10 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     for (var t in tokens) {
       final clean = t.replaceAll(RegExp(r'[^0-9]'), '');
       if (clean.isNotEmpty) {
-        // Enforce integer only and maximum 2 digits per sack (e.g. 1 - 99 kg)
-        final max2Digits = clean.length > 2 ? clean.substring(0, 2) : clean;
-        final parsed = double.tryParse(max2Digits);
-        if (parsed != null && parsed > 0) {
+        // Enforce integer only and maximum 3 digits per sack (e.g. 1 - 999 kg)
+        final max3Digits = clean.length > 3 ? clean.substring(0, 3) : clean;
+        final parsed = double.tryParse(max3Digits);
+        if (parsed != null && parsed > 0 && parsed <= 999) {
           weights.add(parsed);
         }
       }
@@ -405,7 +405,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       variety: _selectedVariety!,
       grade: _selectedGrade!,
       standardPrice: _standardPrice,
-      additionalPrice: 0.0,
+      additionalPrice: addPremiumPerKg,
       finalPrice: finalPricePerKg,
       sackWeights: _sackWeights,
       totalWeight: totalWeight,

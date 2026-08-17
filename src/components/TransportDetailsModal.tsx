@@ -174,6 +174,69 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
             </div>
           </div>
 
+          {/* Truck Loading Photo & Driver Signature Verification Cards */}
+          {(transport.truckPhotoUrl || transport.driverSignature) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Loaded Truck Photo */}
+              {transport.truckPhotoUrl ? (
+                <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                      📷 Loaded Truck Photo
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      Plate: {transport.plateNumber}
+                    </span>
+                  </div>
+                  <div className="relative group rounded-xl overflow-hidden border border-white/10 max-h-48 bg-black/40 flex items-center justify-center">
+                    <img
+                      src={transport.truckPhotoUrl}
+                      alt={`Loaded Truck ${transport.plateNumber}`}
+                      className="max-h-48 w-auto object-contain rounded-lg"
+                    />
+                    <a
+                      href={transport.truckPhotoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute bottom-2 right-2 bg-[#0b0f19]/80 backdrop-blur hover:bg-sky-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors border border-white/20"
+                    >
+                      View Full Image ↗
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-slate-500 text-xs italic">
+                  No Loaded Truck Photo Attached
+                </div>
+              )}
+
+              {/* Driver Signature */}
+              {transport.driverSignature ? (
+                <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                      ✍️ Driver Digital Signature
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold">
+                      {transport.driverName}
+                    </span>
+                  </div>
+                  <div className="rounded-xl border border-white/10 p-2 bg-black/40 flex items-center justify-center min-h-[140px]">
+                    <img
+                      src={transport.driverSignature}
+                      alt={`Signature of ${transport.driverName}`}
+                      className="max-h-32 object-contain filter invert brightness-200"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-slate-500 text-xs italic">
+                  No Driver Signature Recorded
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Summary Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl">

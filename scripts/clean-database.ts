@@ -29,6 +29,9 @@ async function cleanDatabase() {
   const deletedProfiles = await prisma.farmerProfile.deleteMany({});
   console.log(`  ✓ Cleared ${deletedProfiles.count} Farmer Profiles.`);
 
+  const deletedRejections = await prisma.rejectionLog.deleteMany({});
+  console.log(`  ✓ Cleared ${deletedRejections.count} Rejection Log records.`);
+
   const deletedAuditLogs = await prisma.auditLog.deleteMany({});
   console.log(`  ✓ Cleared ${deletedAuditLogs.count} Audit Logs.`);
 

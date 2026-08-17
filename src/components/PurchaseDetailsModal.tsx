@@ -84,11 +84,11 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px]">Standard Price</span>
-                <span className="font-bold text-amber-400">{(item.standardPrice || 1997.5).toLocaleString()} KHR/kg</span>
+                <span className="font-bold text-amber-400">{(item.standardPrice || 0).toLocaleString()} KHR/kg</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px]">Final Price (Inc Premium)</span>
-                <span className="font-extrabold text-emerald-400">{(item.finalPrice || 2047.5).toLocaleString()} KHR/kg</span>
+                <span className="font-extrabold text-emerald-400">{(item.finalPrice || item.standardPrice || 0).toLocaleString()} KHR/kg</span>
               </div>
             </div>
           </div>
@@ -100,7 +100,7 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
                 <Package className="w-4 h-4" /> Weighed Sacks List ({purchase.items?.[0]?.sacks || sackWeightsList.length} Sacks Total)
               </span>
               <span className="font-extrabold text-emerald-400">
-                Total: {purchase.totalWeight.toFixed(2)} kg
+                Total: {Math.round(purchase.totalWeight).toLocaleString()} kg
               </span>
             </div>
 

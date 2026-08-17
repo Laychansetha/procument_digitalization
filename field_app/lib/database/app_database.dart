@@ -32,7 +32,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -71,6 +71,20 @@ class AppDatabase {
         debugPrint('🧹 Migration v5: Purged old local test database records for clean fresh start.');
       } catch (e) {
         debugPrint('Migration v5 error: $e');
+      }
+    }
+    if (oldVersion < 6) {
+      try {
+        await db.execute('ALTER TABLE transport_records ADD COLUMN truckPhotoUrl TEXT');
+      } catch (e) {
+        debugPrint('Migration v6 error or column exists: $e');
+      }
+    }
+    if (oldVersion < 7) {
+      try {
+        await db.execute('ALTER TABLE transport_records ADD COLUMN driverSignature TEXT');
+      } catch (e) {
+        debugPrint('Migration v7 error or column exists: $e');
       }
     }
   }
@@ -166,6 +180,8 @@ class AppDatabase {
         plateNumber $textType,
         mobileNumber $nullableText,
         truckCleaned $intType,
+        truckPhotoUrl $nullableText,
+        driverSignature $nullableText,
         loadingLocation $textType,
         destinationWarehouse $textType,
         notes $nullableText,

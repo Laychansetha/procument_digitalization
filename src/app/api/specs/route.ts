@@ -26,7 +26,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const { userId, userName, userRole } = await getResolvedUser();
+    const { userId, userName, userRole } = await getResolvedUser(request);
 
     const body = await request.json();
     const {
@@ -61,11 +61,13 @@ export async function POST(request: Request) {
     const bPrice = parseFloat(basePrice) || 0;
     const fPrice = parseFloat(finalPrice) || bPrice;
 
-    // Check if specs record already exists for this (Family Code + Village)
+    // Check if specs record already exists for this exact (Family Code + Village + Paddy Type + Grade)
     const existing = await db.specsRecord.findFirst({
       where: {
         familyCode: normCode,
         village: normVillage,
+        paddyType: paddyType.trim(),
+        selectedGrade: selectedGrade.trim(),
       },
     });
 
@@ -75,8 +77,8 @@ export async function POST(request: Request) {
         where: { id: existing.id },
         data: {
           farmerName: farmerName.trim(),
-          paddyType,
-          selectedGrade,
+          paddyType: paddyType.trim(),
+          selectedGrade: selectedGrade.trim(),
           isOrganic: isOrganic !== undefined ? Boolean(isOrganic) : true,
           moisture: parseFloat(moisture) || 0,
           foreignMatter: parseFloat(foreignMatter) || 0,
@@ -96,8 +98,8 @@ export async function POST(request: Request) {
           familyCode: normCode,
           farmerName: farmerName.trim(),
           village: normVillage,
-          paddyType,
-          selectedGrade,
+          paddyType: paddyType.trim(),
+          selectedGrade: selectedGrade.trim(),
           isOrganic: isOrganic !== undefined ? Boolean(isOrganic) : true,
           moisture: parseFloat(moisture) || 0,
           foreignMatter: parseFloat(foreignMatter) || 0,

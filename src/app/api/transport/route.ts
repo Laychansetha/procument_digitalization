@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
+import { processAndSaveImage } from '@/lib/image-upload-server';
 
 export async function GET() {
   try {
@@ -45,7 +46,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const { userId, userName, userRole } = await getResolvedUser();
+    const { userId, userName, userRole } = await getResolvedUser(request);
 
     const body = await request.json();
     const {
@@ -56,6 +57,8 @@ export async function POST(request: Request) {
       destinationWarehouse,
       notes,
       truckCleaned,
+      truckPhotoUrl,
+      driverSignature,
       selectedPurchaseIds, // Array of purchase IDs assigned to this truck
     } = body;
 
@@ -67,8 +70,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please select at least one purchase record to assign to this truck.' }, { status: 400 });
     }
 
-    // Try finding by ID first
-    let purchasesToAssign = await db.purchaseRecord.findMany({
+    // Find purchase records by exact ID
+    const purchasesToAssign = await db.purchaseRecord.findMany({
       where: {
         id: { in: selectedPurchaseIds },
       },
@@ -76,20 +79,6 @@ export async function POST(request: Request) {
         items: true,
       },
     });
-
-    // If mobile IDs were passed instead of server CUIDs, fallback to unassigned PENDING purchases
-    if (purchasesToAssign.length === 0) {
-      purchasesToAssign = await db.purchaseRecord.findMany({
-        where: {
-          status: 'PENDING',
-          transportRecordId: null,
-        },
-        include: {
-          items: true,
-        },
-        take: selectedPurchaseIds.length,
-      });
-    }
 
     if (purchasesToAssign.length === 0) {
       return NextResponse.json({ error: 'Selected purchase records were not found.' }, { status: 404 });
@@ -99,6 +88,8 @@ export async function POST(request: Request) {
     const totalSacks = purchasesToAssign.reduce((sum, p) => sum + (p.items?.[0]?.sacks || 0), 0);
     const totalFieldWeight = purchasesToAssign.reduce((sum, p) => sum + p.totalWeight, 0);
 
+    const savedTruckPhoto = await processAndSaveImage(truckPhotoUrl, 'truck_loading');
+
     // Create Transport Record
     const transport = await db.transportRecord.create({
       data: {
@@ -106,6 +97,8 @@ export async function POST(request: Request) {
         plateNumber: plateNumber.toUpperCase().trim(),
         mobileNumber: mobileNumber || null,
         truckCleaned: truckCleaned ?? true,
+        truckPhotoUrl: savedTruckPhoto || truckPhotoUrl || null,
+        driverSignature: driverSignature || null,
         loadingLocation: loadingLocation || 'Chhaeb Buying Station',
         destinationWarehouse: destinationWarehouse || 'Central Mill Warehouse, Preah Vihear',
         notes: notes || null,
