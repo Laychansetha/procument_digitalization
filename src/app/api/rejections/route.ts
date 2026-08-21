@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(req: Request) {
   try {
@@ -9,12 +10,12 @@ export async function GET(req: Request) {
     const entityType = searchParams.get('entityType');
     const entityId = searchParams.get('entityId');
 
-    if (!entityType || !entityId) {
-      return NextResponse.json({ error: 'entityType and entityId are required.' }, { status: 400 });
-    }
+    const where: any = {};
+    if (entityType) where.entityType = entityType;
+    if (entityId) where.entityId = entityId;
 
     const logs = await db.rejectionLog.findMany({
-      where: { entityType, entityId },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
@@ -51,15 +52,26 @@ export async function POST(req: Request) {
     const userName = session.user.name || session.user.email || 'System User';
     const userRole = (session.user as any).role || 'WAREHOUSE';
 
+    // Verify valid user for foreign key constraint
+    const validUser = await db.user.findFirst({
+      where: { OR: [{ id: userId }, { email: session.user.email || '' }] },
+    });
+    const fallbackUser = await db.user.findFirst({ where: { role: 'ADMIN' } }) || await db.user.findFirst();
+    const effectiveUserId = validUser?.id || fallbackUser?.id;
+
+    if (!effectiveUserId) {
+      return NextResponse.json({ error: 'No user account found in database.' }, { status: 400 });
+    }
+
     // 1. Create Rejection Log
     const rejectionLog = await db.rejectionLog.create({
       data: {
         entityType,
         entityId,
         targetModule,
-        rejectedBy: userId,
-        rejectedByName: userName,
-        rejectedByRole: userRole,
+        rejectedBy: effectiveUserId,
+        rejectedByName: session.user.name || validUser?.name || 'System User',
+        rejectedByRole: (validUser?.role as any) || userRole,
         reason: reason.trim(),
         status: 'REJECTED',
       },
@@ -78,58 +90,98 @@ export async function POST(req: Request) {
             where: { id: tr.intake.id },
             data: { inventoryStatus: 'REJECTED' },
           });
+        } else {
+          // Check if intake exists with transportId
+          const matchingIntake = await db.warehouseIntake.findUnique({ where: { transportId: entityId } });
+          if (matchingIntake) {
+            await db.warehouseIntake.update({
+              where: { id: matchingIntake.id },
+              data: { inventoryStatus: 'REJECTED' },
+            });
+          }
+        }
+        await db.transportRecord.update({
+          where: { id: entityId },
+          data: { status: 'RECEIVED' },
+        });
+      } else if (targetModule === 'WAREHOUSE') {
+        if (tr?.intake) {
+          await db.warehouseIntake.update({
+            where: { id: tr.intake.id },
+            data: { status: 'REJECTED', inventoryStatus: 'REJECTED' },
+          });
         }
         await db.transportRecord.update({
           where: { id: entityId },
           data: { status: 'RECEIVED' },
         });
       } else {
+        // targetModule === 'FIELD'
+        if (tr?.intake) {
+          await db.warehouseIntake.update({
+            where: { id: tr.intake.id },
+            data: { status: 'REJECTED', inventoryStatus: 'REJECTED' },
+          });
+        }
         await db.transportRecord.update({
           where: { id: entityId },
           data: { status: 'REJECTED' },
         });
+        await db.purchaseRecord.updateMany({
+          where: { transportRecordId: entityId },
+          data: { status: 'REJECTED' },
+        });
       }
     } else if (entityType === 'WarehouseIntake') {
-      const intake = await db.warehouseIntake.findUnique({ where: { id: entityId } });
+      let intake = await db.warehouseIntake.findUnique({ where: { id: entityId } });
+      if (!intake) {
+        intake = await db.warehouseIntake.findUnique({ where: { transportId: entityId } });
+      }
 
-      if (targetModule === 'INVENTORY') {
-        await db.warehouseIntake.update({
-          where: { id: entityId },
-          data: { inventoryStatus: 'REJECTED' },
-        });
-        if (intake?.transportId) {
-          await db.transportRecord.update({
-            where: { id: intake.transportId },
-            data: { status: 'RECEIVED' },
+      if (intake) {
+        if (targetModule === 'INVENTORY') {
+          await db.warehouseIntake.update({
+            where: { id: intake.id },
+            data: { inventoryStatus: 'REJECTED' },
           });
-        }
-      } else if (targetModule === 'WAREHOUSE') {
-        await db.warehouseIntake.update({
-          where: { id: entityId },
-          data: {
-            status: 'REJECTED',
-            inventoryStatus: 'REJECTED',
-          },
-        });
-        if (intake?.transportId) {
-          await db.transportRecord.update({
-            where: { id: intake.transportId },
-            data: { status: 'RECEIVED' },
+          if (intake.transportId) {
+            await db.transportRecord.update({
+              where: { id: intake.transportId },
+              data: { status: 'RECEIVED' },
+            });
+          }
+        } else if (targetModule === 'WAREHOUSE') {
+          await db.warehouseIntake.update({
+            where: { id: intake.id },
+            data: {
+              status: 'REJECTED',
+              inventoryStatus: 'REJECTED',
+            },
           });
-        }
-      } else if (targetModule === 'FIELD') {
-        await db.warehouseIntake.update({
-          where: { id: entityId },
-          data: {
-            status: 'REJECTED',
-            inventoryStatus: 'REJECTED',
-          },
-        });
-        if (intake?.transportId) {
-          await db.transportRecord.update({
-            where: { id: intake.transportId },
-            data: { status: 'REJECTED' },
+          if (intake.transportId) {
+            await db.transportRecord.update({
+              where: { id: intake.transportId },
+              data: { status: 'RECEIVED' },
+            });
+          }
+        } else if (targetModule === 'FIELD') {
+          await db.warehouseIntake.update({
+            where: { id: intake.id },
+            data: {
+              status: 'REJECTED',
+              inventoryStatus: 'REJECTED',
+            },
           });
+          if (intake.transportId) {
+            await db.transportRecord.update({
+              where: { id: intake.transportId },
+              data: { status: 'REJECTED' },
+            });
+            await db.purchaseRecord.updateMany({
+              where: { transportRecordId: intake.transportId },
+              data: { status: 'REJECTED' },
+            });
+          }
         }
       }
     } else if (entityType === 'PurchaseRecord') {
@@ -140,16 +192,15 @@ export async function POST(req: Request) {
     }
 
     // 3. Create Audit Log Entry
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName,
-        userRole,
-        action: 'REJECT',
-        entityType,
-        entityId,
-        details: JSON.stringify({ targetModule, reason: reason.trim() }),
-      },
+    await logAudit({
+      userId,
+      userEmail: session.user.email,
+      userName,
+      userRole,
+      action: 'REJECT',
+      entityType,
+      entityId,
+      details: { targetModule, reason: reason.trim() },
     });
 
     return NextResponse.json({ success: true, rejectionLog });

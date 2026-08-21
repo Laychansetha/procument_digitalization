@@ -75,9 +75,9 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const provStr = Array.isArray(assignedProvinces)
-      ? assignedProvinces.join(',')
-      : (assignedProvinces || 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri');
+    const provStr = role === 'FIELD'
+      ? (Array.isArray(assignedProvinces) ? assignedProvinces.join(',') : (assignedProvinces || 'Preah Vihear'))
+      : 'na';
 
     const newUser = await db.user.create({
       data: {

@@ -175,7 +175,9 @@ class _VillagePickerBottomSheetState extends State<_VillagePickerBottomSheet> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '${filtered.length} Villages',
+                    _userAssignedProvinces.isNotEmpty && _userAssignedProvinces.length < 4
+                        ? '${_userAssignedProvinces.join(", ")} (${filtered.length} Villages)'
+                        : '${filtered.length} Villages',
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue),
                   ),
                 ),

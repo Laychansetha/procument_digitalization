@@ -347,6 +347,30 @@ class AppDatabase {
     return s + f + p + t;
   }
 
+  /// Clear only synchronized records from local SQLite (frees up mobile device storage)
+  Future<int> clearSyncedData() async {
+    if (kIsWeb) {
+      final s = _webSpecs.where((e) => e.isSynced).length;
+      final f = _webFarmers.where((e) => e.isSynced).length;
+      final p = _webPurchases.where((e) => e.isSynced).length;
+      final t = _webTransports.where((e) => e.isSynced).length;
+      _webSpecs.removeWhere((e) => e.isSynced);
+      _webFarmers.removeWhere((e) => e.isSynced);
+      _webPurchases.removeWhere((e) => e.isSynced);
+      _webTransports.removeWhere((e) => e.isSynced);
+      return s + f + p + t;
+    }
+    final db = await instance.database;
+    if (db != null) {
+      final s = await db.delete('quality_specs', where: 'isSynced = 1');
+      final f = await db.delete('farmer_profiles', where: 'isSynced = 1');
+      final p = await db.delete('purchase_records', where: 'isSynced = 1');
+      final t = await db.delete('transport_records', where: 'isSynced = 1');
+      return s + f + p + t;
+    }
+    return 0;
+  }
+
   /// Wipe all local SQLite table data (for fresh app initialization / testing)
   Future<void> clearAllData() async {
     if (kIsWeb) {

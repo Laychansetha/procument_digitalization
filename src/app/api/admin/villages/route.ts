@@ -3,26 +3,38 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     const user = session?.user as { role?: string; assignedProvinces?: string } | undefined;
 
+    const { searchParams } = new URL(request.url);
+    const provincesQuery = searchParams.get('provinces');
+
     let whereClause = {};
-    if (user?.role === 'FIELD' && user.assignedProvinces) {
-      const provinces = user.assignedProvinces
+    const targetProvincesStr = provincesQuery || (user?.role === 'FIELD' ? user?.assignedProvinces : undefined);
+
+    if (targetProvincesStr) {
+      const provinces = targetProvincesStr
         .split(',')
         .map((p) => p.trim())
         .filter(Boolean);
 
-      if (provinces.length > 0 && provinces.length < 4) {
-        whereClause = { province: { in: provinces } };
+      const allProvinces = ['Preah Vihear', 'Stung Treng', 'Ratanakiri', 'Mondolkiri'];
+      if (provinces.length > 0 && provinces.length < 4 && !provinces.some((p) => p.toLowerCase() === 'all')) {
+        // Map to exact casing in DB
+        const matchedDbProvinces = allProvinces.filter((ap) =>
+          provinces.some((p) => p.toLowerCase() === ap.toLowerCase())
+        );
+        whereClause = {
+          province: { in: matchedDbProvinces.length > 0 ? matchedDbProvinces : provinces },
+        };
       }
     }
 
     const villages = await db.village.findMany({
       where: whereClause,
-      orderBy: { name: 'asc' },
+      orderBy: [{ province: 'asc' }, { name: 'asc' }],
     });
     return NextResponse.json(villages);
   } catch (error) {

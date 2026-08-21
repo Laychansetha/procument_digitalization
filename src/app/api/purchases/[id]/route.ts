@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { isVillageAuthorized } from '@/lib/province-guard';
 
+import { logAudit } from '@/lib/audit';
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -36,7 +38,7 @@ export async function PUT(
       return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
     }
 
-    // Locking check: Allow editing if status is PENDING OR if assigned to a transport record whose status is REJECTED
+    // Locking check: Allow editing if status is PENDING, DRAFT, REJECTED OR if assigned to a transport record whose status is REJECTED
     let isLocked = false;
     if (existing.transportRecordId) {
       const linkedTransport = await db.transportRecord.findUnique({
@@ -45,7 +47,7 @@ export async function PUT(
       if (linkedTransport && linkedTransport.status !== 'REJECTED') {
         isLocked = true;
       }
-    } else if (existing.status !== 'PENDING') {
+    } else if (existing.status !== 'PENDING' && existing.status !== 'REJECTED' && existing.status !== 'DRAFT') {
       isLocked = true;
     }
 
@@ -82,7 +84,9 @@ export async function PUT(
     const seedDeductionVal = seedDeduction !== undefined && !isNaN(parseFloat(seedDeduction)) ? parseFloat(seedDeduction) : calculatedSeedDeduction;
     const netPaymentToFarmer = Math.max(0, totalPaddyValue - seedDeductionVal);
 
-    // Update Purchase Record
+    // Update Purchase Record (if previously REJECTED, reset to PENDING so it can be dispatched again)
+    const nextStatus = existing.status === 'REJECTED' ? 'PENDING' : existing.status;
+
     const updatedRecord = await db.purchaseRecord.update({
       where: { id },
       data: {
@@ -99,6 +103,7 @@ export async function PUT(
         signatureFarmer: signatureFarmer || existing.signatureFarmer,
         signatureStaff: signatureStaff || existing.signatureStaff,
         specsRecordId: specsRecordId || existing.specsRecordId,
+        status: nextStatus,
       },
     });
 
@@ -135,21 +140,31 @@ export async function PUT(
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
+    // Resolve any active rejection logs for this purchase
+    await db.rejectionLog.updateMany({
+      where: { entityType: 'PurchaseRecord', entityId: id, status: 'REJECTED' },
       data: {
-        userId,
-        userName: session.user?.name || 'Unknown User',
-        userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
-        action: 'UPDATE',
-        entityType: 'PurchaseRecord',
-        entityId: id,
-        details: JSON.stringify({
-          familyCode: updatedRecord.familyCode,
-          farmerName: updatedRecord.farmerName,
-          totalWeight: totalWeightKg,
-          netPayment: netPaymentToFarmer,
-        }),
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        resolvedByName: session.user?.name || session.user?.email || 'Field Staff',
+      },
+    });
+
+    // Audit Log
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Field Staff',
+      userRole: (session.user as { role?: string })?.role,
+      action: 'UPDATE',
+      entityType: 'PurchaseRecord',
+      entityId: id,
+      details: {
+        familyCode: updatedRecord.familyCode,
+        farmerName: updatedRecord.farmerName,
+        totalWeight: totalWeightKg,
+        netPayment: netPaymentToFarmer,
+        status: nextStatus,
       },
     });
 
@@ -222,21 +237,20 @@ export async function DELETE(
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Field Staff',
-        userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
-        action: 'DELETE',
-        entityType: 'PurchaseRecord',
-        entityId: id,
-        details: JSON.stringify({
-          familyCode: existing.familyCode,
-          farmerName: existing.farmerName,
-          village: existing.village,
-          totalWeight: existing.totalWeight,
-          netPayment: existing.netPayment,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Field Staff',
+      userRole: (session.user as { role?: string })?.role,
+      action: 'DELETE',
+      entityType: 'PurchaseRecord',
+      entityId: id,
+      details: {
+        familyCode: existing.familyCode,
+        farmerName: existing.farmerName,
+        village: existing.village,
+        totalWeight: existing.totalWeight,
+        netPayment: existing.netPayment,
       },
     });
 

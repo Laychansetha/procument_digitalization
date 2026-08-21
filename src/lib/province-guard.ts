@@ -23,7 +23,7 @@ export async function getAllowedVillagesForSession(
   }
 
   const rawAssigned = sessionUser.assignedProvinces?.trim();
-  if (!rawAssigned) {
+  if (!rawAssigned || rawAssigned.toLowerCase() === 'na' || rawAssigned.toLowerCase() === 'all') {
     return null;
   }
 
@@ -34,14 +34,18 @@ export async function getAllowedVillagesForSession(
 
   // If user is assigned to all 4 provinces, return null (unrestricted)
   const allProvinces = ['Preah Vihear', 'Stung Treng', 'Ratanakiri', 'Mondolkiri'];
-  if (provinces.length >= 4 || allProvinces.every((p) => provinces.includes(p))) {
+  if (provinces.length >= 4 || allProvinces.every((ap) => provinces.some((p) => p.toLowerCase() === ap.toLowerCase()))) {
     return null;
   }
+
+  const matchedDbProvinces = allProvinces.filter((ap) =>
+    provinces.some((p) => p.toLowerCase() === ap.toLowerCase())
+  );
 
   // Fetch villages belonging to user's assigned provinces
   const villages = await db.village.findMany({
     where: {
-      province: { in: provinces },
+      province: { in: matchedDbProvinces.length > 0 ? matchedDbProvinces : provinces },
     },
     select: { name: true },
   });

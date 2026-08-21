@@ -872,7 +872,119 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // TWO-COLUMN: LOADED TRUCK PHOTO (LEFT) & DRIVER SIGNATURE (RIGHT)
+                  // Compact Truck Cleaning Checkbox
+                  InkWell(
+                    onTap: () => setState(() => _truckCleaned = !_truckCleaned),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: _truckCleaned,
+                              activeColor: AppTheme.emeraldPrimary,
+                              checkColor: const Color(0xFF0B0F19),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              onChanged: (val) => setState(() => _truckCleaned = val ?? true),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Truck Cleaning & Inspection Completed',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.emeraldLight),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // STEP 1: LOAD PURCHASE RECORDS ONTO TRUCK
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.inputBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.skyBlue.withOpacity(0.4)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.inventory_2, color: AppTheme.skyBlue, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'LOAD PURCHASE RECORDS ONTO TRUCK',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                                ),
+                              ],
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: _openPurchaseSelectionModal,
+                              icon: const Icon(Icons.add_shopping_cart, size: 16, color: Color(0xFF0B0F19)),
+                              label: Text(
+                                _selectedPurchases.isEmpty ? 'Load Purchase Invoices' : 'Edit Selection (${_selectedPurchases.length})',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19)),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.skyBlue,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        if (_selectedPurchases.isEmpty)
+                          const Text('No purchase records selected yet. Tap the button above to search and select loaded cargo.', style: TextStyle(fontSize: 11, color: AppTheme.textMuted))
+                        else ...[
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 12,
+                            runSpacing: 4,
+                            children: [
+                              Text('Loaded Farmers: ${_selectedPurchases.length} Records ($totalSacksCount Bags)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
+                              Text('Total Field Cargo: ${totalCargoWeight.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _selectedPurchases.map((p) {
+                              return Chip(
+                                backgroundColor: AppTheme.emeraldPrimary.withOpacity(0.2),
+                                side: const BorderSide(color: AppTheme.emeraldPrimary),
+                                label: Text('${p.familyCode} (${p.totalWeight}kg)', style: const TextStyle(fontSize: 10, color: AppTheme.emeraldLight)),
+                                onDeleted: () {
+                                  setState(() {
+                                    _selectedPurchases.removeWhere((item) => item.id == p.id);
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // STEP 2 & 3: LOADED TRUCK PHOTO (LEFT) & DRIVER SIGNATURE (RIGHT)
                   LayoutBuilder(
                     builder: (context, constraints) {
                       bool isDesktop = constraints.maxWidth > 600;
@@ -1084,110 +1196,9 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                             );
                     },
                   ),
-                  const SizedBox(height: 16),
-
-                  // Compact Truck Cleaning Checkbox
-                  InkWell(
-                    onTap: () => setState(() => _truckCleaned = !_truckCleaned),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Checkbox(
-                              value: _truckCleaned,
-                              activeColor: AppTheme.emeraldPrimary,
-                              checkColor: const Color(0xFF0B0F19),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              onChanged: (val) => setState(() => _truckCleaned = val ?? true),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Truck Cleaning',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.emeraldLight),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Modal Purchase Picker Button Area (Responsive Wrap to Prevent Overflow)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.inputBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.skyBlue.withOpacity(0.4)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          alignment: WrapAlignment.spaceBetween,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            const Text('LOAD PURCHASE RECORDS ONTO TRUCK', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
-                            ElevatedButton.icon(
-                              onPressed: _openPurchaseSelectionModal,
-                              icon: const Icon(Icons.inventory_2, size: 16, color: Color(0xFF0B0F19)),
-                              label: Text(
-                                _selectedPurchases.isEmpty ? 'Load Purchase Invoices' : 'Edit Selection (${_selectedPurchases.length})',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19)),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.skyBlue,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        if (_selectedPurchases.isEmpty)
-                          const Text('No purchase records selected yet. Tap the button above to search and select loaded cargo.', style: TextStyle(fontSize: 11, color: AppTheme.textMuted))
-                        else ...[
-                          Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 12,
-                            runSpacing: 4,
-                            children: [
-                              Text('Loaded Farmers: ${_selectedPurchases.length} Records ($totalSacksCount Bags)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
-                              Text('Total Field Cargo: ${totalCargoWeight.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: _selectedPurchases.map((p) {
-                              return Chip(
-                                backgroundColor: AppTheme.emeraldPrimary.withOpacity(0.2),
-                                side: const BorderSide(color: AppTheme.emeraldPrimary),
-                                label: Text('${p.familyCode} (${p.totalWeight}kg)', style: const TextStyle(fontSize: 10, color: AppTheme.emeraldLight)),
-                                onDeleted: () {
-                                  setState(() {
-                                    _selectedPurchases.removeWhere((item) => item.id == p.id);
-                                  });
-                                },
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 20),
 
+                  // STEP 4: SAVE / UPDATE TRANSPORT RECORD
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(

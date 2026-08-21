@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -31,16 +32,31 @@ export async function GET() {
     // Map each truck with farmer bank profiles & calculate truck-level finance metrics
     const trucksData = transportRecs.map((t) => {
       const purchasesWithProfiles = t.purchases.map((purchase) => {
-        const profile = farmerProfiles.find(
-          (f) => f.familyCode.toUpperCase() === purchase.familyCode.toUpperCase()
-        ) || null;
+        const pFamilyNorm = purchase.familyCode.toUpperCase().trim();
+        const pVillageNorm = (purchase.village || '').toLowerCase().trim();
+
+        // Match by composite (Family Code + Village) first, fallback to Family Code
+        const profile =
+          farmerProfiles.find(
+            (f) =>
+              f.familyCode.toUpperCase().trim() === pFamilyNorm &&
+              (f.village || '').toLowerCase().trim() === pVillageNorm
+          ) ||
+          farmerProfiles.find(
+            (f) => f.familyCode.toUpperCase().trim() === pFamilyNorm
+          ) ||
+          null;
+
         return {
           ...purchase,
           farmerProfile: profile,
         };
       });
 
-      const totalFarmersCount = new Set(t.purchases.map((p) => p.familyCode)).size;
+      // Composite farmer identity (Family Code + Village)
+      const totalFarmersCount = new Set(
+        t.purchases.map((p) => `${p.familyCode.toUpperCase().trim()}___${(p.village || '').toLowerCase().trim()}`)
+      ).size;
       const totalTruckNetPayment = t.purchases.reduce((sum, p) => sum + p.netPayment, 0);
       const totalTruckGrossPayment = t.purchases.reduce((sum, p) => sum + p.totalPayment, 0);
 
@@ -122,16 +138,38 @@ export async function POST(request: Request) {
         data: { status: 'VERIFIED' },
       });
 
-      await db.auditLog.create({
-        data: {
-          userId,
-          userName: session.user?.name || 'Finance Officer',
-          userRole: userRole as any,
-          action: 'VERIFY',
-          entityType: 'TransportRecord',
-          entityId: transportId,
-          details: JSON.stringify({ plateNumber: transport.plateNumber, status: 'VERIFIED' }),
+      if (transport.intake) {
+        await db.warehouseIntake.update({
+          where: { id: transport.intake.id },
+          data: { status: 'RECEIVED' },
+        });
+      }
+
+      // Resolve all rejection logs for this transport and intake
+      await db.rejectionLog.updateMany({
+        where: {
+          OR: [
+            { entityType: 'TransportRecord', entityId: transportId },
+            ...(transport.intake ? [{ entityType: 'WarehouseIntake', entityId: transport.intake.id }] : []),
+          ],
+          status: 'REJECTED',
         },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolvedByName: session.user?.name || 'Finance Officer',
+        },
+      });
+
+      await logAudit({
+        userId,
+        userEmail: session.user?.email,
+        userName: session.user?.name || 'Finance Officer',
+        userRole,
+        action: 'VERIFY',
+        entityType: 'TransportRecord',
+        entityId: transportId,
+        details: { plateNumber: transport.plateNumber, status: 'VERIFIED' },
       });
 
       return NextResponse.json({ success: true, status: 'VERIFIED' });
@@ -159,21 +197,36 @@ export async function POST(request: Request) {
         data: { status: 'DISBURSED' },
       });
 
-      await db.auditLog.create({
+      // Resolve all rejection logs for this transport and intake
+      await db.rejectionLog.updateMany({
+        where: {
+          OR: [
+            { entityType: 'TransportRecord', entityId: transportId },
+            ...(transport.intake ? [{ entityType: 'WarehouseIntake', entityId: transport.intake.id }] : []),
+          ],
+          status: 'REJECTED',
+        },
         data: {
-          userId,
-          userName,
-          userRole: userRole as any,
-          action: 'DISBURSE',
-          entityType: 'TransportRecord',
-          entityId: transportId,
-          details: JSON.stringify({
-            plateNumber: transport.plateNumber,
-            paymentMethod: paymentMethod || 'ABA Bulk Transfer',
-            paymentBatchNumber: paymentBatchNumber || 'BATCH-2026',
-            paymentReceiptUrl: paymentReceiptUrl || null,
-            status: 'DISBURSED',
-          }),
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolvedByName: userName,
+        },
+      });
+
+      await logAudit({
+        userId,
+        userEmail: session.user?.email,
+        userName,
+        userRole,
+        action: 'DISBURSE',
+        entityType: 'TransportRecord',
+        entityId: transportId,
+        details: {
+          plateNumber: transport.plateNumber,
+          paymentMethod: paymentMethod || 'ABA Bulk Transfer',
+          paymentBatchNumber: paymentBatchNumber || 'BATCH-2026',
+          paymentReceiptUrl: paymentReceiptUrl || null,
+          status: 'DISBURSED',
         },
       });
 

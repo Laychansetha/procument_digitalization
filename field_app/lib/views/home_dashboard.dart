@@ -56,13 +56,33 @@ class _HomeDashboardState extends State<HomeDashboard> {
     }
   }
 
-  Future<void> _triggerSync() async {
+  Future<void> _triggerSync({bool masterOnly = false}) async {
     setState(() {
       _isSyncing = true;
-      _syncStatusMessage = 'Updating Master Config & Syncing Records...';
+      _syncStatusMessage = masterOnly
+          ? 'Downloading latest Master Data, Prices & Specs from server...'
+          : 'Updating Master Config & Syncing Offline Records...';
     });
 
     await ConfigDao.instance.fetchRemoteConfig();
+
+    if (masterOnly) {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _syncStatusMessage = '✅ Master Data, Prices & Paddy Specs updated successfully from central server.';
+        });
+        AppNotification.showSuccess(context, 'Master Data Updated');
+      }
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted && _syncStatusMessage.startsWith('✅ Master Data')) {
+          setState(() {
+            _syncStatusMessage = '';
+          });
+        }
+      });
+      return;
+    }
 
     final syncService = SyncService();
     final result = await syncService.syncAllOfflineRecords(
@@ -82,8 +102,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
       });
     }
 
-    // Auto-dismiss sync status banner after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
+    // Auto-dismiss sync status banner after 4 seconds
+    Future.delayed(const Duration(seconds: 4), () {
       if (mounted && _syncStatusMessage == result.message) {
         setState(() {
           _syncStatusMessage = '';
@@ -97,7 +117,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
       if (result.syncedCount > 0) {
         AppNotification.showSuccess(context, 'Synced');
       } else {
-        AppNotification.showInfo(context, result.message.contains('No') ? 'Up to Date' : 'Synced');
+        AppNotification.showInfo(context, result.message.contains('No') ? 'Master Config & Records Up to Date' : 'Synced');
       }
     }
   }
@@ -142,6 +162,66 @@ class _HomeDashboardState extends State<HomeDashboard> {
           MaterialPageRoute(builder: (_) => const LoginScreen()),
           (route) => false,
         );
+      }
+    }
+  }
+
+  Future<void> _confirmClearSyncedData() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBackground,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.cleaning_services, color: AppTheme.skyBlue, size: 22),
+            SizedBox(width: 8),
+            Text('Clear Synced Records?', style: TextStyle(color: AppTheme.textWhite, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will remove all records (Quality Specs, Farmer Profiles, Purchases, and Transports) that have ALREADY been successfully synced to the central database to free up device storage space.',
+              style: TextStyle(color: AppTheme.textWhite, fontSize: 12),
+            ),
+            SizedBox(height: 12),
+            Text(
+              '⚠️ Records that are still pending or have not yet been synced will NOT be deleted.',
+              style: TextStyle(color: AppTheme.amberGold, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.cleaning_services, size: 16, color: Color(0xFF0B0F19)),
+            label: const Text('Clear Synced Records', style: TextStyle(color: Color(0xFF0B0F19), fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.skyBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final count = await AppDatabase.instance.clearSyncedData();
+      await _loadUnsyncedCount();
+      if (mounted) {
+        AppNotification.showSuccess(
+          context,
+          count > 0
+              ? '🧹 Cleared $count synchronized record(s) from device.'
+              : 'No synchronized records to clear. Device storage is clean.',
+        );
+        setState(() {});
       }
     }
   }
@@ -322,6 +402,46 @@ class _HomeDashboardState extends State<HomeDashboard> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(color: Colors.white10),
+                    const SizedBox(height: 12),
+                    
+                    // Explicit Action 1: Update / Refresh Master Data
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _triggerSync(masterOnly: true);
+                        },
+                        icon: const Icon(Icons.sync, size: 16, color: Color(0xFF0B0F19)),
+                        label: const Text('Update / Refresh Master Data', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19))),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.emeraldPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Explicit Action 2: Clear Synced Records
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _confirmClearSyncedData();
+                        },
+                        icon: const Icon(Icons.cleaning_services_outlined, size: 16, color: AppTheme.skyBlue),
+                        label: const Text('Clear Synced Records from Storage', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppTheme.skyBlue),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
                     ),
                   ],
                 ),

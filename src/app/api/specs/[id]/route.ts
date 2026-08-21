@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { isVillageAuthorized } from '@/lib/province-guard';
 
+import { logAudit } from '@/lib/audit';
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -36,14 +38,17 @@ export async function PUT(
       return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
     }
 
-    // LOCKING RULE: Cannot edit SpecsRecord if a PurchaseRecord has already been created from it
+    // LOCKING RULE: Cannot edit SpecsRecord if an active (unrejected) PurchaseRecord is linked to it
     const linkedPurchase = await db.purchaseRecord.findFirst({
-      where: { specsRecordId: id },
+      where: {
+        specsRecordId: id,
+        status: { notIn: ['REJECTED'] },
+      },
     });
 
     if (linkedPurchase) {
       return NextResponse.json(
-        { error: 'This Specs Record has already been used for a purchase and can no longer be edited.' },
+        { error: 'This Specs Record has already been used for an active purchase and can no longer be edited unless the purchase is removed or rejected.' },
         { status: 400 }
       );
     }
@@ -87,21 +92,20 @@ export async function PUT(
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'User',
-        userRole: (userRole as any) || 'FIELD',
-        action: 'UPDATE',
-        entityType: 'SpecsRecord',
-        entityId: id,
-        details: JSON.stringify({
-          familyCode: updated.familyCode,
-          farmerName: updated.farmerName,
-          paddyType: updated.paddyType,
-          selectedGrade: updated.selectedGrade,
-          finalPrice: updated.finalPrice,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Field Staff',
+      userRole,
+      action: 'UPDATE',
+      entityType: 'SpecsRecord',
+      entityId: id,
+      details: {
+        familyCode: updated.familyCode,
+        farmerName: updated.farmerName,
+        paddyType: updated.paddyType,
+        selectedGrade: updated.selectedGrade,
+        finalPrice: updated.finalPrice,
       },
     });
 
@@ -144,7 +148,10 @@ export async function DELETE(
 
     // LOCKING RULE: Cannot delete SpecsRecord if an active PurchaseRecord is linked to it
     const linkedPurchase = await db.purchaseRecord.findFirst({
-      where: { specsRecordId: id },
+      where: {
+        specsRecordId: id,
+        status: { notIn: ['REJECTED'] },
+      },
     });
 
     if (linkedPurchase) {
@@ -159,20 +166,19 @@ export async function DELETE(
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Field Staff',
-        userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
-        action: 'DELETE',
-        entityType: 'SpecsRecord',
-        entityId: id,
-        details: JSON.stringify({
-          familyCode: existing.familyCode,
-          farmerName: existing.farmerName,
-          paddyType: existing.paddyType,
-          selectedGrade: existing.selectedGrade,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Field Staff',
+      userRole: (session.user as { role?: string })?.role,
+      action: 'DELETE',
+      entityType: 'SpecsRecord',
+      entityId: id,
+      details: {
+        familyCode: existing.familyCode,
+        farmerName: existing.farmerName,
+        paddyType: existing.paddyType,
+        selectedGrade: existing.selectedGrade,
       },
     });
 

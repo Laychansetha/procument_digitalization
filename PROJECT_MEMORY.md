@@ -76,22 +76,27 @@ The **IBIS Rice Digitalization & Payment System** is an enterprise-grade digital
 
 ## 2. End-to-End Workflow & Business Rules
 
-### A. Flexible Uncoupled Field Workflow
-- **Uncoupled Execution**: Field operations can be executed non-linearly or across multiple days depending on field conditions.
-- **Asynchronous Synchronization**:
-  - Staff can collect and sync **Specs Records** only.
-  - Staff can collect and sync **Farmer Payment Profiles** only.
-  - Staff can collect and sync **Purchase Records** only.
-  - Truck loading can be performed on the mobile app or later via the web interface.
-  - Syncing Specs or Profiles does not force immediate creation of Purchase Records or Transport Dispatches.
+### A. Flexible Uncoupled Field Workflow & Data Lifecycle
+- **Uncoupled Execution**: Field operations are non-linear:
+  - **Specs Record** and **Farmer Payment Profile** are completely independent and can be created in any order.
+  - When the same **Family Code** exists, the two records share/autofill farmer name and village information. Neither requires the other to be completed first.
+  - **Main Operational Sequence**: `Specs → Purchase → Transport`.
+- **Offline-First Data Flow**:
+  - **Mobile/Tablet**: Primary offline data collection tool with local SQLite storage. Field users can create, edit, or delete local records freely.
+  - **Synchronization**: Once synced to the central PostgreSQL server, records follow normal server business rules. Synchronization does NOT permanently lock records on the server.
+  - **Storage Management**: Synced records do not need to be kept permanently on the mobile device. Users can clear synced records from device storage (`clearSyncedData`) while the central database remains the single source of truth.
+  - **Web App**: Main online management interface where users continue the workflow, edit records according to normal rules, or inspect data.
 
-### B. Record Editing & Locking Rules Matrix
+### B. Record Editing, Reusability & Locking Rules Matrix
 
-| Entity | State / Condition | Editable Status | Locking Rule |
+| Entity | State / Condition | Editable Status | Business & Reusability Rule |
 |---|---|---|---|
-| 🔬 **Specs Record** | Not linked to any Purchase Record | 🟢 **Editable** | Locked once linked to a `PurchaseRecord` (`specsRecord.purchaseRecord !== null`). |
-| 📋 **Farmer Profile** | Any | 🟢 **Editable** | Profiles can be updated to correct bank details or phone numbers. |
-| 🧾 **Purchase Record** | Unassigned (`transportRecordId === null`) | 🟢 **Editable** | Locked once assigned to a `TransportRecord` (`transportRecordId !== null`). |
+| 🔬 **Specs Record** | Not yet used for purchase | 🟢 **Editable / Deletable** | Full editing and deletion allowed. |
+| 🔬 **Specs Record** | Used for a Purchase | 🔒 **Locked** | Marked as **Purchased**. Remains **fully selectable again** for new purchases (shows previous purchase ID & requires confirmation prompt before reuse, never blocked). |
+| 📋 **Farmer Profile** | Any | 🟢 **Editable / Deletable** | Can be created independently and updated/deleted at any time without breaking existing purchase or transport records. |
+| 🧾 **Purchase Record** | Unassigned to truck | 🟢 **Editable / Deletable** | Full editing and deletion allowed while not yet loaded onto a transport truck. |
+| 🧾 **Purchase Record** | Assigned to truck (`Transport.status === 'EN_ROUTE'`) | 🔒 **Locked** | Locked while active in transit or intake. |
+| 🧾 **Purchase Record** | Assigned to truck (`Transport.status === 'REJECTED'`) | 🟢 **Unlocked for Edit** | If transport is returned/rejected by Warehouse, linked purchases automatically become editable and deletable again for field correction. |
 | 🚛 **Transport Record** | `EN_ROUTE` or `REJECTED` | 🟢 **Editable** | Locked once received by Warehouse (`RECEIVED`, `VERIFIED`, `DISBURSED`) unless rejected back to Field by Warehouse. |
 | 🏬 **Warehouse Intake** | `RECEIVED` or `REJECTED` | 🟢 **Editable** | Locked once verified or disbursed by Finance (`VERIFIED`, `DISBURSED`). |
 

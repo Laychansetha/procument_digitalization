@@ -1124,6 +1124,7 @@ export default function AdminConfigPage() {
                     >
                       <option value="FIELD">FIELD (Inspector)</option>
                       <option value="WAREHOUSE">WAREHOUSE (Scale Operator)</option>
+                      <option value="INVENTORY">INVENTORY (Record Manager)</option>
                       <option value="FINANCE">FINANCE (Treasury)</option>
                       <option value="ADMIN">ADMIN (Full Access)</option>
                     </select>
@@ -1144,24 +1145,30 @@ export default function AdminConfigPage() {
                 {/* Assigned Provinces Section */}
                 <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#0F172A', borderRadius: '8px', border: '1px solid #334155' }}>
                   <label style={{ display: 'block', fontSize: '11px', color: '#F59E0B', fontWeight: 'bold', marginBottom: '6px' }}>
-                    📍 Assigned Provinces for Inspector Village Filter:
+                    📍 Assigned Provinces ({userForm.role === 'FIELD' ? 'Field Regional Filter' : 'Global / Online Access'}):
                   </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    {availableProvinces.map((prov) => {
-                      const checked = userForm.assignedProvinces.includes(prov);
-                      return (
-                        <label key={prov} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#FFF', cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleProvinceSelection(prov)}
-                            style={{ cursor: 'pointer' }}
-                          />
-                          <span>{prov}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  {userForm.role !== 'FIELD' ? (
+                    <div style={{ fontSize: '12px', color: '#10B981', fontWeight: 'bold', padding: '4px 0' }}>
+                      🌐 Global Access (na) — Account role &quot;{userForm.role}&quot; has full access across all regions.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {availableProvinces.map((prov) => {
+                        const checked = userForm.assignedProvinces.includes(prov);
+                        return (
+                          <label key={prov} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#FFF', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleProvinceSelection(prov)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span>{prov}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>

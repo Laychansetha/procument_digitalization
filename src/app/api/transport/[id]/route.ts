@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { processAndSaveImage } from '@/lib/image-upload-server';
+import { logAudit } from '@/lib/audit';
 
 export async function PUT(
   request: Request,
@@ -147,10 +148,20 @@ export async function PUT(
       },
     });
 
-    // If an existing WarehouseIntake existed (from a secondary rejection), delete it so truck arrives fresh in Warehouse receiving queue
+    // If an existing WarehouseIntake existed, update it with new field weights and reset inventory status so it seamlessly continues to Warehouse and Inventory
     if (existing.intake) {
-      await db.warehouseIntake.delete({
+      const netWeight = existing.intake.warehouseNetWeight || 0;
+      const diffKg = Number((netWeight - totalFieldWeight).toFixed(2));
+      const diffPercent = totalFieldWeight > 0 ? Number(((diffKg / totalFieldWeight) * 100).toFixed(2)) : 0;
+
+      await db.warehouseIntake.update({
         where: { id: existing.intake.id },
+        data: {
+          status: 'RECEIVED',
+          inventoryStatus: 'WAITING_FOR_INVENTORY',
+          weightDiffKg: diffKg,
+          weightDiffPercent: diffPercent,
+        },
       });
     }
 
@@ -171,21 +182,20 @@ export async function PUT(
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'User',
-        userRole: (userRole as any) || 'FIELD',
-        action: 'UPDATE',
-        entityType: 'TransportRecord',
-        entityId: id,
-        details: JSON.stringify({
-          driverName,
-          plateNumber,
-          totalSacks,
-          totalFieldWeight,
-          purchaseCount: purchasesToAssign.length,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Field Staff',
+      userRole,
+      action: 'UPDATE',
+      entityType: 'TransportRecord',
+      entityId: id,
+      details: {
+        driverName,
+        plateNumber,
+        totalSacks,
+        totalFieldWeight,
+        purchaseCount: purchasesToAssign.length,
       },
     });
 
@@ -235,19 +245,18 @@ export async function DELETE(
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
-        action: 'DELETE',
-        entityType: 'TransportRecord',
-        entityId: id,
-        details: JSON.stringify({
-          driverName: existing.driverName,
-          plateNumber: existing.plateNumber,
-          purchasesUnlinkedCount: existing.purchases.length,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'DELETE',
+      entityType: 'TransportRecord',
+      entityId: id,
+      details: {
+        driverName: existing.driverName,
+        plateNumber: existing.plateNumber,
+        purchasesUnlinkedCount: existing.purchases.length,
       },
     });
 

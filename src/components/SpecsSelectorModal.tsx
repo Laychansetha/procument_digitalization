@@ -37,16 +37,20 @@ export default function SpecsSelectorModal({
 
   if (!isOpen) return null;
 
-  // Match purchased record by exact spec.id or exact (Family Code + Variety + Grade)
+  // Match purchased record by exact spec.id or exact (Family Code + Village + Variety + Grade)
   const findPurchasedMatch = (spec: SpecsRecordItem) => {
     if (!purchases || !Array.isArray(purchases)) return null;
     return purchases.find((p) => {
       if (p.specsRecordId === spec.id) return true;
       const item = p.items?.[0] || {};
       const familyMatch = p.familyCode?.toLowerCase().trim() === spec.familyCode?.toLowerCase().trim();
+      const villageMatch =
+        !p.village ||
+        !spec.village ||
+        p.village?.toLowerCase().trim() === spec.village?.toLowerCase().trim();
       const varietyMatch = item.variety?.toLowerCase().trim() === spec.paddyType?.toLowerCase().trim();
       const gradeMatch = item.grade?.toLowerCase().trim() === spec.selectedGrade?.toLowerCase().trim();
-      return familyMatch && varietyMatch && gradeMatch;
+      return familyMatch && villageMatch && varietyMatch && gradeMatch;
     });
   };
 

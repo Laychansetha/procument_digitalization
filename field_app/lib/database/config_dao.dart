@@ -97,13 +97,23 @@ class ConfigDao {
   List<String> get villages => List.unmodifiable(_villages);
 
   List<String> getVillagesForProvinces(List<String> assignedProvinces) {
-    if (assignedProvinces.isEmpty || assignedProvinces.length >= 4) {
+    final cleanProvinces = assignedProvinces
+        .map((p) => p.toLowerCase().trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    if (cleanProvinces.isEmpty || cleanProvinces.length >= 4 || cleanProvinces.contains('all')) {
       return List.unmodifiable(_villages);
     }
+
     final filtered = _villages.where((v) {
-      final prov = _villageProvinceMapping[v];
-      return prov == null || assignedProvinces.contains(prov);
+      final prov = _villageProvinceMapping[v]?.toLowerCase().trim();
+      return prov != null && cleanProvinces.contains(prov);
     }).toList();
+
+    if (filtered.isEmpty) {
+      return List.unmodifiable(_villages);
+    }
     return List.unmodifiable(filtered);
   }
   List<String> get banks => List.unmodifiable(_banks);
@@ -164,7 +174,9 @@ class ConfigDao {
   /// Automatically check server for master configuration updates on startup
   Future<void> fetchRemoteConfig() async {
     try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/api/config')).timeout(const Duration(seconds: 5));
+      final cacheBusterUrl = '${AppConfig.baseUrl}/api/config?t=${DateTime.now().millisecondsSinceEpoch}';
+      debugPrint('🔄 Fetching remote master config from: $cacheBusterUrl');
+      final response = await http.get(Uri.parse(cacheBusterUrl)).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -178,7 +190,7 @@ class ConfigDao {
         await prefs.setString(_kCachedConfigKey, response.body);
         await prefs.setString(_kLastSyncedAtKey, nowIso);
 
-        debugPrint('✅ Master Configuration automatically updated from server at $nowIso.');
+        debugPrint('✅ Master Configuration updated from server at $nowIso. Banks: $_banks');
       }
     } catch (e) {
       debugPrint('⚠️ Offline fallback: continuing with existing cached master configuration. ($e)');
@@ -214,8 +226,31 @@ class ConfigDao {
       }
     }
 
-    if (data['banks'] != null && data['banks'] is List && (data['banks'] as List).isNotEmpty) {
-      _banks = (data['banks'] as List).map((e) => e.toString()).toList();
+    // Dynamic commercial bank list update from server rawBanks or banks
+    if (data['rawBanks'] != null && data['rawBanks'] is List && (data['rawBanks'] as List).isNotEmpty) {
+      final bankNames = <String>[];
+      for (var item in data['rawBanks']) {
+        if (item is Map && item['name'] != null && item['name'].toString().trim().isNotEmpty) {
+          bankNames.add(item['name'].toString().trim());
+        } else if (item is String && item.trim().isNotEmpty) {
+          bankNames.add(item.trim());
+        }
+      }
+      if (bankNames.isNotEmpty) {
+        _banks = bankNames;
+      }
+    } else if (data['banks'] != null && data['banks'] is List && (data['banks'] as List).isNotEmpty) {
+      final bankNames = <String>[];
+      for (var item in data['banks']) {
+        if (item is Map && item['name'] != null) {
+          bankNames.add(item['name'].toString().trim());
+        } else if (item != null && item.toString().trim().isNotEmpty) {
+          bankNames.add(item.toString().trim());
+        }
+      }
+      if (bankNames.isNotEmpty) {
+        _banks = bankNames;
+      }
     }
 
     if (data['fleet'] != null && data['fleet'] is List) {

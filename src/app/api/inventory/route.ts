@@ -34,6 +34,8 @@ export async function GET() {
   }
 }
 
+import { logAudit } from '@/lib/audit';
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -63,13 +65,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Warehouse Intake record not found' }, { status: 404 });
     }
 
+    // Verify valid user for database relations
+    const validUser = await db.user.findFirst({
+      where: { OR: [{ id: userId }, { email: session.user?.email || '' }] },
+    });
+    const effectiveUserId = validUser?.id || userId;
+
     // Update WarehouseIntake record into Inventory Recorded status
     const updatedIntake = await db.warehouseIntake.update({
       where: { id: intakeId },
       data: {
+        status: 'RECEIVED',
         inventoryStatus: 'INVENTORY_RECORDED',
-        inventoryStaffId: userId,
-        inventoryStaffName: session.user?.name || 'Inventory Officer',
+        inventoryStaffId: effectiveUserId,
+        inventoryStaffName: session.user?.name || validUser?.name || 'Inventory Officer',
         inventoryConfirmedAt: new Date(),
         inventoryLocation: inventoryLocation || 'Main Warehouse Storage',
         inventoryNotes: inventoryNotes || null,
@@ -83,37 +92,35 @@ export async function POST(request: Request) {
       },
     });
 
-    // Resolve active rejection log if record was returned by Finance for correction
-    const activeRejection = await db.rejectionLog.findFirst({
-      where: { entityType: 'WarehouseIntake', entityId: intakeId, status: 'REJECTED' },
-      orderBy: { createdAt: 'desc' },
+    // Resolve all active rejection logs for this intake, linked transport, and purchases
+    await db.rejectionLog.updateMany({
+      where: {
+        OR: [
+          { entityType: 'WarehouseIntake', entityId: intakeId },
+          { entityType: 'TransportRecord', entityId: existingIntake.transportId },
+        ],
+        status: 'REJECTED',
+      },
+      data: {
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        resolvedByName: session.user?.name || session.user?.email || 'Inventory Staff',
+      },
     });
 
-    if (activeRejection) {
-      await db.rejectionLog.update({
-        where: { id: activeRejection.id },
-        data: {
-          status: 'RESOLVED',
-          resolvedAt: new Date(),
-          resolvedByName: session.user?.name || session.user?.email || 'Inventory Staff',
-        },
-      });
-    }
-
-    // Create Audit Log entry
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Inventory Staff',
-        userRole: userRole as any,
-        action: 'CONFIRM_INVENTORY',
-        entityType: 'WarehouseIntake',
-        entityId: intakeId,
-        details: JSON.stringify({
-          warehouseId: `WR-2026-${intakeId.slice(-6).toUpperCase()}`,
-          inventoryLocation: inventoryLocation || 'Main Warehouse Storage',
-          netWeight: existingIntake.warehouseNetWeight,
-        }),
+    // Safely write Audit Log entry
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || validUser?.name || 'Inventory Staff',
+      userRole,
+      action: 'CONFIRM_INVENTORY',
+      entityType: 'WarehouseIntake',
+      entityId: intakeId,
+      details: {
+        warehouseId: `WR-2026-${intakeId.slice(-6).toUpperCase()}`,
+        inventoryLocation: inventoryLocation || 'Main Warehouse Storage',
+        netWeight: existingIntake.warehouseNetWeight,
       },
     });
 

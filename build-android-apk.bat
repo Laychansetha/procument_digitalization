@@ -12,8 +12,11 @@ echo.
 echo Project Root: %PROJECT_ROOT%
 echo.
 
-REM Set JAVA_HOME to embedded JDK if it exists in the project, otherwise use system JDK
-if exist "%PROJECT_ROOT%jdk-17-real\bin\java.exe" (
+REM Set JAVA_HOME to project JDK 17 if it exists
+if exist "%PROJECT_ROOT%jdk-17\bin\java.exe" (
+    set "JAVA_HOME=%PROJECT_ROOT%jdk-17"
+    echo Using project JDK: %PROJECT_ROOT%jdk-17
+) else if exist "%PROJECT_ROOT%jdk-17-real\bin\java.exe" (
     set "JAVA_HOME=%PROJECT_ROOT%jdk-17-real"
     echo Using embedded JDK: %PROJECT_ROOT%jdk-17-real
 ) else (

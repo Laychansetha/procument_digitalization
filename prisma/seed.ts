@@ -6,10 +6,9 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding IBIS RICE master database from official configuration...');
 
-  const passwordHash = await bcrypt.hash('Ibis2026!', 10);
-
   // 1. Seed Official Accounts from username_roles.csv
   const csvUsers = [
+    { province: 'na', username: 'chansetha', password: 'Setha*2026', role: 'ADMIN' },
     { province: 'Preah Vihear', username: 'piseth', password: 'PVH-piseth-2026', role: 'FIELD' },
     { province: 'Preah Vihear', username: 'chandara', password: 'PVH-chandara-2026', role: 'FIELD' },
     { province: 'Preah Vihear', username: 'chin', password: 'PVH-chin-2026', role: 'FIELD' },
@@ -17,11 +16,9 @@ async function main() {
     { province: 'Preah Vihear', username: 'vornne', password: 'PVH-vornne-2026', role: 'FIELD' },
     { province: 'Preah Vihear', username: 'sokun', password: 'PVH-sokun-2026', role: 'FIELD' },
     { province: 'Preah Vihear', username: 'vuthy', password: 'PVH-vuthy-2026', role: 'FIELD' },
-    { province: 'Stung Treng', username: 'chansetha', password: 'ST-chansetha-2026', role: 'ADMIN' },
     { province: 'Stung Treng', username: 'theavy', password: 'ST-theavy-2026', role: 'FIELD' },
     { province: 'Stung Treng', username: 'samol', password: 'ST-samol-2026', role: 'FIELD' },
     { province: 'Stung Treng', username: 'yornthy', password: 'ST-yornthy-2026', role: 'FIELD' },
-    { province: 'Stung Treng', username: 'heap', password: 'ST-heap-2026', role: 'FINANCE' },
     { province: 'Stung Treng', username: 'kalayan', password: 'ST-kalayan-2026', role: 'FIELD' },
     { province: 'Stung Treng', username: 'vongrith', password: 'ST-vongrith-2026', role: 'FIELD' },
     { province: 'Stung Treng', username: 'samath', password: 'ST-samath-2026', role: 'FIELD' },
@@ -34,8 +31,13 @@ async function main() {
     { province: 'Mondolkiri', username: 'vimean', password: 'MDK-vimean-2026', role: 'FIELD' },
     { province: 'Mondolkiri', username: 'chantha', password: 'MDK-chantha-2026', role: 'FIELD' },
     { province: 'Mondolkiri', username: 'thana', password: 'MDK-thana-2026', role: 'FIELD' },
-    { province: 'Kampong Thom', username: 'phearun', password: 'KPT-phearun-2026', role: 'WAREHOUSE' },
-    { province: 'Phnom Penh', username: 'bousong', password: 'PNH-bousong-2026', role: 'INVENTORY' },
+    { province: 'na', username: 'chanvoleak', password: 'PP-voleak-2026', role: 'FINANCE' },
+    { province: 'na', username: 'sengiy', password: 'PP-seangiy-2026', role: 'FINANCE' },
+    { province: 'na', username: 'neath', password: 'PP-neath-2026', role: 'FINANCE' },
+    { province: 'na', username: 'kanha', password: 'PP-kanha-2026', role: 'FINANCE' },
+    { province: 'na', username: 'heap', password: 'ST-heap-2026', role: 'FINANCE' },
+    { province: 'na', username: 'phearun', password: 'KPT-phearun-2026', role: 'WAREHOUSE' },
+    { province: 'na', username: 'bousong', password: 'PNH-bousong-2026', role: 'INVENTORY' },
   ];
 
   for (const u of csvUsers) {
@@ -57,11 +59,11 @@ async function main() {
 
   // 2. Create Default Alias Core Accounts (.org & .com) for backward compatibility
   const coreAccounts = [
-    { email: 'admin@ibisrice.com', name: 'admin', role: 'ADMIN', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'ST-chansetha-2026' },
+    { email: 'admin@ibisrice.com', name: 'admin', role: 'ADMIN', provinces: 'na', pass: 'Setha*2026' },
     { email: 'field@ibisrice.com', name: 'field', role: 'FIELD', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'PVH-piseth-2026' },
-    { email: 'warehouse@ibisrice.com', name: 'warehouse', role: 'WAREHOUSE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'KPT-phearun-2026' },
-    { email: 'inventory@ibisrice.com', name: 'inventory', role: 'INVENTORY', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'PNH-bousong-2026' },
-    { email: 'finance@ibisrice.com', name: 'finance', role: 'FINANCE', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'ST-heap-2026' },
+    { email: 'warehouse@ibisrice.com', name: 'warehouse', role: 'WAREHOUSE', provinces: 'na', pass: 'KPT-phearun-2026' },
+    { email: 'inventory@ibisrice.com', name: 'inventory', role: 'INVENTORY', provinces: 'na', pass: 'PNH-bousong-2026' },
+    { email: 'finance@ibisrice.com', name: 'finance', role: 'FINANCE', provinces: 'na', pass: 'ST-heap-2026' },
   ];
 
   for (const acc of coreAccounts) {

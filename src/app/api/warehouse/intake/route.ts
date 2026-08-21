@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -34,6 +35,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch warehouse intake records.' }, { status: 500 });
   }
 }
+
+import { processAndSaveImage } from '@/lib/image-upload-server';
 
 export async function POST(request: Request) {
   try {
@@ -89,24 +92,70 @@ export async function POST(request: Request) {
       ? Number(((diffKg / transport.totalFieldWeight) * 100).toFixed(2))
       : 0;
 
-    // Create Warehouse Intake record
-    const intake = await db.warehouseIntake.create({
-      data: {
-        transportId,
-        warehouseGrossWeight: Number(warehouseGrossWeight),
-        warehouseTareWeight: Number(warehouseTareWeight),
-        warehouseNetWeight: netWeight,
-        weightDiffKg: diffKg,
-        weightDiffPercent: diffPercent,
-        grossScalePhotoUrl: grossScalePhotoUrl || null,
-        tareScalePhotoUrl: tareScalePhotoUrl || null,
-        transportInvoiceUrl: transportInvoiceUrl || null,
-        receivingStaffId: userId,
-        receivingStaffName: session.user?.name || 'Warehouse Staff',
-        notes: notes || null,
-        status: 'RECEIVED',
-      },
+    // Process images (Base64 to /uploads/)
+    const savedGrossPhoto = await processAndSaveImage(grossScalePhotoUrl, 'gross_scale');
+    const savedTarePhoto = await processAndSaveImage(tareScalePhotoUrl, 'tare_scale');
+    const savedInvoicePhoto = await processAndSaveImage(transportInvoiceUrl, 'invoice');
+
+    // Check if an intake record already exists for this transportId
+    const existingIntake = await db.warehouseIntake.findUnique({
+      where: { transportId },
     });
+
+    let intake;
+    if (existingIntake) {
+      intake = await db.warehouseIntake.update({
+        where: { id: existingIntake.id },
+        data: {
+          warehouseGrossWeight: Number(warehouseGrossWeight),
+          warehouseTareWeight: Number(warehouseTareWeight),
+          warehouseNetWeight: netWeight,
+          weightDiffKg: diffKg,
+          weightDiffPercent: diffPercent,
+          grossScalePhotoUrl: savedGrossPhoto || existingIntake.grossScalePhotoUrl,
+          tareScalePhotoUrl: savedTarePhoto || existingIntake.tareScalePhotoUrl,
+          transportInvoiceUrl: savedInvoicePhoto || existingIntake.transportInvoiceUrl,
+          receivingStaffId: userId,
+          receivingStaffName: session.user?.name || existingIntake.receivingStaffName,
+          notes: notes !== undefined ? notes : existingIntake.notes,
+          status: 'RECEIVED',
+          inventoryStatus: 'WAITING_FOR_INVENTORY',
+        },
+      });
+
+      // Resolve any active rejection logs for this intake
+      await db.rejectionLog.updateMany({
+        where: {
+          entityType: 'WarehouseIntake',
+          entityId: existingIntake.id,
+          status: 'REJECTED',
+        },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolvedByName: session.user?.name || 'Warehouse Staff',
+        },
+      });
+    } else {
+      intake = await db.warehouseIntake.create({
+        data: {
+          transportId,
+          warehouseGrossWeight: Number(warehouseGrossWeight),
+          warehouseTareWeight: Number(warehouseTareWeight),
+          warehouseNetWeight: netWeight,
+          weightDiffKg: diffKg,
+          weightDiffPercent: diffPercent,
+          grossScalePhotoUrl: savedGrossPhoto || null,
+          tareScalePhotoUrl: savedTarePhoto || null,
+          transportInvoiceUrl: savedInvoicePhoto || null,
+          receivingStaffId: userId,
+          receivingStaffName: session.user?.name || 'Warehouse Staff',
+          notes: notes || null,
+          status: 'RECEIVED',
+          inventoryStatus: 'WAITING_FOR_INVENTORY',
+        },
+      });
+    }
 
     // 5. UPDATE TRUCK STATUS TO "RECEIVED"
     await db.transportRecord.update({
@@ -121,25 +170,24 @@ export async function POST(request: Request) {
     });
 
     // Security Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Warehouse Staff',
-        userRole: userRole as any,
-        action: 'INTAKE',
-        entityType: 'WarehouseIntake',
-        entityId: intake.id,
-        details: JSON.stringify({
-          transportId,
-          warehouseNetWeight: netWeight,
-          fieldWeight: transport.totalFieldWeight,
-          diffKg,
-          diffPercent,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Warehouse Staff',
+      userRole,
+      action: existingIntake ? 'UPDATE' : 'INTAKE',
+      entityType: 'WarehouseIntake',
+      entityId: intake.id,
+      details: {
+        transportId,
+        warehouseNetWeight: netWeight,
+        fieldWeight: transport.totalFieldWeight,
+        diffKg,
+        diffPercent,
       },
     });
 
-    return NextResponse.json(intake, { status: 201 });
+    return NextResponse.json(intake, { status: existingIntake ? 200 : 201 });
   } catch (error) {
     console.error('Error saving warehouse intake:', error);
     return NextResponse.json({ error: 'Failed to record warehouse intake.' }, { status: 500 });

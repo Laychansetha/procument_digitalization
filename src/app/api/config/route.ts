@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const prisma = new PrismaClient();
 
 const DEFAULT_SETTINGS = {
@@ -84,20 +87,27 @@ export async function GET(request: Request) {
     const serverTimestamp = new Date().toISOString();
     const configVersion = `v1-${Date.now()}`;
 
-    return NextResponse.json({
-      serverTimestamp,
-      configVersion,
-      settings: settingsMap,
-      paddySpecs,
-      rawVillages: filteredVillages,
-      allVillages: rawVillages,
-      rawBanks,
-      villages: filteredVillages.map((v) => v.name),
-      banks: rawBanks.map((b) => b.name),
-      locations,
-      fleet,
-      warehouses: locations.filter((l) => l.type === 'WAREHOUSE').map((l) => l.name),
-    });
+    return NextResponse.json(
+      {
+        serverTimestamp,
+        configVersion,
+        settings: settingsMap,
+        paddySpecs,
+        rawVillages: filteredVillages,
+        allVillages: rawVillages,
+        rawBanks,
+        villages: filteredVillages.map((v) => v.name),
+        banks: rawBanks.map((b) => b.name),
+        locations,
+        fleet,
+        warehouses: locations.filter((l) => l.type === 'WAREHOUSE').map((l) => l.name),
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    );
   } catch (error: any) {
     console.error('API Config GET Error:', error);
     return NextResponse.json(

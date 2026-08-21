@@ -66,7 +66,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
-          assignedProvinces: user.assignedProvinces || 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri',
+          assignedProvinces: user.assignedProvinces || (user.role === 'FIELD' ? 'Preah Vihear' : 'na'),
         };
       },
     }),

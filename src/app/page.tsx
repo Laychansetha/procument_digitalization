@@ -152,7 +152,7 @@ export default function OperationsDashboard() {
   const [invSearchQuery, setInvSearchQuery] = useState('');
   const [invStatusFilter, setInvStatusFilter] = useState<'ALL' | 'WAITING_FOR_INVENTORY' | 'INVENTORY_RECORDED'>('ALL');
   const [invConfirmModalIntake, setInvConfirmModalIntake] = useState<any>(null);
-  const [invLocationInput, setInvLocationInput] = useState('Silo 01 - Stack A');
+  const [invLocationInput, setInvLocationInput] = useState('');
   const [invNotesInput, setInvNotesInput] = useState('');
   const [isSubmittingInventory, setIsSubmittingInventory] = useState(false);
 
@@ -176,7 +176,7 @@ export default function OperationsDashboard() {
   const [uFullName, setUFullName] = useState('');
   const [uUsername, setUUsername] = useState('');
   const [uPassword, setUPassword] = useState('Ibis2026!');
-  const [uRole, setURole] = useState<'FIELD' | 'WAREHOUSE' | 'FINANCE' | 'ADMIN'>('FIELD');
+  const [uRole, setURole] = useState<'FIELD' | 'WAREHOUSE' | 'INVENTORY' | 'FINANCE' | 'ADMIN'>('FIELD');
   const [uAssignedProvince, setUAssignedProvince] = useState('Preah Vihear');
   const [uStatus, setUStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -286,7 +286,8 @@ export default function OperationsDashboard() {
   const [scaleToleranceWarning, setScaleToleranceWarning] = useState<number>(500);
   const [scaleToleranceCritical, setScaleToleranceCritical] = useState<number>(500);
 
-  // Rejection Modal state
+  // Rejection Logs State & Rejection Modal state
+  const [rejectionLogs, setRejectionLogs] = useState<any[]>([]);
   const [rejectionTarget, setRejectionTarget] = useState<{
     isOpen: boolean;
     title: string;
@@ -295,6 +296,41 @@ export default function OperationsDashboard() {
     defaultTargetModule?: 'FIELD' | 'WAREHOUSE' | 'INVENTORY';
     availableTargetModules?: Array<'FIELD' | 'WAREHOUSE' | 'INVENTORY'>;
   } | null>(null);
+
+  // Rejection Indicator Helper: only displays active rejection alert when a record is actively returned for correction
+  const getRejectionIndicator = (entityType: string, entityId?: string | null, transportId?: string | null, currentStatus?: string) => {
+    if (!entityId && !transportId) return null;
+
+    // If the record has moved forward or is not in REJECTED state, do not show rejection alert
+    if (currentStatus && currentStatus !== 'REJECTED') {
+      return null;
+    }
+
+    const log = rejectionLogs.find((l) =>
+      l.status === 'REJECTED' && (
+        (entityId && l.entityId === entityId) ||
+        (transportId && (l.entityId === transportId || (l.entityType === 'TransportRecord' && l.entityId === transportId)))
+      )
+    );
+    if (!log) return null;
+
+    return (
+      <div
+        className="mt-1 text-[10px] p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 animate-pulse flex flex-col gap-0.5 leading-tight text-left"
+        title={`Rejection Reason: ${log.reason}`}
+      >
+        <div className="font-extrabold flex items-center gap-1">
+          <AlertOctagon className="w-3 h-3 text-red-400 shrink-0" />
+          <span>
+            🔴 Returned by {log.rejectedByName} ({log.rejectedByRole}) ➔ To {log.targetModule}
+          </span>
+        </div>
+        <div className="text-[10px] text-slate-300 font-normal italic pl-4">
+          &ldquo;{log.reason}&rdquo;
+        </div>
+      </div>
+    );
+  };
 
   // Warehouse receiving cargo breakdown expand state
   const [showCargoBreakdown, setShowCargoBreakdown] = useState<boolean>(false);
@@ -333,7 +369,7 @@ export default function OperationsDashboard() {
 
   const refreshAllData = async () => {
     try {
-      const [resVillages, resBanks, resPriceSpecs, resSpecs, resFarmers, resPurchases, resTransports, resIntakes, resFinanceTrucks, resAudit, resUsers] =
+      const [resVillages, resBanks, resPriceSpecs, resSpecs, resFarmers, resPurchases, resTransports, resIntakes, resFinanceTrucks, resAudit, resUsers, resRejections] =
         await Promise.all([
           fetch('/api/admin/villages'),
           fetch('/api/admin/banks'),
@@ -346,6 +382,7 @@ export default function OperationsDashboard() {
           fetch('/api/finance/trucks'),
           fetch('/api/audit'),
           fetch('/api/admin/users'),
+          fetch('/api/rejections'),
         ]);
 
       if (resVillages.ok) {
@@ -375,6 +412,7 @@ export default function OperationsDashboard() {
       if (resFinanceTrucks.ok) setFinanceTrucks(await resFinanceTrucks.json());
       if (resAudit.ok) setAuditLogs(await resAudit.json());
       if (resUsers.ok) setUserAccounts(await resUsers.json());
+      if (resRejections.ok) setRejectionLogs(await resRejections.json());
 
       fetch('/api/admin/scale-tolerance')
         .then((res) => res.json())
@@ -418,13 +456,8 @@ export default function OperationsDashboard() {
   // USER MANAGEMENT HANDLERS
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uFullName || !uUsername || !uPassword) {
+    if (!uFullName.trim() || !uUsername.trim() || !uPassword.trim()) {
       alert('Full Name, Username, and Password are required.');
-      return;
-    }
-
-    if (uRole === 'FIELD' && !uAssignedProvince) {
-      alert('Please select an Assigned Province for Field Staff.');
       return;
     }
 
@@ -436,7 +469,7 @@ export default function OperationsDashboard() {
         email: uUsername,
         password: uPassword,
         role: uRole,
-        assignedProvinces: uRole === 'FIELD' ? uAssignedProvince : 'Preah Vihear,Stung Treng,Ratanakiri,Mondolkiri',
+        assignedProvinces: uAssignedProvince || (uRole === 'FIELD' ? 'Preah Vihear' : 'na'),
         status: uStatus,
       }),
     });
@@ -504,13 +537,21 @@ export default function OperationsDashboard() {
     }
   };
 
-  // Cross Auto-Fill Helper: Search farmer details by Family Code across Farmer Profiles, Specs, and Purchases
-  const findFarmerByFamilyCode = (code: string) => {
+  // Cross Auto-Fill Helper: Search farmer details by Family Code AND Village across Farmer Profiles, Specs, and Purchases
+  const findFarmerByFamilyCode = (code: string, targetVillage?: string) => {
     const normalized = code.trim().toLowerCase();
     if (!normalized) return null;
+    const normVillage = targetVillage?.trim().toLowerCase();
+
+    // Helper to check match: must match family code, and if targetVillage is specified, must match village
+    const isMatch = (item: { familyCode?: string; village?: string }) => {
+      if (item.familyCode?.trim().toLowerCase() !== normalized) return false;
+      if (normVillage && item.village?.trim().toLowerCase() !== normVillage) return false;
+      return true;
+    };
 
     // 1. Search Farmer Payment Profiles
-    const profileMatch = farmerProfiles.find((f) => f.familyCode?.trim().toLowerCase() === normalized);
+    const profileMatch = farmerProfiles.find(isMatch) || (!normVillage ? farmerProfiles.find((f) => f.familyCode?.trim().toLowerCase() === normalized) : null);
     if (profileMatch) {
       return {
         farmerName: profileMatch.farmerName,
@@ -521,7 +562,7 @@ export default function OperationsDashboard() {
     }
 
     // 2. Search Specs Records
-    const specsMatch = specsList.find((s) => s.familyCode?.trim().toLowerCase() === normalized);
+    const specsMatch = specsList.find(isMatch) || (!normVillage ? specsList.find((s) => s.familyCode?.trim().toLowerCase() === normalized) : null);
     if (specsMatch) {
       return {
         farmerName: specsMatch.farmerName,
@@ -531,7 +572,7 @@ export default function OperationsDashboard() {
     }
 
     // 3. Search Purchase Records
-    const purchaseMatch = purchases.find((p) => p.familyCode?.trim().toLowerCase() === normalized);
+    const purchaseMatch = purchases.find(isMatch) || (!normVillage ? purchases.find((p) => p.familyCode?.trim().toLowerCase() === normalized) : null);
     if (purchaseMatch) {
       return {
         farmerName: purchaseMatch.farmerName,
@@ -546,10 +587,10 @@ export default function OperationsDashboard() {
   // Handlers for Family Code Auto-fill
   const handlePayFamilyCodeChange = (codeVal: string) => {
     setPayFamilyCode(codeVal);
-    const match = findFarmerByFamilyCode(codeVal);
+    const match = findFarmerByFamilyCode(codeVal, payVillage);
     if (match) {
       if (match.farmerName) setPayFarmerName(match.farmerName);
-      if (match.village) setPayVillage(match.village);
+      if (match.village && !payVillage) setPayVillage(match.village);
       if (match.phone && !payPhone) setPayPhone(match.phone);
       if (payRelationship === 'Self' && match.farmerName) {
         setPayAccountHolder(match.farmerName);
@@ -557,21 +598,55 @@ export default function OperationsDashboard() {
     }
   };
 
+  const handlePayVillageChange = (vName: string) => {
+    setPayVillage(vName);
+    if (payFamilyCode) {
+      const match = findFarmerByFamilyCode(payFamilyCode, vName);
+      if (match) {
+        if (match.farmerName) setPayFarmerName(match.farmerName);
+        if (match.phone && !payPhone) setPayPhone(match.phone);
+        if (payRelationship === 'Self' && match.farmerName) {
+          setPayAccountHolder(match.farmerName);
+        }
+      }
+    }
+  };
+
   const handleSpFamilyCodeChange = (codeVal: string) => {
     setSpFamilyCode(codeVal);
-    const match = findFarmerByFamilyCode(codeVal);
+    const match = findFarmerByFamilyCode(codeVal, spVillage);
     if (match) {
       if (match.farmerName) setSpFarmerName(match.farmerName);
-      if (match.village) setSpVillage(match.village);
+      if (match.village && !spVillage) setSpVillage(match.village);
+    }
+  };
+
+  const handleSpVillageChange = (vName: string) => {
+    setSpVillage(vName);
+    if (spFamilyCode) {
+      const match = findFarmerByFamilyCode(spFamilyCode, vName);
+      if (match) {
+        if (match.farmerName) setSpFarmerName(match.farmerName);
+      }
     }
   };
 
   const handlePFamilyCodeChange = (codeVal: string) => {
     setPFamilyCode(codeVal);
-    const match = findFarmerByFamilyCode(codeVal);
+    const match = findFarmerByFamilyCode(codeVal, pVillage);
     if (match) {
       if (match.farmerName) setPFarmerName(match.farmerName);
-      if (match.village) PVillage(match.village);
+      if (match.village && !pVillage) PVillage(match.village);
+    }
+  };
+
+  const handlePVillageChange = (vName: string) => {
+    PVillage(vName);
+    if (pFamilyCode) {
+      const match = findFarmerByFamilyCode(pFamilyCode, vName);
+      if (match) {
+        if (match.farmerName) setPFarmerName(match.farmerName);
+      }
     }
   };
 
@@ -3095,7 +3170,7 @@ export default function OperationsDashboard() {
                           <SearchableVillageSelect
                             villages={villages}
                             value={spVillage}
-                            onChange={(vName) => setSpVillage(vName)}
+                            onChange={(vName) => handleSpVillageChange(vName)}
                             placeholder="Select Target Village..."
                           />
                         </div>
@@ -3433,7 +3508,7 @@ export default function OperationsDashboard() {
                           <SearchableVillageSelect
                             villages={villages}
                             value={payVillage}
-                            onChange={(vName) => setPayVillage(vName)}
+                            onChange={(vName) => handlePayVillageChange(vName)}
                             placeholder="Select Target Village..."
                           />
                         </div>
@@ -4239,7 +4314,10 @@ export default function OperationsDashboard() {
 
                             return (
                               <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                                <td className="p-3 font-mono font-bold text-emerald-400">{pIdFormatted}</td>
+                                <td className="p-3 font-mono font-bold text-emerald-400">
+                                  {pIdFormatted}
+                                  {getRejectionIndicator('PurchaseRecord', p.id, p.transportRecordId, p.status)}
+                                </td>
                                 <td className="p-3 text-slate-400 text-[11px]">
                                   {new Date(p.createdAt).toLocaleDateString()}{' '}
                                   <span className="text-slate-500">{new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -4764,7 +4842,10 @@ export default function OperationsDashboard() {
 
                             return (
                               <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                                <td className="p-3 font-mono font-bold text-sky-400">{tIdFormatted}</td>
+                                <td className="p-3 font-mono font-bold text-sky-400">
+                                  {tIdFormatted}
+                                  {getRejectionIndicator('TransportRecord', t.id, null, t.status)}
+                                </td>
                                 <td className="p-3 text-slate-400 text-[11px]">
                                   {new Date(t.createdAt).toLocaleDateString()}{' '}
                                   <span className="text-slate-500">{new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -4958,6 +5039,7 @@ export default function OperationsDashboard() {
                         <span className="font-mono text-xs text-sky-300 font-extrabold mr-1">
                           TR-2026-{selectedEnRouteTransport.id.slice(-6).toUpperCase()}
                         </span>
+                        {getRejectionIndicator('TransportRecord', selectedEnRouteTransport.id)}
 
                         <button
                           type="button"
@@ -5354,11 +5436,7 @@ export default function OperationsDashboard() {
                           <tr key={intake.id} className="hover:bg-white/5 transition-colors">
                             <td className="p-3 font-mono font-bold text-sky-400">
                               {receivingIdFormatted}
-                              {(intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED') && (
-                                <div className="text-[10px] font-black text-red-400 animate-pulse flex items-center gap-1 mt-0.5">
-                                  <AlertOctagon className="w-3 h-3 text-red-400" /> Returned by Inventory
-                                </div>
-                              )}
+                              {getRejectionIndicator('WarehouseIntake', intake.id, intake.transportId, intake.status === 'REJECTED' || intake.inventoryStatus === 'REJECTED' ? 'REJECTED' : intake.status)}
                             </td>
                             <td className="p-3 text-slate-400 text-[11px]">
                               {new Date(intake.createdAt).toLocaleDateString()}{' '}
@@ -5634,7 +5712,10 @@ export default function OperationsDashboard() {
 
                         return (
                           <tr key={intake.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400">{wrIdFormatted}</td>
+                            <td className="p-3 font-mono font-bold text-sky-400">
+                              {wrIdFormatted}
+                              {getRejectionIndicator('WarehouseIntake', intake.id, intake.transportId, intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED' ? 'REJECTED' : intake.inventoryStatus)}
+                            </td>
                             <td className="p-3 text-slate-300">{new Date(intake.createdAt).toLocaleString()}</td>
                             <td className="p-3 font-bold text-white">
                               {transport.driverName}
@@ -5701,8 +5782,8 @@ export default function OperationsDashboard() {
                                   <button
                                     onClick={() => {
                                       setInvConfirmModalIntake(intake);
-                                      setInvLocationInput('Silo 01 - Stack A');
-                                      setInvNotesInput('');
+                                      setInvLocationInput(intake.inventoryLocation || '');
+                                      setInvNotesInput(intake.inventoryNotes || '');
                                     }}
                                     className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-extrabold text-[10px] shadow-sm shadow-purple-600/30 transition-all"
                                   >
@@ -5712,16 +5793,17 @@ export default function OperationsDashboard() {
                                     onClick={() =>
                                       setRejectionTarget({
                                         isOpen: true,
-                                        title: `Reject & Return Warehouse Intake WR-2026-${intake.id.slice(-6).toUpperCase()} to Warehouse Team`,
+                                        title: `Reject & Return Warehouse Intake WR-2026-${intake.id.slice(-6).toUpperCase()}`,
                                         entityType: 'WarehouseIntake',
                                         entityId: intake.id,
                                         defaultTargetModule: 'WAREHOUSE',
+                                        availableTargetModules: ['WAREHOUSE', 'FIELD'],
                                       })
                                     }
                                     className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
-                                    title="Reject Warehouse Scale Intake & Return to Warehouse Receiver for Correction"
+                                    title="Reject Warehouse Scale Intake & Return to Warehouse Receiver or Field Team for Correction"
                                   >
-                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject to Warehouse
+                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject / Return
                                   </button>
                                 </div>
                               ) : isRecorded ? (
@@ -5960,7 +6042,10 @@ export default function OperationsDashboard() {
 
                         return (
                           <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400">{trIdFormatted}</td>
+                            <td className="p-3 font-mono font-bold text-sky-400">
+                              {trIdFormatted}
+                              {getRejectionIndicator('TransportRecord', t.id, intake?.id, t.status)}
+                            </td>
                             <td className="p-3 font-mono font-bold text-purple-400">{wrIdFormatted}</td>
                             <td className="p-3 font-bold text-white">
                               {t.driverName}
@@ -6030,16 +6115,17 @@ export default function OperationsDashboard() {
                                       onClick={() =>
                                         setRejectionTarget({
                                           isOpen: true,
-                                          title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()} to Inventory Team`,
-                                          entityType: 'WarehouseIntake',
-                                          entityId: intake.id || t.id,
+                                          title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()}`,
+                                          entityType: 'TransportRecord',
+                                          entityId: t.id,
                                           defaultTargetModule: 'INVENTORY',
+                                          availableTargetModules: ['INVENTORY', 'WAREHOUSE', 'FIELD'],
                                         })
                                       }
                                       className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
-                                      title="Reject Inventory Record & Return to Inventory Team for Correction"
+                                      title="Reject Record & Return to Inventory, Warehouse, or Field for Correction"
                                     >
-                                      <AlertOctagon className="w-3.5 h-3.5" /> Reject to Inventory
+                                      <AlertOctagon className="w-3.5 h-3.5" /> Reject / Return
                                     </button>
                                   </div>
                                 ) : (
@@ -6065,16 +6151,17 @@ export default function OperationsDashboard() {
                                     onClick={() =>
                                       setRejectionTarget({
                                         isOpen: true,
-                                        title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()} to Inventory Team`,
-                                        entityType: 'WarehouseIntake',
-                                        entityId: intake.id || t.id,
+                                        title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()}`,
+                                        entityType: 'TransportRecord',
+                                        entityId: t.id,
                                         defaultTargetModule: 'INVENTORY',
+                                        availableTargetModules: ['INVENTORY', 'WAREHOUSE', 'FIELD'],
                                       })
                                     }
                                     className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
-                                    title="Reject Verification & Return to Inventory Team for Correction"
+                                    title="Reject Verification & Return to Inventory, Warehouse, or Field for Correction"
                                   >
-                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject to Inventory
+                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject / Return
                                   </button>
                                 </div>
                               )}
@@ -6216,12 +6303,18 @@ export default function OperationsDashboard() {
                         <label className="block text-slate-400 font-bold uppercase mb-1">Assigned Role</label>
                         <select
                           value={uRole}
-                          onChange={(e) => setURole(e.target.value as any)}
+                          onChange={(e) => {
+                            const newRole = e.target.value as any;
+                            setURole(newRole);
+                            if (newRole !== 'FIELD') setUAssignedProvince('na');
+                            else if (uAssignedProvince === 'na') setUAssignedProvince('Preah Vihear');
+                          }}
                           className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-white font-bold"
                         >
-                          <option value="FIELD">🌾 Field Staff</option>
-                          <option value="WAREHOUSE">🏬 Warehouse Staff</option>
-                          <option value="FINANCE">💳 Finance Staff</option>
+                          <option value="FIELD">🌾 Field Team</option>
+                          <option value="WAREHOUSE">🏬 Warehouse Team</option>
+                          <option value="INVENTORY">📦 Inventory Team</option>
+                          <option value="FINANCE">💳 Finance Team</option>
                           <option value="ADMIN">⚙️ System Admin</option>
                         </select>
                       </div>
@@ -6239,21 +6332,20 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
-                    {uRole === 'FIELD' && (
-                      <div>
-                        <label className="block text-slate-400 font-bold uppercase mb-1">Assigned Province *</label>
-                        <select
-                          value={uAssignedProvince}
-                          onChange={(e) => setUAssignedProvince(e.target.value)}
-                          className="w-full bg-[#1e293b] border border-purple-500/50 rounded-lg p-2.5 text-white font-bold"
-                        >
-                          <option value="Preah Vihear">Preah Vihear</option>
-                          <option value="Stung Treng">Stung Treng</option>
-                          <option value="Ratanakiri">Ratanakiri</option>
-                          <option value="Mondolkiri">Mondolkiri</option>
-                        </select>
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-slate-400 font-bold uppercase mb-1">Assigned Province *</label>
+                      <select
+                        value={uAssignedProvince}
+                        onChange={(e) => setUAssignedProvince(e.target.value)}
+                        className="w-full bg-[#1e293b] border border-purple-500/50 rounded-lg p-2.5 text-white font-bold"
+                      >
+                        <option value="Preah Vihear">Preah Vihear</option>
+                        <option value="Stung Treng">Stung Treng</option>
+                        <option value="Ratanakiri">Ratanakiri</option>
+                        <option value="Mondolkiri">Mondolkiri</option>
+                        <option value="na">NA (Global / Online Access)</option>
+                      </select>
+                    </div>
 
                     <button
                       type="submit"
@@ -6303,14 +6395,16 @@ export default function OperationsDashboard() {
                                     ? 'bg-emerald-500/20 text-emerald-400'
                                     : u.role === 'WAREHOUSE'
                                     ? 'bg-sky-500/20 text-sky-400'
+                                    : u.role === 'INVENTORY'
+                                    ? 'bg-indigo-500/20 text-indigo-400'
                                     : 'bg-amber-500/20 text-amber-400'
                                 }`}
                               >
-                                {u.role === 'FIELD' ? '🌾 FIELD' : u.role === 'WAREHOUSE' ? '🏬 WAREHOUSE' : u.role === 'FINANCE' ? '💳 FINANCE' : '⚙️ ADMIN'}
+                                {u.role === 'FIELD' ? '🌾 FIELD' : u.role === 'WAREHOUSE' ? '🏬 WAREHOUSE' : u.role === 'INVENTORY' ? '📦 INVENTORY' : u.role === 'FINANCE' ? '💳 FINANCE' : '⚙️ ADMIN'}
                               </span>
-                              {u.role === 'FIELD' && u.assignedProvinces && (
-                                <div className="text-[10px] text-emerald-400 font-mono mt-0.5">
-                                  📍 {u.assignedProvinces}
+                              {u.assignedProvinces && (
+                                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                  📍 {u.assignedProvinces === 'na' ? 'NA (Global Access)' : u.assignedProvinces}
                                 </div>
                               )}
                             </td>
@@ -6941,7 +7035,7 @@ export default function OperationsDashboard() {
                     required
                     value={invLocationInput}
                     onChange={(e) => setInvLocationInput(e.target.value)}
-                    placeholder="e.g. Silo 02 - Bay 4 / Stack A"
+                    placeholder="e.g. Silo 01 - Stack A / Bay 4"
                     className="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white font-bold focus:border-purple-500"
                   />
                 </div>
