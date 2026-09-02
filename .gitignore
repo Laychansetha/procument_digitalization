@@ -65,7 +65,8 @@ scripts/setup-jdk.ps1
 *.xlsx
 username_roles.csv
 
-# ─── Local Scratch / Test Scripts & Obsolete Guides ───────────────────────────
+# ─── Local Scratch / Test Scripts, Memory & Internal Documentation ────────────
+PROJECT_MEMORY.md
 scripts/check*
 scripts/test*
 DEPLOYMENT_DESKTOP_GUIDE.md
