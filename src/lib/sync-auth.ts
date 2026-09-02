@@ -94,15 +94,7 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
   }
 
   if (!fieldUser) {
-    fieldUser = await db.user.create({
-      data: {
-        name: 'Mobile Field Inspector',
-        email: 'field.mobile@ibisrice.org',
-        password: '$2a$10$e8w4G2X0tXm7P5Q1wYnNveO8e7wQ5d4v3c2b1a0z9y8x7w6v5u4t3',
-        role: 'FIELD',
-        status: 'ACTIVE',
-      },
-    });
+    throw new Error('Unauthorized: No active field user found in database.');
   }
 
   return {

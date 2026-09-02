@@ -37,37 +37,6 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
 
-    // Embedded Offline Test Account for Field Testing without Server
-    if ((cleanEmail.toLowerCase() == 'testing' || cleanEmail.toLowerCase() == 'testing@ibisrice.com') &&
-        cleanPassword == 'TestingFirst-12345') {
-      final testUser = <String, dynamic>{
-        'id': 'test_field_inspector',
-        'name': 'Field Inspector (Test Mode)',
-        'email': 'testing@ibisrice.com',
-        'role': 'FIELD',
-        'assignedProvinces': 'Preah Vihear, Stung Treng, Mondulkiri, Ratanakiri',
-      };
-
-      // Save active session locally
-      await prefs.setBool(keyIsLoggedIn, true);
-      await prefs.setString(keyUserId, testUser['id']!.toString());
-      await prefs.setString(keyUserName, testUser['name']!.toString());
-      await prefs.setString(keyUserEmail, testUser['email']!.toString());
-      await prefs.setString(keyUserRole, testUser['role']!.toString());
-      await prefs.setString(keyAssignedProvinces, testUser['assignedProvinces']!.toString());
-
-      // Cache credentials and user payload for offline re-authentication
-      await prefs.setString(keyCachedEmail, cleanEmail.toLowerCase());
-      await prefs.setString(keyCachedPassword, cleanPassword);
-      await prefs.setString(keyCachedUserData, jsonEncode(testUser));
-
-      return AuthResult(
-        success: true,
-        message: '⚡ Test Account: Offline login successful!',
-        userData: testUser,
-      );
-    }
-
     try {
       final uri = Uri.parse('${AppConfig.baseUrl}/api/auth/mobile-login');
       final response = await http

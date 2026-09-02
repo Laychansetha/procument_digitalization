@@ -5,7 +5,7 @@ class AppConfig {
   static const String _keyBaseUrl = 'server_base_url';
   
   /// Default Server Base URL
-  static String baseUrl = 'http://192.168.1.100:3000';
+  static String baseUrl = 'https://procurement.icsserver.com';
 
   /// Load persisted server URL from SharedPreferences
   static Future<void> loadBaseUrl() async {

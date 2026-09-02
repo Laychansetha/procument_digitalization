@@ -461,42 +461,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 16),
-
-                        // Offline Testing Mode Banner
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.skyBlue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.skyBlue.withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.flash_on, color: AppTheme.skyBlue, size: 18),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'Offline Testing Account:\nUsername: testing · Pass: TestingFirst-12345',
-                                  style: TextStyle(fontSize: 10, color: AppTheme.skyBlue, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  _usernameController.text = 'testing';
-                                  _passwordController.text = 'TestingFirst-12345';
-                                },
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: const Text('Fill', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.emeraldLight)),
-                              ),
-                            ],
-                          ),
-                        ),
-
                         const SizedBox(height: 20),
 
                         // Server IP & Settings Footer Row

@@ -57,31 +57,6 @@ async function main() {
     });
   }
 
-  // 2. Create Default Alias Core Accounts (.org & .com) for backward compatibility
-  const coreAccounts = [
-    { email: 'admin@ibisrice.com', name: 'admin', role: 'ADMIN', provinces: 'na', pass: 'Setha*2026' },
-    { email: 'field@ibisrice.com', name: 'field', role: 'FIELD', provinces: 'Preah Vihear,Stung Treng,Ratanakiri,Mondulkiri', pass: 'PVH-piseth-2026' },
-    { email: 'warehouse@ibisrice.com', name: 'warehouse', role: 'WAREHOUSE', provinces: 'na', pass: 'KPT-phearun-2026' },
-    { email: 'inventory@ibisrice.com', name: 'inventory', role: 'INVENTORY', provinces: 'na', pass: 'PNH-bousong-2026' },
-    { email: 'finance@ibisrice.com', name: 'finance', role: 'FINANCE', provinces: 'na', pass: 'ST-heap-2026' },
-  ];
-
-  for (const acc of coreAccounts) {
-    const passHash = await bcrypt.hash(acc.pass, 10);
-    await prisma.user.upsert({
-      where: { email: acc.email },
-      update: { name: acc.name, password: passHash, role: acc.role as any, assignedProvinces: acc.provinces, status: 'ACTIVE' },
-      create: {
-        name: acc.name,
-        email: acc.email,
-        password: passHash,
-        role: acc.role as any,
-        assignedProvinces: acc.provinces,
-        status: 'ACTIVE',
-      },
-    });
-  }
-
   // 3. Seed Official Target Villages & Provinces from Excel configuration
   const villageData = [
     // Preah Vihear

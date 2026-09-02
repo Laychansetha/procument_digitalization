@@ -1,6 +1,6 @@
 # Amazon Lightsail VPS Deployment Guide — IBIS Rice Procurement System
 
-This guide outlines the exact steps to deploy the **IBIS Rice Procurement System** to your existing **Amazon Lightsail VPS running Amazon Linux (2023)** under subdomain **`procurment.icsserver.com`**, running alongside your existing **ICS Server (`icsserver.com`)** without disruption.
+This guide outlines the exact steps to deploy the **IBIS Rice Procurement System** to your existing **Amazon Lightsail VPS running Amazon Linux (2023)** under subdomain **`procurement.icsserver.com`**, running alongside your existing **ICS Server (`icsserver.com`)** without disruption.
 
 ---
 
@@ -9,7 +9,7 @@ This guide outlines the exact steps to deploy the **IBIS Rice Procurement System
 | Service | Host / Domain | Internal Port | Technology | Notes |
 |---------|---------------|---------------|------------|-------|
 | **ICS Server** | `icsserver.com` | `127.0.0.1:9000` | Survey Solutions (Docker container) | Existing container moved from port 80 to 9000 |
-| **IBIS Rice Procurement** | `procurment.icsserver.com` | `127.0.0.1:3000` | Next.js + Node.js (PM2 managed) | New procurement system |
+| **IBIS Rice Procurement** | `procurement.icsserver.com` | `127.0.0.1:3000` | Next.js + Node.js (PM2 managed) | New procurement system |
 | **Reverse Proxy** | Public Port 80 / 443 | - | Nginx | Routes traffic by domain header |
 | **Database** | PostgreSQL | `5432` | PostgreSQL (Database: `ibis_db`) | Isolated DB on existing PostgreSQL server |
 
@@ -22,7 +22,7 @@ This guide outlines the exact steps to deploy the **IBIS Rice Procurement System
 3. Navigate to **DNS → Records → Add record**.
 4. Configure:
    - **Type**: `A`
-   - **Name**: `procurment`
+   - **Name**: `procurement`
    - **IPv4 Address**: Your Lightsail VPS Static IP (same IP as `icsserver.com`)
    - **Proxy Status**: 🟠 Proxied (Orange Cloud ON)
 5. Save the record.
@@ -78,13 +78,13 @@ sudo docker run -d -p 9000:80 --name hq \
 ```
 
 ### 3.2 Add Nginx Configuration
-Create Nginx configuration at `/etc/nginx/conf.d/procurment.icsserver.com.conf`:
+Create Nginx configuration at `/etc/nginx/conf.d/procurement.icsserver.com.conf`:
 
 ```bash
-sudo nano /etc/nginx/conf.d/procurment.icsserver.com.conf
+sudo nano /etc/nginx/conf.d/procurement.icsserver.com.conf
 ```
 
-Paste content from `deployment/nginx/procurment.icsserver.com.conf`:
+Paste content from `deployment/nginx/procurement.icsserver.com.conf`:
 ```nginx
 # ICS Server (Survey Solutions)
 server {
@@ -105,7 +105,7 @@ server {
 # IBIS Rice Procurement System
 server {
     listen 80;
-    server_name procurment.icsserver.com;
+    server_name procurement.icsserver.com;
     client_max_body_size 25M;
 
     location / {
@@ -155,7 +155,7 @@ nano .env
 Set `.env` parameters:
 ```env
 DATABASE_URL="postgresql://dbmasteruser:YOUR_POSTGRES_PASSWORD@localhost:5432/ibis_db?schema=public"
-NEXTAUTH_URL="https://procurment.icsserver.com"
+NEXTAUTH_URL="https://procurement.icsserver.com"
 NEXTAUTH_SECRET="your-generated-64-character-secret"
 PORT=3000
 HOSTNAME="0.0.0.0"
@@ -196,7 +196,7 @@ sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
 ## ✅ Verification Checklist
 
 1. `https://icsserver.com` → Survey Solutions loads normally.
-2. `https://procurment.icsserver.com` → IBIS Rice Procurement System login loads.
+2. `https://procurement.icsserver.com` → IBIS Rice Procurement System login loads.
 3. `pm2 status` → `ibis-app` status shows `online`.
 4. `sudo docker ps` → `hq` container running on `0.0.0.0:9000->80/tcp`.
 

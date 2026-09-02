@@ -3,7 +3,7 @@
 # IBIS RICE Procurement System — Amazon Linux Production Deploy Script
 # Runs ON the Lightsail VPS (Amazon Linux 2023), executed via SSH or CI/CD.
 #
-# Target Subdomain: procurment.icsserver.com
+# Target Subdomain: procurement.icsserver.com
 # Port: 3000
 # Database: PostgreSQL (database: ibis_db)
 # =============================================================================
@@ -111,7 +111,7 @@ echo ""
 log "============================================================"
 success "  IBIS RICE Deployment Complete: $(date '+%Y-%m-%d %H:%M:%S')"
 log "============================================================"
-log "Target Subdomain: https://procurment.icsserver.com"
+log "Target Subdomain: https://procurement.icsserver.com"
 log "Check logs with:  pm2 logs $APP_NAME"
 log "Check status:     pm2 status"
 echo ""
