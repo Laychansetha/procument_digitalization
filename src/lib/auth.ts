@@ -41,11 +41,6 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Account has been deactivated. Please contact System Admin.');
         }
 
-        // Role verification against assigned database role
-        if (credentials.selectedRole && user.role !== credentials.selectedRole) {
-          throw new Error(`Selected role (${credentials.selectedRole}) does not match your assigned account role (${user.role}).`);
-        }
-
         const isValid = await bcrypt.compare(credentials.password, user.password);
         if (!isValid) {
           throw new Error('Invalid username or password.');

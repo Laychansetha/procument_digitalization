@@ -54,7 +54,7 @@ success "Updated to commit: $(git log -1 --format='%h — %s')"
 
 # ─── Step 3: Install Production Dependencies ────────────────────────────────
 log "Step 3/8 — Installing production dependencies..."
-npm ci --prefer-offline
+npm install
 success "Dependencies installed."
 
 # ─── Step 4: Generate Prisma Client ──────────────────────────────────────────

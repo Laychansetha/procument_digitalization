@@ -8,7 +8,6 @@ import { Lock, Mail, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react'
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'FIELD' | 'WAREHOUSE' | 'INVENTORY' | 'FINANCE' | 'ADMIN'>('ADMIN');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -28,12 +27,11 @@ export default function LoginPage() {
       const res = await signIn('credentials', {
         email,
         password,
-        selectedRole,
         redirect: false,
       });
 
       if (res?.error) {
-        setError(res.error || 'Invalid credentials or role mismatch.');
+        setError(res.error || 'Invalid username or password.');
       } else {
         router.push('/');
         router.refresh();
@@ -43,17 +41,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickRoleSelect = (
-    role: 'FIELD' | 'WAREHOUSE' | 'INVENTORY' | 'FINANCE' | 'ADMIN',
-    quickUsername: string,
-    quickPass: string
-  ) => {
-    setSelectedRole(role);
-    setEmail(quickUsername);
-    setPassword(quickPass);
-    setError('');
   };
 
   return (

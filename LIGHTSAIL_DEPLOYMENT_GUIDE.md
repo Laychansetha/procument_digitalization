@@ -41,8 +41,10 @@ Install required packages using Amazon Linux `dnf`:
 # 1. Update system packages
 sudo dnf update -y
 
-# 2. Install Node.js (v18+) if not installed
-sudo dnf install -y nodejs
+# 2. Install Node.js 20 (Next.js requires Node >= 20.9.0)
+sudo npm install -g n
+sudo n 20
+hash -r
 
 # 3. Install Nginx reverse proxy
 sudo dnf install -y nginx
@@ -163,8 +165,8 @@ HOSTNAME="0.0.0.0"
 
 ### 5.2 Build & Initialize Database
 ```bash
-# 1. Install dependencies
-npm ci
+# 1. Install dependencies (fetches platform native bindings for Linux)
+npm install
 
 # 2. Generate Prisma client
 npx prisma generate
