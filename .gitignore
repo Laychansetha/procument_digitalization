@@ -39,14 +39,39 @@ prisma/*.db-journal
 .env.*.local
 .env.production
 .env.staging
-# Allow .env.example so developers can get the template
+# Allow .env.example and .env.production.example template
 !.env.example
+!.env.production.example
+
+# ─── Runtime User Uploads ─────────────────────────────────────────────────────
+/public/uploads/*
+!/public/uploads/.gitkeep
 
 # ─── Android / Flutter build artifacts ────────────────────────────────────────
 *.apk
 *.aab
 *.keystore
 *.jks
+field_app/android/app/build/
+field_app/build/
+field_app/.dart_tool/
+
+# ─── Windows Development Batch & PowerShell Scripts ───────────────────────────
+*.bat
+create-app-icons.ps1
+scripts/setup-jdk.ps1
+
+# ─── Local Data & Reference Spreadsheets ──────────────────────────────────────
+*.xlsx
+username_roles.csv
+
+# ─── Local Scratch / Test Scripts & Obsolete Guides ───────────────────────────
+scripts/check*
+scripts/test*
+DEPLOYMENT_DESKTOP_GUIDE.md
+README_DESKTOP_DEPLOYMENT.md
+VPS_SETUP_GUIDE.md
+cloudflared_config.yml.example
 
 # ─── Deployment packages (large zip archives) ─────────────────────────────────
 *.zip
@@ -78,6 +103,7 @@ desktop.ini
 # ─── IDE / editor config folders (machine-specific symlinks / settings) ───────
 .claude/
 .windsurf/
+.agents/
 
 # ─── Antigravity IDE internal lock file ───────────────────────────────────────
 skills-lock.json
