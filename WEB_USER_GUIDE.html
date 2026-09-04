@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IBIS Rice Procurement System — Web User Guide</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 18mm 16mm;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.55;
+    font-size: 13.5px;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+  .header {
+    border-bottom: 2px solid #10b981;
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .header h1 {
+    font-size: 22px;
+    margin: 0 0 4px 0;
+    color: #0f172a;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .header .subtitle {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+  }
+  .badge-app {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .section-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+    page-break-inside: avoid;
+  }
+  .section-card.login-card {
+    background: #f8fafc;
+    border-left: 4px solid #3b82f6;
+  }
+  .role-card {
+    border-left: 4px solid #10b981;
+  }
+  .role-card.warehouse {
+    border-left-color: #f59e0b;
+  }
+  .role-card.inventory {
+    border-left-color: #8b5cf6;
+  }
+  .role-card.finance {
+    border-left-color: #06b6d4;
+  }
+  .role-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 8px;
+  }
+  .role-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .role-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .role-badge.field { background: #d1fae5; color: #065f46; }
+  .role-badge.warehouse { background: #fef3c7; color: #92400e; }
+  .role-badge.inventory { background: #ede9fe; color: #5b21b6; }
+  .role-badge.finance { background: #cffafe; color: #155e75; }
+
+  .meta-block {
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .meta-label {
+    font-weight: 700;
+    color: #475569;
+  }
+
+  .tasks-list {
+    margin: 0;
+    padding-left: 18px;
+  }
+  .tasks-list li {
+    margin-bottom: 9px;
+  }
+  .tasks-list strong {
+    color: #0f172a;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 12.5px;
+    page-break-inside: avoid;
+  }
+  th {
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+  }
+  td {
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  .footer-note {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    page-break-inside: avoid;
+  }
+  .url-highlight {
+    font-family: monospace;
+    font-weight: 700;
+    color: #0284c7;
+    background: #e0f2fe;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .note-tip {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #1e40af;
+    border-radius: 0 4px 4px 0;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>IBIS Rice Procurement System</h1>
+      <p class="subtitle">Official Web Interface User Guide — Staff Operations & Workflow</p>
+    </div>
+    <div>
+      <span class="badge-app">Version 1.0 • 2026</span>
+    </div>
+  </div>
+
+  <!-- 1. Login Section -->
+  <div class="section-card login-card">
+    <div class="role-title-row">
+      <h2 class="role-title">🔑 1. How to Log In</h2>
+      <span class="url-highlight">https://procurement.icsserver.com</span>
+    </div>
+    <ol style="margin: 0; padding-left: 20px;">
+      <li>Open your web browser (Google Chrome, Microsoft Edge, or Safari).</li>
+      <li>Navigate to: <strong class="url-highlight">https://procurement.icsserver.com</strong></li>
+      <li>Enter your assigned <strong>Username</strong> (or Email) and <strong>Password</strong>.</li>
+      <li>Click <strong>Sign In to Operations Portal</strong>.</li>
+    </ol>
+    <div class="note-tip">
+      <strong>Smart Role Detection:</strong> The portal automatically detects your official role upon login and opens your team's workspace with only the features and tools you need.
+    </div>
+  </div>
+
+  <!-- 2. Field Team -->
+  <div class="section-card role-card">
+    <div class="role-title-row">
+      <h2 class="role-title">🌾 2. Field Team Guide</h2>
+      <span class="role-badge field">ROLE: FIELD</span>
+    </div>
+    <div class="meta-block">
+      <span class="meta-label">Workspace View:</span> <strong>Field Operations</strong> portal tab.<br>
+      <span class="meta-label">Team Purpose:</span> Review, manage, and verify field quality inspections, farmer payment registration profiles, purchase invoices, and transport dispatches.
+    </div>
+    <ol class="tasks-list">
+      <li><strong>Quality Specs Inspection:</strong> View and record paddy quality tests (Moisture %, Foreign Matter %, Paddy Variety, and Quality Grade). The system calculates the official Base Purchase Price (KHR/kg) automatically.</li>
+      <li><strong>Farmer Payment Profile:</strong> Register or update farmer family codes, contact numbers, and bank account information (Bank name, account number, account holder name, and passbook photos).</li>
+      <li><strong>Weighing & Purchase Records:</strong> Manage purchase invoices with individual sack weights (kg), additional premiums (KHR/kg), seed repayment deductions, and digital signatures.</li>
+      <li><strong>Transport Dispatch:</strong> Link purchased farmer invoices to transport trucks, enter driver details, upload truck photos, and assign destination warehouses (<code>CACC KPT</code>, <code>Amru Nature KPG</code>, <code>Other</code>). If returned by Warehouse (<code>REJECTED</code>), edit manifest details and resubmit.</li>
+    </ol>
+  </div>
+
+  <!-- 3. Warehouse Team -->
+  <div class="section-card role-card warehouse">
+    <div class="role-title-row">
+      <h2 class="role-title">🏬 3. Warehouse Team Guide</h2>
+      <span class="role-badge warehouse">ROLE: WAREHOUSE</span>
+    </div>
+    <div class="meta-block">
+      <span class="meta-label">Workspace View:</span> <strong>Warehouse Receiving</strong> portal with real-time status metric cards.<br>
+      <span class="meta-label">Team Purpose:</span> Receive incoming trucks from the field, weigh gross and tare scale weights, check cargo manifests, and upload scale photos.
+    </div>
+    <ol class="tasks-list">
+      <li><strong>Select Incoming Truck:</strong> Review trucks currently en route and click <strong>Select Truck</strong> to begin the receiving intake.</li>
+      <li><strong>Inspect Cargo Manifest:</strong> Click <strong>View Details</strong> or <strong>Download Truck CSV</strong> to audit all loaded farmer invoices, sack counts, and field weights before weighing.</li>
+      <li><strong>Weighbridge Intake:</strong> Enter the full truck weight (<strong>Gross Weight</strong>) and empty truck weight (<strong>Tare Weight</strong>). The system computes Warehouse Net Weight (kg) and checks weight variance against field weights automatically.</li>
+      <li><strong>Upload Scale Photos:</strong> Upload clear photos of the <strong>Gross Scale Display</strong>, <strong>Tare Scale Display</strong>, and physical <strong>Transport Invoice</strong>.</li>
+      <li><strong>Rejections & Resubmissions:</strong> If an intake is returned by Inventory (<code>🔴 Returned by Inventory</code>), edit weights or photos and click <strong>Resubmit</strong>. If cargo issues belong to the field team, click <strong>Reject to Field</strong>.</li>
+    </ol>
+  </div>
+
+  <!-- 4. Inventory Team -->
+  <div class="section-card role-card inventory">
+    <div class="role-title-row">
+      <h2 class="role-title">📦 4. Inventory Team Guide</h2>
+      <span class="role-badge inventory">ROLE: INVENTORY</span>
+    </div>
+    <div class="meta-block">
+      <span class="meta-label">Workspace View:</span> <strong>Inventory Control</strong> queue.<br>
+      <span class="meta-label">Team Purpose:</span> Assign physical storage locations (silos, stacks, bays) for received paddy shipments and confirm stack inventory records before finance payout.
+    </div>
+    <ol class="tasks-list">
+      <li><strong>Pending Intakes Queue:</strong> View all shipments that have been weighed and received by the Warehouse Team waiting for storage placement.</li>
+      <li><strong>Assign Storage Location:</strong> Select or enter the physical storage location (e.g., <code>Silo 01</code>, <code>Stack A</code>, <code>Warehouse Bay 3</code>) and add quality or moisture observation notes.</li>
+      <li><strong>Confirm Inventory:</strong> Click <strong>Confirm Inventory</strong> to verify stack placement. This automatically advances the shipment to the Finance Team for disbursement.</li>
+      <li><strong>Handle Rejections:</strong> If scale weights or photos are incorrect, click <strong>Reject to Warehouse</strong>. If Finance returned a record (<code>🔴 Returned by Finance</code>), update storage notes or return to Warehouse.</li>
+    </ol>
+  </div>
+
+  <!-- 5. Finance Team -->
+  <div class="section-card role-card finance">
+    <div class="role-title-row">
+      <h2 class="role-title">💳 5. Finance Team Guide</h2>
+      <span class="role-badge finance">ROLE: FINANCE</span>
+    </div>
+    <div class="meta-block">
+      <span class="meta-label">Workspace View:</span> <strong>Finance Disbursement</strong> table with workflow status filters.<br>
+      <span class="meta-label">Team Purpose:</span> Audit scale weight reconciliation, verify farmer bank account details and passbook photos, authorize disbursements, and mark payments complete.
+    </div>
+    <ol class="tasks-list">
+      <li><strong>Audit & Reconcile Shipment:</strong> Open any shipment marked <code>📦 Inventory Recorded</code> to inspect weight variance (Field Net Weight vs. Warehouse Net Weight) and review linked Farmer Payment Profiles and bank passbook photos.</li>
+      <li><strong>Authorize Payout:</strong> Once scale tolerance and bank documents are verified, click <strong>Verify</strong> to approve payment and mark disbursement complete (<code>✅ Payment Complete</code>).</li>
+      <li><strong>Print Reports:</strong> Click <strong>Print Summary</strong> to generate printable payment vouchers for accounting and bookkeeping records.</li>
+      <li><strong>Reject to Inventory:</strong> If bank details or weight data require correction, click <strong>Reject to Inventory</strong> and enter the audit reason.</li>
+    </ol>
+  </div>
+
+  <!-- Summary Table -->
+  <div class="section-card">
+    <h3 style="margin-top: 0; font-size: 15px; color: #0f172a;">📋 Quick Operational Summary Matrix</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 22%;">Team Role</th>
+          <th style="width: 33%;">Main Operational Focus</th>
+          <th style="width: 45%;">Key Actions & Functions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>🌾 Field Team</strong></td>
+          <td>Quality & Field Procurement</td>
+          <td>Inspection Specs, Farmer Profiles, Purchase Invoices, Transport Dispatches</td>
+        </tr>
+        <tr>
+          <td><strong>🏬 Warehouse Team</strong></td>
+          <td>Receiving & Weighbridge Scales</td>
+          <td>Select Truck, Gross/Tare Scale Weights, Scale Photos, Manifest Audit</td>
+        </tr>
+        <tr>
+          <td><strong>📦 Inventory Team</strong></td>
+          <td>Physical Storage & Stacking</td>
+          <td>Assign Silo/Stack Location, Confirm Inventory, Warehouse Rejection</td>
+        </tr>
+        <tr>
+          <td><strong>💳 Finance Team</strong></td>
+          <td>Audit, Reconciliation & Payout</td>
+          <td>Weight Reconciliation, Bank Document Check, Payment Approval, Reports</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Support Footer -->
+  <div class="footer-note">
+    <div>
+      <strong>Need Help or Password Reset?</strong> Contact System Administrator: <strong>chansetha</strong>
+    </div>
+    <div>
+      Portal: <strong>https://procurement.icsserver.com</strong>
+    </div>
+  </div>
+
+</body>
+</html>

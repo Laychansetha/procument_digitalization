@@ -194,17 +194,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
             ),
           ],
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.cleaning_services, size: 16, color: Color(0xFF0B0F19)),
-            label: const Text('Clear Synced Records', style: TextStyle(color: Color(0xFF0B0F19), fontWeight: FontWeight.bold)),
+            icon: const Icon(Icons.cleaning_services, size: 14, color: Color(0xFF0B0F19)),
+            label: const Text('Clear', style: TextStyle(color: Color(0xFF0B0F19), fontWeight: FontWeight.bold, fontSize: 13)),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.skyBlue,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: const Size(0, 36),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -435,10 +439,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
                           _confirmClearSyncedData();
                         },
                         icon: const Icon(Icons.cleaning_services_outlined, size: 16, color: AppTheme.skyBlue),
-                        label: const Text('Clear Synced Records from Storage', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
+                        label: const Text('Clear Synced Records', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: AppTheme.skyBlue),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
@@ -495,6 +499,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
           ],
         ),
         actions: [
+          // Clear Synced Records Icon Button (🧹)
+          IconButton(
+            icon: const Icon(Icons.cleaning_services_outlined, color: AppTheme.skyBlue, size: 19),
+            onPressed: _confirmClearSyncedData,
+            tooltip: 'Clear Synced Records',
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
+          ),
+          const SizedBox(width: 2),
           // Server Settings Icon (⚙️)
           IconButton(
             icon: const Icon(Icons.settings, color: AppTheme.skyBlue, size: 19),

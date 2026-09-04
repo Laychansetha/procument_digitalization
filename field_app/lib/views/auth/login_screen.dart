@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Icon(Icons.settings, color: AppTheme.skyBlue, size: 22),
                             SizedBox(width: 8),
                             Text(
-                              'Server IP & Connection',
+                              'Server Settings',
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
                             ),
                           ],
@@ -108,11 +108,56 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
+
+                    // Current Active Server URL Card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'CURRENT ACTIVE SERVER',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textMuted,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.cloud_done_outlined, size: 16, color: AppTheme.emeraldLight),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  AppConfig.baseUrl,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.emeraldLight,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     const Text(
-                      'Enter your central desktop server LAN IP address or Cloud URL (e.g. http://192.168.1.10:3000):',
+                      'Configure Server URL (e.g. https://procurement.icsserver.com):',
                       style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 8),
 
                     TextFormField(
                       controller: urlController,
@@ -463,27 +508,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 20),
 
-                        // Server IP & Settings Footer Row
-                        InkWell(
-                          onTap: _openServerSettingsModal,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.settings, size: 16, color: AppTheme.skyBlue),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Server Settings (${AppConfig.baseUrl})',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.skyBlue,
-                                    fontWeight: FontWeight.bold,
+                        // Server Settings Footer Button
+                        Center(
+                          child: InkWell(
+                            onTap: _openServerSettingsModal,
+                            borderRadius: BorderRadius.circular(8),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 14.0),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.settings, size: 16, color: AppTheme.skyBlue),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Server Settings',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.skyBlue,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.2,
+                                    ),
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
