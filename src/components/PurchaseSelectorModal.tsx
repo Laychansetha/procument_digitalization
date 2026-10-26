@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, X, CheckSquare, Square, Package, Scale, FileText, CheckCircle2 } from 'lucide-react';
+import { formatPurchaseId } from '@/lib/purchase-id';
 
 interface PurchaseSelectorModalProps {
   isOpen: boolean;
@@ -70,13 +71,15 @@ export default function PurchaseSelectorModal({
     const item = p.items?.[0] || {};
     const q = searchQuery.toLowerCase();
     const pIdFormatted = `pr-2026-${p.id.slice(-6)}`.toLowerCase();
+    const newIdFormatted = formatPurchaseId(p).toLowerCase();
     return (
       p.familyCode.toLowerCase().includes(q) ||
       p.farmerName.toLowerCase().includes(q) ||
       p.village.toLowerCase().includes(q) ||
       (item.variety || '').toLowerCase().includes(q) ||
       (p.purchasingStaffName || '').toLowerCase().includes(q) ||
-      pIdFormatted.includes(q)
+      pIdFormatted.includes(q) ||
+      newIdFormatted.includes(q)
     );
   });
 
@@ -191,7 +194,7 @@ export default function PurchaseSelectorModal({
                   {filteredList.map((p) => {
                     const item = p.items?.[0] || {};
                     const isSelected = selectedIds.includes(p.id);
-                    const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+                    const pIdFormatted = formatPurchaseId(p);
 
                     return (
                       <tr
@@ -209,7 +212,7 @@ export default function PurchaseSelectorModal({
                             className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
                           />
                         </td>
-                        <td className="p-3 font-mono font-bold text-emerald-400">{pIdFormatted}</td>
+                        <td className="p-3 font-mono font-bold text-emerald-400 whitespace-nowrap">{pIdFormatted}</td>
                         <td className="p-3 font-extrabold text-amber-400">{p.familyCode}</td>
                         <td className="p-3 font-bold text-white">{p.farmerName}</td>
                         <td className="p-3 text-slate-300">{p.village}</td>

@@ -267,6 +267,7 @@ model WarehouseIntake {
   transportInvoiceUrl  String?         // Photo of Truck Transport Invoice for Finance payment verification
   receivingStaffId     String
   receivingStaffName   String?
+  arrivedWarehouse     String?         // Actual warehouse where truck arrived e.g. W002, W003, W004, W005
   notes                String?
   inventoryStatus      String    @default("WAITING_FOR_INVENTORY") // WAITING_FOR_INVENTORY, INVENTORY_RECORDED
   inventoryStaffId     String?

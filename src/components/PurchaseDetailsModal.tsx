@@ -2,6 +2,7 @@
 
 import { X, CheckCircle2, User, Scale, ShieldCheck, MapPin, AlertCircle, FileSpreadsheet, Package } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
+import { formatPurchaseId } from '@/lib/purchase-id';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
     sackWeightsList = [];
   }
 
-  const purchaseIdFormatted = `PR-2026-${purchase.id.slice(-6).toUpperCase()}`;
+  const purchaseIdFormatted = formatPurchaseId(purchase);
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">

@@ -4,6 +4,8 @@ import { X, Scale, Camera, CheckCircle2, AlertTriangle, XCircle, FileSpreadsheet
 import { formatImageSrc } from '@/lib/image-utils';
 
 import RejectionHistorySection from '@/components/RejectionHistorySection';
+import { formatTransportId } from '@/lib/transport-id';
+import { formatPurchaseId } from '@/lib/purchase-id';
 
 interface FinanceTruckDetailsModalProps {
   isOpen: boolean;
@@ -28,7 +30,7 @@ export default function FinanceTruckDetailsModal({
   const intake = truckData.intake || {};
   const purchases = truckData.purchases || [];
 
-  const transportIdFormatted = `TR-2026-${transport.id?.slice(-6).toUpperCase()}`;
+  const transportIdFormatted = formatTransportId(transport);
   const intakeIdFormatted = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'Awaiting Intake';
 
   const fieldWeight = truckData.fieldWeight || 0;
@@ -112,7 +114,7 @@ export default function FinanceTruckDetailsModal({
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
       const f = p.farmerProfile || {};
-      const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+      const pIdFormatted = formatPurchaseId(p);
 
       rows.push([
         pIdFormatted,
@@ -395,11 +397,11 @@ export default function FinanceTruckDetailsModal({
                   {purchases.map((p: any) => {
                     const item = p.items?.[0] || {};
                     const f = p.farmerProfile || {};
-                    const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+                    const pIdFormatted = formatPurchaseId(p);
 
                     return (
                       <tr key={p.id} className="hover:bg-white/5">
-                        <td className="p-2.5 font-mono font-bold text-sky-400">{pIdFormatted}</td>
+                        <td className="p-2.5 font-mono font-bold text-sky-400 whitespace-nowrap">{pIdFormatted}</td>
                         <td className="p-2.5 font-bold text-[#ffffff]">
                           <div>{p.farmerName} ({p.village})</div>
                           <div className="font-extrabold text-amber-400 text-[10px]">🆔 {p.familyCode}</div>

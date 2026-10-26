@@ -3,6 +3,7 @@
 import { Printer, X, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
 import { getReportTranslation } from '@/lib/report-translations';
+import { formatPurchaseId } from '@/lib/purchase-id';
 
 interface PrintReceiptModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
     window.print();
   };
 
-  const receiptId = `PR-2026-${purchase.id.slice(-6).toUpperCase()}`;
+  const receiptId = formatPurchaseId(purchase);
 
   return (
     <>

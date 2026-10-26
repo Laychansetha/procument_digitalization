@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Search, X, CheckCircle2, Filter, Eye } from 'lucide-react';
+import { formatPurchaseId } from '@/lib/purchase-id';
 
 interface SpecsRecordItem {
   id: string;
@@ -56,7 +57,7 @@ export default function SpecsSelectorModal({
 
   const handleCardClick = (spec: SpecsRecordItem, linkedPurchase: any) => {
     if (linkedPurchase) {
-      const pIdFormatted = `PR-2026-${linkedPurchase.id.slice(-6).toUpperCase()}`;
+      const pIdFormatted = formatPurchaseId(linkedPurchase);
       const confirmUseAgain = confirm(
         `⚠️ This Quality Specs inspection record (Family Code: ${spec.familyCode}, Variety: ${spec.paddyType}, Grade: ${spec.selectedGrade}) has already been used for Purchase Record ${pIdFormatted}.\n\nDo you want to use it again to create another purchase record?`
       );
@@ -117,7 +118,7 @@ export default function SpecsSelectorModal({
             filteredSpecs.map((spec) => {
               const linkedPurchase = findPurchasedMatch(spec);
               const isPurchased = Boolean(linkedPurchase);
-              const pIdFormatted = linkedPurchase ? `PR-2026-${linkedPurchase.id.slice(-6).toUpperCase()}` : '';
+              const pIdFormatted = linkedPurchase ? formatPurchaseId(linkedPurchase) : '';
 
               return (
                 <div

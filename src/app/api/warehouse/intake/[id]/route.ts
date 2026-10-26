@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { getWarehouseId } from '@/lib/warehouse-config';
 
 export async function PUT(
   request: Request,
@@ -40,6 +41,8 @@ export async function PUT(
     const grossScalePhotoUrl = body.grossScalePhotoUrl ?? existing.grossScalePhotoUrl;
     const tareScalePhotoUrl = body.tareScalePhotoUrl ?? existing.tareScalePhotoUrl;
     const transportInvoiceUrl = body.transportInvoiceUrl ?? existing.transportInvoiceUrl;
+    const receivingStaffName = body.receivingStaffName ? String(body.receivingStaffName).trim() : undefined;
+    const arrivedWarehouse = body.arrivedWarehouse ? getWarehouseId(body.arrivedWarehouse) : undefined;
 
     const netWeight = Math.max(0, grossWeight - tareWeight);
     const fieldWeight = existing.transport?.totalFieldWeight || 0;
@@ -57,6 +60,8 @@ export async function PUT(
         grossScalePhotoUrl,
         tareScalePhotoUrl,
         transportInvoiceUrl,
+        ...(receivingStaffName ? { receivingStaffName } : {}),
+        ...(arrivedWarehouse ? { arrivedWarehouse } : {}),
         status: 'RECEIVED',
         inventoryStatus: 'WAITING_FOR_INVENTORY',
       },

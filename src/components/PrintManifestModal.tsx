@@ -2,6 +2,9 @@
 
 import { X, Printer } from 'lucide-react';
 import { getReportTranslation } from '@/lib/report-translations';
+import { formatTransportId } from '@/lib/transport-id';
+import { formatPurchaseId } from '@/lib/purchase-id';
+import { getWarehouseDisplay } from '@/lib/warehouse-config';
 
 interface PrintManifestModalProps {
   isOpen: boolean;
@@ -18,7 +21,7 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
     window.print();
   };
 
-  const transportId = `TR-2026-${transport.id.slice(-6).toUpperCase()}`;
+  const transportId = formatTransportId(transport);
   const purchases = transport.purchases || [];
 
   return (
@@ -64,7 +67,7 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
               </div>
               <div>
                 <p><strong className="text-slate-600">{t.loadingStation}</strong> {transport.loadingLocation || 'Preah Vihear'}</p>
-                <p><strong className="text-slate-600">{t.destinationWarehouse}</strong> {transport.destinationWarehouse || 'CACC (KPT)'}</p>
+                <p><strong className="text-slate-600">{t.destinationWarehouse}</strong> <span className="font-mono font-bold text-sky-900">{getWarehouseDisplay(transport.destinationWarehouse)}</span></p>
                 <p><strong className="text-slate-600">{t.sacks}:</strong> {transport.totalSacks} Sacks</p>
                 <p><strong className="text-slate-600">{t.totalFieldWeight}</strong> <span className="font-mono font-bold text-emerald-800">{transport.totalFieldWeight.toFixed(2)} kg</span></p>
               </div>
@@ -89,7 +92,7 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
                     const item = p.items?.[0] || {};
                     return (
                       <tr key={p.id}>
-                        <td className="p-2 font-mono text-sky-900 font-bold">PR-2026-{p.id.slice(-6).toUpperCase()}</td>
+                        <td className="p-2 font-mono text-sky-900 font-bold whitespace-nowrap">{formatPurchaseId(p)}</td>
                         <td className="p-2 font-bold text-emerald-800">{p.familyCode}</td>
                         <td className="p-2 font-bold">{p.farmerName}</td>
                         <td className="p-2">{p.village}</td>
@@ -149,7 +152,7 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
           </div>
           <div className="space-y-1">
             <p><strong className="text-slate-700">{t.loadingStation}</strong> {transport.loadingLocation || 'Chhaeb Buying Station'}</p>
-            <p><strong className="text-slate-700">{t.destinationWarehouse}</strong> {transport.destinationWarehouse || 'Central Mill Warehouse'}</p>
+            <p><strong className="text-slate-700">{t.destinationWarehouse}</strong> <span className="font-mono font-bold">{getWarehouseDisplay(transport.destinationWarehouse)}</span></p>
             <p><strong className="text-slate-700">{t.sacks}:</strong> {transport.totalSacks} Sacks</p>
             <p><strong className="text-slate-700">{t.totalFieldWeight}</strong> <span className="font-mono font-bold text-emerald-900">{transport.totalFieldWeight.toFixed(2)} kg</span></p>
           </div>
@@ -173,7 +176,7 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
               const item = p.items?.[0] || {};
               return (
                 <tr key={p.id}>
-                  <td className="p-2 font-mono text-sky-900 font-bold border-r border-slate-200">PR-2026-{p.id.slice(-6).toUpperCase()}</td>
+                  <td className="p-2 font-mono text-sky-900 font-bold border-r border-slate-200 whitespace-nowrap">{formatPurchaseId(p)}</td>
                   <td className="p-2 font-bold text-emerald-800 border-r border-slate-200">{p.familyCode}</td>
                   <td className="p-2 font-bold border-r border-slate-200">{p.farmerName}</td>
                   <td className="p-2 border-r border-slate-200">{p.village}</td>

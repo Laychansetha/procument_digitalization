@@ -1,8 +1,11 @@
 'use client';
 
-import { X, Truck, Calendar, User, MapPin, Package, Scale, ShieldCheck, FileSpreadsheet } from 'lucide-react';
+import { X, Truck, Calendar, User, UserCheck, MapPin, Package, Scale, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 
 import RejectionHistorySection from '@/components/RejectionHistorySection';
+import { formatTransportId } from '@/lib/transport-id';
+import { formatPurchaseId } from '@/lib/purchase-id';
+import { getWarehouseId, getWarehouseName } from '@/lib/warehouse-config';
 
 interface TransportDetailsModalProps {
   isOpen: boolean;
@@ -14,7 +17,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
   if (!isOpen || !transport) return null;
 
   const purchases = transport.purchases || [];
-  const transportIdFormatted = `TR-2026-${transport.id.slice(-6).toUpperCase()}`;
+  const transportIdFormatted = formatTransportId(transport);
   const uniqueFarmersCount = new Set(purchases.map((p: any) => p.familyCode)).size;
 
   // EXPORT SINGLE TRUCK MANIFEST & PURCHASE RECORDS TO CSV
@@ -28,6 +31,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
     rows.push([
       'Transport ID',
       'Dispatch Date & Time',
+      'Responsible Loading Staff',
       'Driver Name',
       'Truck Plate Number',
       'Loading Location',
@@ -40,10 +44,11 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
     rows.push([
       transportIdFormatted,
       new Date(transport.createdAt).toLocaleString(),
+      transport.fieldStaffName || 'Field Staff',
       transport.driverName || '',
       transport.plateNumber || '',
       transport.loadingLocation || 'Chhaeb Buying Station',
-      transport.destinationWarehouse || 'Central Mill Warehouse, Preah Vihear',
+      getWarehouseId(transport.destinationWarehouse),
       uniqueFarmersCount,
       purchases.length,
       transport.totalSacks || 0,
@@ -70,7 +75,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
     } else {
       purchases.forEach((p: any) => {
         const item = p.items?.[0] || {};
-        const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+        const pIdFormatted = formatPurchaseId(p);
         rows.push([
           pIdFormatted,
           p.familyCode || '',
@@ -158,8 +163,8 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
             </div>
           </div>
 
-          {/* Locations Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#0f172a] border border-sky-500/30 rounded-xl">
+          {/* Locations & Staff Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-[#0f172a] border border-sky-500/30 rounded-xl">
             <div>
               <span className="text-slate-400 block text-[10px] font-bold uppercase">Loading Location</span>
               <span className="font-bold text-white flex items-center gap-1">
@@ -168,8 +173,17 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] font-bold uppercase">Destination Warehouse</span>
-              <span className="font-bold text-sky-400 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-sky-400" /> {transport.destinationWarehouse || 'CACC (KPT)'}
+              <span className="font-bold text-sky-400 flex items-center gap-1 font-mono">
+                <MapPin className="w-3.5 h-3.5 text-sky-400" /> {getWarehouseId(transport.destinationWarehouse)}
+              </span>
+              <span className="text-[11px] text-slate-400 block ml-4">
+                {getWarehouseName(transport.destinationWarehouse)}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] font-bold uppercase">Responsible Loading Staff</span>
+              <span className="font-bold text-emerald-400 flex items-center gap-1">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400" /> {transport.fieldStaffName || 'Field Staff'}
               </span>
             </div>
           </div>
@@ -321,17 +335,18 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                     <th className="p-3">Variety / Grade</th>
                     <th className="p-3 text-center">Sacks</th>
                     <th className="p-3 text-right">Weight (kg)</th>
+                    <th className="p-3">Purchasing Staff</th>
                     <th className="p-3 text-right">Net Payment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {purchases.map((p: any) => {
                     const item = p.items?.[0] || {};
-                    const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+                    const pIdFormatted = formatPurchaseId(p);
 
                     return (
                       <tr key={p.id} className="hover:bg-white/5">
-                        <td className="p-3 font-mono font-bold text-sky-400">{pIdFormatted}</td>
+                        <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap">{pIdFormatted}</td>
                         <td className="p-3 font-extrabold text-amber-400">{p.familyCode}</td>
                         <td className="p-3 font-bold text-white">{p.farmerName}</td>
                         <td className="p-3 text-slate-300">{p.village}</td>
@@ -341,6 +356,11 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                         <td className="p-3 text-center font-bold text-white">{item.sacks || 0}</td>
                         <td className="p-3 text-right font-mono font-bold text-sky-400">
                           {p.totalWeight.toFixed(2)} kg
+                        </td>
+                        <td className="p-3 font-medium text-slate-300">
+                          <span className="inline-flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded text-[11px] text-slate-200 font-semibold border border-white/5">
+                            {p.purchasingStaffName || 'Field Staff'}
+                          </span>
                         </td>
                         <td className="p-3 text-right font-mono font-bold text-emerald-400">
                           {p.netPayment.toLocaleString()} KHR

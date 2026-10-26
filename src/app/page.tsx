@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Eye,
+  ChevronDown,
   FileSpreadsheet,
   Layers,
   Sparkles,
@@ -66,6 +67,9 @@ import SpecsDetailsModal from '@/components/SpecsDetailsModal';
 import FarmerProfileDetailsModal from '@/components/FarmerProfileDetailsModal';
 import RejectionModal from '@/components/RejectionModal';
 import IbisLogo from '@/components/IbisLogo';
+import { formatTransportId } from '@/lib/transport-id';
+import { formatPurchaseId } from '@/lib/purchase-id';
+import { DESTINATION_WAREHOUSES, getWarehouseId, getWarehouseName, getWarehouseDisplay } from '@/lib/warehouse-config';
 
 export default function OperationsDashboard() {
   const { data: session, status } = useSession();
@@ -110,6 +114,9 @@ export default function OperationsDashboard() {
         setActiveModule('finance');
       } else if (role === 'FIELD') {
         setActiveModule('field');
+      }
+      if (session.user.name) {
+        if (!tFieldStaffName) setTFieldStaffName(session.user.name);
       }
     }
   }, [status, session]);
@@ -259,6 +266,7 @@ export default function OperationsDashboard() {
   const [tPlate, setTPlate] = useState('');
   const [tMobile, setTMobile] = useState('');
   const [tCleaned, setTCleaned] = useState(true);
+  const [tFieldStaffName, setTFieldStaffName] = useState('');
   const [tLoadingLocation, setTLoadingLocation] = useState('');
   const [tDestinationWarehouse, setTDestinationWarehouse] = useState('');
   const [tNotes, setTNotes] = useState('');
@@ -279,6 +287,7 @@ export default function OperationsDashboard() {
   const [uploadingTarePhoto, setUploadingTarePhoto] = useState(false);
   const [uploadingInvoicePhoto, setUploadingInvoicePhoto] = useState(false);
   const [whNotes, setWhNotes] = useState('');
+  const [whArrivedWarehouse, setWhArrivedWarehouse] = useState('W002');
   const [editingIntakeId, setEditingIntakeId] = useState<string | null>(null);
 
   // Admin Configurable Scale Weight Tolerance Settings (kg)
@@ -652,7 +661,7 @@ export default function OperationsDashboard() {
 
   // Delete Purchase Record Handler (2-Step Confirmation & Stage Guard)
   const handleDeletePurchaseRecord = async (p: any) => {
-    const formattedId = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+    const formattedId = formatPurchaseId(p);
 
     // Step 1 Confirmation
     const step1 = window.confirm(
@@ -1058,9 +1067,9 @@ export default function OperationsDashboard() {
   };
 
   const handleEditSpecs = (spec: any) => {
-    const isUsed = purchases.some((p: any) => p.specsRecordId === spec.id);
-    if (isUsed) {
-      alert('This Specs Record has already been used for a purchase and can no longer be edited.');
+    const linkedP = purchases.find((p: any) => p.specsRecordId === spec.id);
+    if (linkedP && (linkedP.status !== 'PENDING' || linkedP.transportRecordId)) {
+      alert('This Specs Record cannot be edited because its linked purchase has already been assigned to transport or dispatched.');
       return;
     }
 
@@ -1286,8 +1295,12 @@ export default function OperationsDashboard() {
   // Submit / Update Purchase Invoice
   const handleSavePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedSpecsRecordId && !editingPurchaseId) {
+      alert('Please select an Approved Specs Record first by clicking "🔍 Select / Load from Approved Specs Record".');
+      return;
+    }
     if (!pFamilyCode || !pFarmerName) {
-      alert('Please select a Specs Record or enter Family Code and Farmer Name.');
+      alert('Please select an Approved Specs Record to populate Family Code and Farmer Name.');
       return;
     }
 
@@ -1329,7 +1342,7 @@ export default function OperationsDashboard() {
       });
 
       if (res.ok) {
-        const pIdFormatted = `PR-2026-${editingPurchaseId.slice(-6).toUpperCase()}`;
+        const pIdFormatted = formatPurchaseId({ id: editingPurchaseId, familyCode: pFamilyCode });
         setSuccessBanner(`Purchase Record ${pIdFormatted} updated successfully.`);
         resetPurchaseForm();
         refreshAllData();
@@ -1347,7 +1360,7 @@ export default function OperationsDashboard() {
 
       if (res.ok) {
         const data = await res.json();
-        const pId = `PR-2026-${data.id.slice(-6).toUpperCase()}`;
+        const pId = formatPurchaseId(data);
 
         setSuccessBanner(`Purchase Record saved successfully. Purchase ID: ${pId}`);
         resetPurchaseForm();
@@ -1362,7 +1375,7 @@ export default function OperationsDashboard() {
   const handleEditPurchase = (purchase: any) => {
     // Locking rule: Cannot edit if already assigned to transport or truck dispatched
     if (purchase.status !== 'PENDING' || purchase.transportRecordId) {
-      alert(`Cannot edit Purchase Record PR-2026-${purchase.id.slice(-6).toUpperCase()}. This record has already been assigned to transport or dispatched.`);
+      alert(`Cannot edit Purchase Record ${formatPurchaseId(purchase)}. This record has already been assigned to transport or dispatched.`);
       return;
     }
 
@@ -1388,7 +1401,7 @@ export default function OperationsDashboard() {
       setPSackWeights([]);
     }
 
-    setSuccessBanner(`Editing Purchase Record PR-2026-${purchase.id.slice(-6).toUpperCase()}. Make your changes above and click Update.`);
+    setSuccessBanner(`Editing Purchase Record ${formatPurchaseId(purchase)}. Make your changes above and click Update.`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1462,7 +1475,7 @@ export default function OperationsDashboard() {
 
     filteredPurchases.forEach((p) => {
       const item = p.items?.[0] || {};
-      const pId = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+      const pId = formatPurchaseId(p);
       rows.push([
         pId,
         new Date(p.createdAt).toLocaleString(),
@@ -1502,6 +1515,7 @@ export default function OperationsDashboard() {
     setTPlate('');
     setTMobile('');
     setTCleaned(true);
+    setTFieldStaffName(currentUserName);
     setTLoadingLocation('');
     setTDestinationWarehouse('');
     setTNotes('');
@@ -1522,8 +1536,9 @@ export default function OperationsDashboard() {
     setTPlate(transport.plateNumber || '');
     setTMobile(transport.mobileNumber || '');
     setTCleaned(transport.truckCleaned ?? true);
+    setTFieldStaffName(transport.fieldStaffName || currentUserName);
     setTLoadingLocation(transport.loadingLocation || '');
-    setTDestinationWarehouse(transport.destinationWarehouse || '');
+    setTDestinationWarehouse(getWarehouseId(transport.destinationWarehouse) || '');
     setTNotes(transport.notes || '');
     setTTruckPhotoUrl(transport.truckPhotoUrl || '');
     setTDriverSignature(transport.driverSignature || '');
@@ -1532,7 +1547,7 @@ export default function OperationsDashboard() {
     const assignedPurchases = transport.purchases || [];
     setSelectedPurchasesForTruck(assignedPurchases);
 
-    setSuccessBanner(`Editing Transport Record TR-2026-${transport.id.slice(-6).toUpperCase()}. Make your changes above and click Update.`);
+    setSuccessBanner(`Editing Transport Record ${formatTransportId(transport)}. Make your changes above and click Update.`);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
 
@@ -1554,8 +1569,9 @@ export default function OperationsDashboard() {
       plateNumber: tPlate,
       mobileNumber: tMobile,
       truckCleaned: tCleaned,
+      fieldStaffName: tFieldStaffName.trim() || currentUserName,
       loadingLocation: tLoadingLocation,
-      destinationWarehouse: tDestinationWarehouse,
+      destinationWarehouse: getWarehouseId(tDestinationWarehouse),
       notes: tNotes,
       truckPhotoUrl: tTruckPhotoUrl,
       driverSignature: tDriverSignature,
@@ -1579,7 +1595,7 @@ export default function OperationsDashboard() {
 
     if (res.ok) {
       const data = await res.json();
-      const tIdFormatted = `TR-2026-${data.id.slice(-6).toUpperCase()}`;
+      const tIdFormatted = formatTransportId(data);
 
       setSuccessBanner(
         editingTransportId
@@ -1604,7 +1620,7 @@ export default function OperationsDashboard() {
     const rows: any[][] = [];
 
     filteredTransports.forEach((t, idx) => {
-      const tIdFormatted = `TR-2026-${t.id.slice(-6).toUpperCase()}`;
+      const tIdFormatted = formatTransportId(t);
       const purchasesList = t.purchases || [];
       const uniqueFarmers = new Set(purchasesList.map((p: any) => p.familyCode)).size;
       const totalSacks = purchasesList.reduce((sum: number, p: any) => sum + (p.items?.[0]?.sacks || 0), 0);
@@ -1618,6 +1634,7 @@ export default function OperationsDashboard() {
       rows.push(['=== TRUCK DISPATCH SUMMARY MANIFEST ===']);
       rows.push([
         'Transport ID',
+        'Loading Staff (Responsible)',
         'Driver Name',
         'Truck Plate Number',
         'Total Farmers',
@@ -1628,6 +1645,7 @@ export default function OperationsDashboard() {
       ]);
       rows.push([
         tIdFormatted,
+        t.fieldStaffName || 'Field Staff',
         t.driverName,
         t.plateNumber,
         uniqueFarmers,
@@ -1643,6 +1661,7 @@ export default function OperationsDashboard() {
       rows.push([
         'Transport ID',
         'Dispatch Date & Time',
+        'Loading Staff (Truck)',
         'Driver Name',
         'Truck Plate Number',
         'Loading Location',
@@ -1655,22 +1674,23 @@ export default function OperationsDashboard() {
         'Grade',
         'Number of Sacks',
         'Total Weight (Kg)',
-        'Purchasing Staff',
+        'Purchasing Staff (Farmer)',
       ]);
 
       if (purchasesList.length === 0) {
-        rows.push([tIdFormatted, new Date(t.createdAt).toLocaleString(), t.driverName, t.plateNumber, t.loadingLocation, t.destinationWarehouse, 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 0, 0, 'N/A']);
+        rows.push([tIdFormatted, new Date(t.createdAt).toLocaleString(), t.fieldStaffName || 'Field Staff', t.driverName, t.plateNumber, t.loadingLocation, getWarehouseId(t.destinationWarehouse), 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 0, 0, 'N/A']);
       } else {
         purchasesList.forEach((p: any) => {
           const item = p.items?.[0] || {};
-          const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+          const pIdFormatted = formatPurchaseId(p);
           rows.push([
             tIdFormatted,
             new Date(t.createdAt).toLocaleString(),
+            t.fieldStaffName || 'Field Staff',
             t.driverName,
             t.plateNumber,
             t.loadingLocation || 'Chhaeb Buying Station',
-            t.destinationWarehouse || 'Central Mill Warehouse',
+            getWarehouseId(t.destinationWarehouse),
             pIdFormatted,
             p.familyCode || '',
             p.farmerName || '',
@@ -1703,7 +1723,7 @@ export default function OperationsDashboard() {
     if (!transport) return;
 
     const purchases = transport.purchases || [];
-    const tIdFormatted = `TR-2026-${transport.id.slice(-6).toUpperCase()}`;
+    const tIdFormatted = formatTransportId(transport);
     const uniqueFarmers = new Set(purchases.map((p: any) => p.familyCode)).size;
     const totalSacks = purchases.reduce((sum: number, p: any) => sum + (p.items?.[0]?.sacks || 0), 0);
     const totalWeight = purchases.reduce((sum: number, p: any) => sum + (p.totalWeight || 0), 0);
@@ -1715,6 +1735,7 @@ export default function OperationsDashboard() {
     rows.push([
       'Transport ID',
       'Dispatch Date & Time',
+      'Loading Staff (Responsible)',
       'Driver Name',
       'Truck Plate Number',
       'Loading Location',
@@ -1727,10 +1748,11 @@ export default function OperationsDashboard() {
     rows.push([
       tIdFormatted,
       new Date(transport.createdAt).toLocaleString(),
+      transport.fieldStaffName || 'Field Staff',
       transport.driverName || '',
       transport.plateNumber || '',
       transport.loadingLocation || 'Chhaeb Buying Station',
-      transport.destinationWarehouse || 'Central Mill Warehouse, Preah Vihear',
+      getWarehouseId(transport.destinationWarehouse),
       uniqueFarmers,
       purchases.length,
       transport.totalSacks || totalSacks,
@@ -1757,7 +1779,7 @@ export default function OperationsDashboard() {
     } else {
       purchases.forEach((p: any) => {
         const item = p.items?.[0] || {};
-        const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+        const pIdFormatted = formatPurchaseId(p);
         rows.push([
           pIdFormatted,
           p.familyCode || '',
@@ -1795,6 +1817,7 @@ export default function OperationsDashboard() {
     setWhTarePhotoUrl('');
     setWhInvoicePhotoUrl('');
     setWhNotes('');
+    setWhArrivedWarehouse('W002');
   };
 
   // Edit Warehouse Receiving Record
@@ -1814,6 +1837,7 @@ export default function OperationsDashboard() {
     setWhTarePhotoUrl(intake.tareScalePhotoUrl || '');
     setWhInvoicePhotoUrl(intake.transportInvoiceUrl || '');
     setWhNotes(intake.notes || '');
+    setWhArrivedWarehouse(getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002'));
 
     const wrIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
     setSuccessBanner(`Editing Warehouse Receiving Record ${wrIdFormatted}. Update weights or photos above.`);
@@ -1832,10 +1856,12 @@ export default function OperationsDashboard() {
       transportId: selectedTransportId,
       warehouseGrossWeight: parseFloat(whGrossWeight),
       warehouseTareWeight: parseFloat(whTareWeight),
+      arrivedWarehouse: getWarehouseId(whArrivedWarehouse),
       grossScalePhotoUrl: whGrossPhotoUrl,
       tareScalePhotoUrl: whTarePhotoUrl,
       transportInvoiceUrl: whInvoicePhotoUrl,
       notes: whNotes,
+      receivingStaffName: currentUserName || 'Warehouse Staff',
     };
 
     if (editingIntakeId) {
@@ -1925,18 +1951,19 @@ export default function OperationsDashboard() {
 
     const rows = [
       [
-        'Warehouse ID',
+        'Receiving ID',
         'Intake Date & Time',
         'Transport ID',
         'Driver Name',
         'Plate Number',
+        'Field Destination',
+        'Arrived Warehouse',
         'Field Weight (kg)',
         'Warehouse Gross (kg)',
         'Warehouse Tare (kg)',
         'Warehouse Net Weight (kg)',
         'Weight Diff (kg)',
         'Weight Diff (%)',
-        'Receiving Staff',
         'Gross Scale Photo',
         'Tare Scale Photo',
         'Truck Transport Invoice Photo',
@@ -1945,22 +1972,25 @@ export default function OperationsDashboard() {
 
     filteredIntakes.forEach((intake) => {
       const transport = intake.transport || {};
-      const wrId = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
-      const trId = `TR-2026-${transport.id?.slice(-6).toUpperCase()}`;
+      const trId = formatTransportId(transport);
+      const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+      const staffUsername = intake.receivingStaffName || 'staff';
+      const receivingId = `${staffUsername}_${arrivedWh}`;
 
       rows.push([
-        wrId,
+        receivingId,
         new Date(intake.createdAt).toLocaleString(),
         trId,
         transport.driverName || '',
         transport.plateNumber || '',
+        getWarehouseId(transport.destinationWarehouse),
+        arrivedWh,
         transport.totalFieldWeight || 0,
         intake.warehouseGrossWeight,
         intake.warehouseTareWeight,
         intake.warehouseNetWeight,
         intake.weightDiffKg,
         intake.weightDiffPercent || 0,
-        intake.receivingStaffName || 'Warehouse Staff',
         intake.grossScalePhotoUrl ? 'Yes' : 'No',
         intake.tareScalePhotoUrl ? 'Yes' : 'No',
         intake.transportInvoiceUrl ? 'Yes' : 'No',
@@ -2050,7 +2080,7 @@ export default function OperationsDashboard() {
     ];
 
     filteredFinanceTrucks.forEach((t) => {
-      const trId = `TR-2026-${t.transport.id.slice(-6).toUpperCase()}`;
+      const trId = formatTransportId(t.transport);
       const wrId = t.intake ? `WR-2026-${t.intake.id.slice(-6).toUpperCase()}` : 'N/A';
 
       rows.push([
@@ -2092,7 +2122,7 @@ export default function OperationsDashboard() {
     const intake = truckData.intake || {};
     const purchases = truckData.purchases || [];
 
-    const transportIdFormatted = `TR-2026-${t.id?.slice(-6).toUpperCase()}`;
+    const transportIdFormatted = formatTransportId(t);
     const intakeIdFormatted = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'N/A';
     const hasGrossPhoto = intake.grossScalePhotoUrl ? 'Yes' : 'No';
     const hasTarePhoto = intake.tareScalePhotoUrl ? 'Yes' : 'No';
@@ -2128,7 +2158,7 @@ export default function OperationsDashboard() {
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
       const f = p.farmerProfile || {};
-      const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+      const pIdFormatted = formatPurchaseId(p);
 
       rows.push([
         transportIdFormatted,
@@ -2185,7 +2215,7 @@ export default function OperationsDashboard() {
     }
 
     const receivingIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
-    const transportIdFormatted = `TR-2026-${transport.id?.slice(-6).toUpperCase()}`;
+    const transportIdFormatted = formatTransportId(transport);
     const fieldWeight = transport.totalFieldWeight || 0;
     const grossWeight = intake.warehouseGrossWeight || 0;
     const tareWeight = intake.warehouseTareWeight || 0;
@@ -2245,7 +2275,7 @@ export default function OperationsDashboard() {
 
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
-      const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+      const pIdFormatted = formatPurchaseId(p);
 
       rows.push([
         receivingIdFormatted,
@@ -2555,6 +2585,7 @@ export default function OperationsDashboard() {
       p.village.toLowerCase().includes(pSearchQuery.toLowerCase()) ||
       (item.variety || '').toLowerCase().includes(pSearchQuery.toLowerCase()) ||
       (p.purchasingStaffName || '').toLowerCase().includes(pSearchQuery.toLowerCase()) ||
+      formatPurchaseId(p).toLowerCase().includes(pSearchQuery.toLowerCase()) ||
       `pr-2026-${p.id.slice(-6)}`.toLowerCase().includes(pSearchQuery.toLowerCase());
 
     const villageMatch = pFilterVillage === 'ALL' || p.village === pFilterVillage;
@@ -2567,14 +2598,24 @@ export default function OperationsDashboard() {
   // Filtered & Searchable Transports for History Table
   const filteredTransports = transports.filter((t) => {
     const q = tSearchQuery.toLowerCase();
-    const tIdFormatted = `tr-2026-${t.id.slice(-6)}`.toLowerCase();
+    const tIdFormatted = formatTransportId(t).toLowerCase();
+    const legacyId = `tr-2026-${t.id.slice(-6)}`.toLowerCase();
+    const matchesPurchases = (t.purchases || []).some(
+      (p: any) =>
+        (p.farmerName || '').toLowerCase().includes(q) ||
+        (p.familyCode || '').toLowerCase().includes(q)
+    );
     return (
       t.driverName.toLowerCase().includes(q) ||
       t.plateNumber.toLowerCase().includes(q) ||
       (t.fieldStaffName || '').toLowerCase().includes(q) ||
       (t.loadingLocation || '').toLowerCase().includes(q) ||
       (t.destinationWarehouse || '').toLowerCase().includes(q) ||
-      tIdFormatted.includes(q)
+      getWarehouseId(t.destinationWarehouse).toLowerCase().includes(q) ||
+      getWarehouseName(t.destinationWarehouse).toLowerCase().includes(q) ||
+      tIdFormatted.includes(q) ||
+      legacyId.includes(q) ||
+      matchesPurchases
     );
   });
 
@@ -2585,7 +2626,11 @@ export default function OperationsDashboard() {
     const purchases = transport.purchases || [];
 
     const wrIdFormatted = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
-    const trIdFormatted = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
+    const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+    const staffUsername = intake.receivingStaffName || 'staff';
+    const receivingIdFormatted = `${staffUsername}_${arrivedWh}`.toLowerCase();
+    const trIdFormatted = formatTransportId(transport).toLowerCase();
+    const legacyTrId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
 
     const matchesFarmer = purchases.some(
       (p: any) =>
@@ -2593,11 +2638,16 @@ export default function OperationsDashboard() {
     );
 
     return (
+      receivingIdFormatted.includes(q) ||
       wrIdFormatted.includes(q) ||
       trIdFormatted.includes(q) ||
+      legacyTrId.includes(q) ||
       (transport.driverName || '').toLowerCase().includes(q) ||
       (transport.plateNumber || '').toLowerCase().includes(q) ||
       (intake.receivingStaffName || '').toLowerCase().includes(q) ||
+      (intake.arrivedWarehouse || '').toLowerCase().includes(q) ||
+      getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse).toLowerCase().includes(q) ||
+      getWarehouseName(intake.arrivedWarehouse || transport.destinationWarehouse).toLowerCase().includes(q) ||
       matchesFarmer
     );
   });
@@ -2609,11 +2659,13 @@ export default function OperationsDashboard() {
     const intake = truckData.intake || {};
     const purchases = truckData.purchases || [];
 
-    const trId = `tr-2026-${t.id.slice(-6)}`.toLowerCase();
+    const trId = formatTransportId(t).toLowerCase();
+    const legacyTrId = `tr-2026-${t.id.slice(-6)}`.toLowerCase();
     const wrId = intake.id ? `wr-2026-${intake.id.slice(-6)}`.toLowerCase() : '';
 
     const matchesSearch =
       trId.includes(q) ||
+      legacyTrId.includes(q) ||
       wrId.includes(q) ||
       t.driverName.toLowerCase().includes(q) ||
       t.plateNumber.toLowerCase().includes(q) ||
@@ -2727,6 +2779,14 @@ export default function OperationsDashboard() {
           onEdit={handleEditSpecs}
           isUsedForPurchase={
             selectedSpecsForDetails ? purchases.some((p: any) => p.specsRecordId === selectedSpecsForDetails.id) : false
+          }
+          isLocked={
+            selectedSpecsForDetails
+              ? purchases.some(
+                  (p: any) =>
+                    p.specsRecordId === selectedSpecsForDetails.id && (p.status !== 'PENDING' || p.transportRecordId)
+                )
+              : false
           }
         />
 
@@ -3376,7 +3436,8 @@ export default function OperationsDashboard() {
                         </div>
                       ) : (
                         filteredSpecsList.map((rec) => {
-                          const isUsedForPurchase = purchases.some((p: any) => p.specsRecordId === rec.id);
+                          const linkedP = purchases.find((p: any) => p.specsRecordId === rec.id);
+                          const isDispatched = linkedP && (linkedP.status !== 'PENDING' || linkedP.transportRecordId);
                           return (
                             <div key={rec.id} className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-xs space-y-1 hover:border-white/20 transition-colors">
                               <div className="flex items-center justify-between">
@@ -3393,27 +3454,29 @@ export default function OperationsDashboard() {
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${rec.isValid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                                     {rec.isValid ? 'Pass' : 'Fail'}
                                   </span>
-                                  {!isUsedForPurchase ? (
+                                  {!isDispatched ? (
                                     <>
                                       <button
                                         onClick={() => handleEditSpecs(rec)}
                                         className="p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
-                                        title="Edit Specs Record"
+                                        title={linkedP ? "Edit Specs Record (Updates will automatically sync to linked Purchase Record)" : "Edit Specs Record"}
                                       >
                                         <Edit className="w-3.5 h-3.5" />
                                       </button>
-                                      <button
-                                        onClick={() => handleDeleteSpecsRecord(rec.id, rec.familyCode)}
-                                        className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-                                        title="Delete Specs Record"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
+                                      {!linkedP && (
+                                        <button
+                                          onClick={() => handleDeleteSpecsRecord(rec.id, rec.familyCode)}
+                                          className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                          title="Delete Specs Record"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
                                     </>
                                   ) : (
                                     <span
                                       className="p-1 text-slate-500 inline-block text-[11px]"
-                                      title="Locked: This Specs Record has already been used for a purchase and cannot be edited or deleted."
+                                      title="Locked: This Specs Record is linked to a purchase already in transport or received."
                                     >
                                       🔒
                                     </span>
@@ -3804,7 +3867,7 @@ export default function OperationsDashboard() {
                     {editingPurchaseId && (
                       <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-300 shadow-md">
                         <div className="flex items-center gap-2 font-bold">
-                          <span>✏️ EDIT MODE: Updating Purchase Record PR-2026-{editingPurchaseId.slice(-6).toUpperCase()}</span>
+                          <span>✏️ EDIT MODE: Updating Purchase Record {formatPurchaseId({ id: editingPurchaseId, familyCode: pFamilyCode })}</span>
                         </div>
                         <button
                           type="button"
@@ -3819,25 +3882,35 @@ export default function OperationsDashboard() {
                     {/* Farmer Info Banner */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white/5 border border-white/10 rounded-xl p-2.5">
                       <div>
-                        <span className="text-slate-400 font-bold uppercase text-[10px] block mb-1">FAMILY CODE *</span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-slate-400 font-bold uppercase text-[10px]">FAMILY CODE *</span>
+                          <span className="text-[10px] text-emerald-400/80 font-semibold flex items-center gap-0.5">
+                            <LockIcon className="w-2.5 h-2.5" /> Auto from Specs
+                          </span>
+                        </div>
                         <input
                           type="text"
+                          readOnly
                           required
                           value={pFamilyCode}
-                          onChange={(e) => handlePFamilyCodeChange(e.target.value)}
-                          placeholder="e.g. TB034"
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-extrabold"
+                          placeholder="Load from Specs..."
+                          className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-extrabold cursor-not-allowed select-none"
                         />
                       </div>
                       <div>
-                        <span className="text-slate-400 font-bold uppercase text-[10px] block mb-1">FARMER NAME *</span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-slate-400 font-bold uppercase text-[10px]">FARMER NAME *</span>
+                          <span className="text-[10px] text-emerald-400/80 font-semibold flex items-center gap-0.5">
+                            <LockIcon className="w-2.5 h-2.5" /> Auto from Specs
+                          </span>
+                        </div>
                         <input
                           type="text"
+                          readOnly
                           required
                           value={pFarmerName}
-                          onChange={(e) => setPFarmerName(e.target.value)}
-                          placeholder="e.g. Sok San"
-                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
+                          placeholder="Load from Specs..."
+                          className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-bold cursor-not-allowed select-none"
                         />
                       </div>
                       <div>
@@ -3865,68 +3938,57 @@ export default function OperationsDashboard() {
                       {/* Row 1: Variety, Grade, Standard Price */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">VARIETY *</label>
-                          <select
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-slate-400 font-bold uppercase text-[10px]">VARIETY *</label>
+                            <span className="text-[10px] text-emerald-400/80 font-semibold flex items-center gap-0.5">
+                              <LockIcon className="w-2.5 h-2.5" /> Auto from Specs
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            readOnly
+                            required
                             value={pVariety}
-                            onChange={(e) => {
-                              const newVar = e.target.value;
-                              setPVariety(newVar);
-                              const validGrades = priceSpecs.filter((s) => s.variety === newVar).map((s) => s.grade);
-                              const nextGrade = validGrades.includes(pGrade) ? pGrade : (validGrades[0] || '');
-                              setPGrade(nextGrade);
-                              const specMatch = priceSpecs.find((s) => s.variety === newVar && s.grade === nextGrade);
-                              if (specMatch) setPStandardPrice(specMatch.basePrice);
-                              else setPStandardPrice(0);
-                            }}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
-                          >
-                            <option value="" disabled>Select Paddy Variety...</option>
-                            {uniqueVarieties.map((v) => (
-                              <option key={v as string} value={v as string}>
-                                {v as string}
-                              </option>
-                            ))}
-                          </select>
+                            placeholder="Load from Specs..."
+                            className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-bold cursor-not-allowed select-none"
+                          />
                         </div>
 
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">GRADE *</label>
-                          <select
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-slate-400 font-bold uppercase text-[10px]">GRADE *</label>
+                            <span className="text-[10px] text-emerald-400/80 font-semibold flex items-center gap-0.5">
+                              <LockIcon className="w-2.5 h-2.5" /> Auto from Specs
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            readOnly
+                            required
                             value={pGrade}
-                            onChange={(e) => {
-                              const newGrade = e.target.value;
-                              setPGrade(newGrade);
-                              const specMatch = priceSpecs.find((s) => s.variety === pVariety && s.grade === newGrade);
-                              if (specMatch) setPStandardPrice(specMatch.basePrice);
-                              else setPStandardPrice(0);
-                            }}
-                            disabled={!pVariety}
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold disabled:opacity-50"
-                          >
-                            <option value="" disabled>{pVariety ? 'Select Grade...' : 'Select Variety First'}</option>
-                            {priceSpecs
-                              .filter((s) => s.variety === pVariety)
-                              .map((s) => (
-                                <option key={s.grade} value={s.grade}>
-                                  {s.grade} — {s.basePrice?.toLocaleString()} KHR/kg
-                                </option>
-                              ))}
-                          </select>
+                            placeholder="Load from Specs..."
+                            className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-bold cursor-not-allowed select-none"
+                          />
                         </div>
 
                         <div>
-                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">
-                            STANDARD BASE PRICE (KHR/KG)
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-slate-400 font-bold uppercase text-[10px]">
+                              STANDARD BASE PRICE (KHR/KG)
+                            </label>
+                            <span className="text-[10px] text-emerald-400/80 font-semibold flex items-center gap-0.5">
+                              <LockIcon className="w-2.5 h-2.5" /> Auto from Specs
+                            </span>
+                          </div>
                           <input
                             type="text"
                             readOnly
                             value={pStandardPrice > 0 ? pStandardPrice.toLocaleString() : ''}
                             placeholder="--"
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-extrabold text-amber-400 placeholder:text-slate-500"
+                            className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-extrabold text-amber-400 placeholder:text-slate-500 cursor-not-allowed select-none"
                           />
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Official Master Base Price: {pStandardPrice > 0 ? `${pStandardPrice.toLocaleString()} KHR/kg` : '--'}
+                            Official Specs Base Price: {pStandardPrice > 0 ? `${pStandardPrice.toLocaleString()} KHR/kg` : '--'}
                           </p>
                         </div>
                       </div>
@@ -4196,7 +4258,7 @@ export default function OperationsDashboard() {
                     >
                       <CheckCircle2 className="w-5 h-5" />
                       {editingPurchaseId
-                        ? `Update Purchase Record (PR-2026-${editingPurchaseId.slice(-6).toUpperCase()})`
+                        ? `Update Purchase Record (${formatPurchaseId({ id: editingPurchaseId, familyCode: pFamilyCode })})`
                         : 'Save Paddy Purchase Record'}
                     </button>
                   </form>
@@ -4286,41 +4348,36 @@ export default function OperationsDashboard() {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
                         <tr>
-                          <th className="p-3">Purchase ID</th>
-                          <th className="p-3">Date & Time</th>
-                          <th className="p-3">Family Code</th>
-                          <th className="p-3">Farmer Name</th>
-                          <th className="p-3">Variety / Grade</th>
-                          <th className="p-3 text-center">Sacks</th>
-                          <th className="p-3 text-right">Total Weight</th>
-                          <th className="p-3 text-right">Final Price</th>
-                          <th className="p-3 text-right">Gross Value</th>
-                          <th className="p-3 text-right">Net Payment</th>
-                          <th className="p-3">Purchasing Staff</th>
-                          <th className="p-3 text-right">Actions</th>
+                          <th className="p-3 whitespace-nowrap">Purchase ID</th>
+                          <th className="p-3 whitespace-nowrap">Family Code</th>
+                          <th className="p-3 whitespace-nowrap">Farmer Name</th>
+                          <th className="p-3 whitespace-nowrap">Variety / Grade</th>
+                          <th className="p-3 text-center whitespace-nowrap">Sacks</th>
+                          <th className="p-3 text-right whitespace-nowrap">Total Weight</th>
+                          <th className="p-3 text-right whitespace-nowrap">Final Price</th>
+                          <th className="p-3 text-right whitespace-nowrap">Gross Value</th>
+                          <th className="p-3 text-right whitespace-nowrap">Net Payment</th>
+                          <th className="p-3 whitespace-nowrap">Purchasing Staff</th>
+                          <th className="p-3 text-right whitespace-nowrap">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {filteredPurchases.length === 0 ? (
                           <tr>
-                            <td colSpan={12} className="p-8 text-center text-slate-500 text-xs">
+                            <td colSpan={11} className="p-8 text-center text-slate-500 text-xs">
                               No purchase records match your search or filter. Create your first purchase record above.
                             </td>
                           </tr>
                         ) : (
                           filteredPurchases.map((p) => {
                             const item = p.items?.[0] || {};
-                            const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+                            const pIdFormatted = formatPurchaseId(p);
 
                             return (
                               <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                                <td className="p-3 font-mono font-bold text-emerald-400">
+                                <td className="p-3 font-mono font-bold text-emerald-400 whitespace-nowrap text-[11px] sm:text-xs">
                                   {pIdFormatted}
                                   {getRejectionIndicator('PurchaseRecord', p.id, p.transportRecordId, p.status)}
-                                </td>
-                                <td className="p-3 text-slate-400 text-[11px]">
-                                  {new Date(p.createdAt).toLocaleDateString()}{' '}
-                                  <span className="text-slate-500">{new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </td>
                                 <td className="p-3 font-extrabold text-amber-400">{p.familyCode}</td>
                                 <td className="p-3 font-bold text-white">
@@ -4332,17 +4389,17 @@ export default function OperationsDashboard() {
                                   <span className="ml-1 font-extrabold text-purple-400">({item.grade || 'A1'})</span>
                                 </td>
                                 <td className="p-3 text-center font-bold text-slate-200">{item.sacks || 0}</td>
-                                <td className="p-3 text-right font-mono font-bold text-slate-200">{p.totalWeight.toFixed(2)} kg</td>
-                                <td className="p-3 text-right font-mono text-emerald-400">
+                                <td className="p-3 text-right font-mono font-bold text-slate-200 whitespace-nowrap">{p.totalWeight.toFixed(2)} kg</td>
+                                <td className="p-3 text-right font-mono text-emerald-400 whitespace-nowrap">
                                   {(item.finalPrice || 2047.5).toLocaleString()} KHR
                                 </td>
-                                <td className="p-3 text-right font-mono text-slate-300">
+                                <td className="p-3 text-right font-mono text-slate-300 whitespace-nowrap">
                                   {p.totalPayment.toLocaleString()} KHR
                                 </td>
-                                <td className="p-3 text-right font-mono font-black text-emerald-400 text-sm">
+                                <td className="p-3 text-right font-mono font-bold text-emerald-400 text-xs whitespace-nowrap">
                                   {p.netPayment.toLocaleString()} KHR
                                 </td>
-                                <td className="p-3 font-bold text-slate-300">
+                                <td className="p-3 font-bold text-slate-300 whitespace-nowrap">
                                   👤 {p.purchasingStaffName || 'Field Staff'}
                                 </td>
 
@@ -4428,7 +4485,7 @@ export default function OperationsDashboard() {
                       <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-300 shadow-md">
                         <div className="flex items-center gap-2 font-bold">
                           <Edit className="w-4 h-4 text-amber-400" />
-                          <span>✏️ EDIT MODE: Updating Transport Record TR-2026-{editingTransportId.slice(-6).toUpperCase()}</span>
+                          <span>✏️ EDIT MODE: Updating Transport Record {formatTransportId({ id: editingTransportId, plateNumber: tPlate })}</span>
                         </div>
                         <button
                           type="button"
@@ -4555,8 +4612,8 @@ export default function OperationsDashboard() {
                                 const item = p.items?.[0] || {};
                                 return (
                                   <tr key={p.id} className="hover:bg-white/5">
-                                    <td className="p-2 font-mono font-bold text-sky-400">
-                                      PR-2026-{p.id.slice(-6).toUpperCase()}
+                                    <td className="p-2 font-mono font-bold text-sky-400 whitespace-nowrap">
+                                      {formatPurchaseId(p)}
                                     </td>
                                     <td className="p-2 font-extrabold text-amber-400">{p.familyCode}</td>
                                     <td className="p-2 font-bold text-white">{p.farmerName}</td>
@@ -4634,7 +4691,28 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-slate-400 font-bold uppercase mb-1 flex items-center justify-between">
+                          <span>Loading Staff (Responsible) *</span>
+                          <span className="text-[10px] text-emerald-400 font-semibold">1 Staff / Truck</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          list="loading-staff-list"
+                          value={tFieldStaffName}
+                          onChange={(e) => setTFieldStaffName(e.target.value)}
+                          placeholder={currentUserName || 'e.g. Vuthy'}
+                          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold focus:border-sky-500"
+                        />
+                        <datalist id="loading-staff-list">
+                          {Array.from(new Set([currentUserName, ...userAccounts.map((u: any) => u.name)].filter(Boolean))).map((name) => (
+                            <option key={name} value={name} />
+                          ))}
+                        </datalist>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Staff member responsible for loading this truck</p>
+                      </div>
                       <div>
                         <label className="block text-slate-400 font-bold uppercase mb-1">Loading Location (Searchable Village) *</label>
                         <SearchableVillageSelect
@@ -4653,9 +4731,11 @@ export default function OperationsDashboard() {
                           className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-sky-500"
                         >
                           <option value="" disabled>Select Destination Warehouse...</option>
-                          <option value="CACC (KPT)">CACC (KPT)</option>
-                          <option value="Amru Nature (KPG)">Amru Nature (KPG)</option>
-                          <option value="Other">Other</option>
+                          {DESTINATION_WAREHOUSES.map((wh) => (
+                            <option key={wh.id} value={wh.id}>
+                              {wh.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -4773,7 +4853,7 @@ export default function OperationsDashboard() {
                     >
                       <Truck className="w-5 h-5" />
                       {editingTransportId
-                        ? `Update Transport Record (TR-2026-${editingTransportId.slice(-6).toUpperCase()})`
+                        ? `Update Transport Record (${formatTransportId({ id: editingTransportId, plateNumber: tPlate })})`
                         : `Save Transport Record (${selectedPurchasesForTruck.length} Purchases)`}
                     </button>
                   </form>
@@ -4816,16 +4896,16 @@ export default function OperationsDashboard() {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
                         <tr>
-                          <th className="p-3">Transport ID</th>
-                          <th className="p-3">Dispatch Date</th>
-                          <th className="p-3">Driver & Plate Number</th>
-                          <th className="p-3">Loading Location</th>
-                          <th className="p-3">Destination</th>
-                          <th className="p-3 text-center">Purchases</th>
-                          <th className="p-3 text-center">Sacks</th>
-                          <th className="p-3 text-right">Field Weight (kg)</th>
-                          <th className="p-3 text-center">Status</th>
-                          <th className="p-3 text-right">Actions</th>
+                          <th className="p-3 whitespace-nowrap">Transport ID</th>
+                          <th className="p-3 whitespace-nowrap">Driver & Plate Number</th>
+                          <th className="p-3 whitespace-nowrap">Loading Staff</th>
+                          <th className="p-3 whitespace-nowrap">Loading Location</th>
+                          <th className="p-3 whitespace-nowrap">Destination</th>
+                          <th className="p-3 text-center whitespace-nowrap">Purchases</th>
+                          <th className="p-3 text-center whitespace-nowrap">Sacks</th>
+                          <th className="p-3 text-right whitespace-nowrap">Field Weight</th>
+                          <th className="p-3 text-center whitespace-nowrap">Status</th>
+                          <th className="p-3 text-right whitespace-nowrap">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
@@ -4837,18 +4917,14 @@ export default function OperationsDashboard() {
                           </tr>
                         ) : (
                           filteredTransports.map((t) => {
-                            const tIdFormatted = `TR-2026-${t.id.slice(-6).toUpperCase()}`;
+                            const tIdFormatted = formatTransportId(t);
                             const purchaseCount = t.purchases?.length || t.lots?.length || 0;
 
                             return (
                               <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                                <td className="p-3 font-mono font-bold text-sky-400">
-                                  {tIdFormatted}
+                                <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap text-[11px] sm:text-xs">
+                                  <span>{tIdFormatted}</span>
                                   {getRejectionIndicator('TransportRecord', t.id, null, t.status)}
-                                </td>
-                                <td className="p-3 text-slate-400 text-[11px]">
-                                  {new Date(t.createdAt).toLocaleDateString()}{' '}
-                                  <span className="text-slate-500">{new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </td>
                                 <td className="p-3 font-bold text-white">
                                   {t.driverName}
@@ -4867,8 +4943,22 @@ export default function OperationsDashboard() {
                                     )}
                                   </div>
                                 </td>
+                                <td className="p-3">
+                                  <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                                    <UserCheck className="w-3.5 h-3.5 flex-shrink-0" />
+                                    <span>{t.fieldStaffName || 'Field Staff'}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block font-normal">Loading Supervisor</span>
+                                </td>
                                 <td className="p-3 text-slate-300">{t.loadingLocation || 'Chhaeb Buying Station'}</td>
-                                <td className="p-3 text-slate-300">{t.destinationWarehouse || 'Central Mill Warehouse'}</td>
+                                <td className="p-3">
+                                  <span className="font-mono font-bold text-sky-400">
+                                    {getWarehouseId(t.destinationWarehouse)}
+                                  </span>
+                                  <span className="text-[11px] text-slate-400 block font-normal">
+                                    {getWarehouseName(t.destinationWarehouse)}
+                                  </span>
+                                </td>
                                 <td className="p-3 text-center font-bold text-emerald-400">{purchaseCount} Purchases</td>
                                 <td className="p-3 text-center font-bold text-amber-400">{t.totalSacks} Sacks</td>
                                 <td className="p-3 text-right font-mono font-black text-sky-400">
@@ -4988,44 +5078,69 @@ export default function OperationsDashboard() {
                 {/* WAREHOUSE RECEIVING DASHBOARD METRICS CARD */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-[#0f172a] border border-white/10 rounded-2xl shadow-lg">
                   <div className="p-3 bg-gradient-to-r from-sky-500/10 to-sky-500/5 border border-sky-500/30 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="text-slate-400 font-bold uppercase text-[10px] block">Trucks En Route</span>
-                      <span className="text-sm font-black text-sky-400 font-mono">🚚 Trucks En Route: <strong className="text-base text-white">{enRouteTrucksCount}</strong></span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black text-sky-400 font-mono">🚚 Trucks En Route:</span>
+                      <strong className="text-2xl sm:text-3xl font-black text-white font-mono">{enRouteTrucksCount}</strong>
                     </div>
                   </div>
 
                   <div className="p-3 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="text-slate-400 font-bold uppercase text-[10px] block">Trucks Received Today</span>
-                      <span className="text-sm font-black text-emerald-400 font-mono">📍 Trucks Received Today: <strong className="text-base text-white">{trucksReceivedTodayCount}</strong></span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black text-emerald-400 font-mono">📍 Trucks Received Today:</span>
+                      <strong className="text-2xl sm:text-3xl font-black text-white font-mono">{trucksReceivedTodayCount}</strong>
                     </div>
                   </div>
 
                   <div className="p-3 bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="text-slate-400 font-bold uppercase text-[10px] block">Waiting for Receiving</span>
-                      <span className="text-sm font-black text-amber-400 font-mono">⏳ Waiting for Receiving: <strong className="text-base text-white">{enRouteTrucksCount}</strong></span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black text-amber-400 font-mono">⏳ Waiting for Receiving:</span>
+                      <strong className="text-2xl sm:text-3xl font-black text-white font-mono">{enRouteTrucksCount}</strong>
                     </div>
                   </div>
                 </div>
 
                 {/* Select En-Route Truck */}
-                <div>
-                  <label className="block text-slate-400 font-bold uppercase mb-1">Select En-Route Truck *</label>
-                  <select
-                    value={selectedTransportId}
-                    onChange={(e) => setSelectedTransportId(e.target.value)}
-                    className="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white font-bold focus:border-sky-500"
-                  >
-                    <option value="">-- Select Arriving Truck --</option>
-                    {transports
-                      .filter((t) => t.status === 'EN_ROUTE')
-                      .map((t) => (
-                        <option key={t.id} value={t.id}>
-                          🚛 Driver: {t.driverName} ({t.plateNumber}) · Field Weight: {t.totalFieldWeight.toFixed(2)} kg · Sacks: {t.totalSacks} · Dispatch Date: {new Date(t.createdAt).toLocaleDateString()}
-                        </option>
-                      ))}
-                  </select>
+                <div className="p-3.5 sm:p-4 bg-gradient-to-r from-sky-950/40 via-[#131d35] to-sky-950/40 border border-sky-500/30 rounded-2xl shadow-lg space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="text-sky-300 font-extrabold uppercase text-xs sm:text-sm tracking-wider flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-sky-400" /> Select En-Route Truck *
+                    </label>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm self-start sm:self-auto">
+                      <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+                      {enRouteTrucksCount} {enRouteTrucksCount === 1 ? 'Truck' : 'Trucks'} on Route
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <select
+                      value={selectedTransportId}
+                      onChange={(e) => {
+                        const tId = e.target.value;
+                        setSelectedTransportId(tId);
+                        const tr = transports.find((t) => t.id === tId);
+                        if (tr?.destinationWarehouse) {
+                          setWhArrivedWarehouse(getWarehouseId(tr.destinationWarehouse));
+                        }
+                      }}
+                      className="w-full bg-[#142036] hover:bg-[#1a2a47] border-2 border-sky-500/40 hover:border-sky-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-500/20 rounded-xl px-4 py-3.5 text-white font-extrabold text-xs sm:text-sm shadow-inner transition-all cursor-pointer appearance-none pr-10"
+                    >
+                      <option value="">
+                        {enRouteTrucksCount > 0
+                          ? `-- Select Arriving Truck (${enRouteTrucksCount} on Route) --`
+                          : '-- No Trucks Currently On Route --'}
+                      </option>
+                      {transports
+                        .filter((t) => t.status === 'EN_ROUTE')
+                        .map((t) => (
+                          <option key={t.id} value={t.id} className="bg-[#141c2f] text-white py-2 font-bold">
+                            🚛 {formatTransportId(t)} · Driver: {t.driverName} ({t.plateNumber}) · Field Net: {t.totalFieldWeight.toFixed(2)} kg · Sacks: {t.totalSacks}
+                          </option>
+                        ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-sky-400">
+                      <ChevronDown className="w-5 h-5" />
+                    </div>
+                  </div>
                 </div>
 
                 {/* READ-ONLY FIELD SUMMARY DISPLAY */}
@@ -5037,7 +5152,7 @@ export default function OperationsDashboard() {
                       </span>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono text-xs text-sky-300 font-extrabold mr-1">
-                          TR-2026-{selectedEnRouteTransport.id.slice(-6).toUpperCase()}
+                          {formatTransportId(selectedEnRouteTransport)}
                         </span>
                         {getRejectionIndicator('TransportRecord', selectedEnRouteTransport.id)}
 
@@ -5064,7 +5179,7 @@ export default function OperationsDashboard() {
                           onClick={() =>
                             setRejectionTarget({
                               isOpen: true,
-                              title: `Reject & Return Transport TR-2026-${selectedEnRouteTransport.id.slice(-6).toUpperCase()} to Field Team`,
+                              title: `Reject & Return Transport ${formatTransportId(selectedEnRouteTransport)} to Field Team`,
                               entityType: 'TransportRecord',
                               entityId: selectedEnRouteTransport.id,
                               defaultTargetModule: 'FIELD',
@@ -5141,7 +5256,7 @@ export default function OperationsDashboard() {
                       >
                         <span className="flex items-center gap-1.5">
                           <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" />
-                          {showCargoBreakdown ? 'Hide Loaded Farmer Invoices & Sack Breakdown' : '📋 Inspect Loaded Farmer Invoices & Sack Weights Breakdown'}
+                          {showCargoBreakdown ? 'Hide Loaded Farmer Invoices' : '📋 Inspect Loaded Farmer Invoices'}
                         </span>
                         <span>{showCargoBreakdown ? '▲' : '▼'}</span>
                       </button>
@@ -5157,20 +5272,16 @@ export default function OperationsDashboard() {
                                 <th className="p-2">Variety & Grade</th>
                                 <th className="p-2 text-center">Sacks</th>
                                 <th className="p-2 text-right">Field Net (kg)</th>
-                                <th className="p-2">Sack Weights Breakdown</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
                               {selectedTruckPurchases.map((p: any) => {
                                 const item = p.items?.[0] || {};
-                                const pId = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
-                                const sackWeightsStr = Array.isArray(item.weights) && item.weights.length > 0
-                                  ? item.weights.join(', ') + ' kg'
-                                  : `${p.totalWeight.toFixed(2)} kg`;
+                                const pId = formatPurchaseId(p);
 
                                 return (
                                   <tr key={p.id} className="hover:bg-white/5">
-                                    <td className="p-2 font-mono font-bold text-emerald-400">{pId}</td>
+                                    <td className="p-2 font-mono font-bold text-emerald-400 whitespace-nowrap">{pId}</td>
                                     <td className="p-2 font-bold text-white">
                                       {p.farmerName}
                                       <div className="text-[10px] text-slate-400 font-mono">{p.familyCode}</div>
@@ -5182,9 +5293,6 @@ export default function OperationsDashboard() {
                                     <td className="p-2 text-center font-bold text-white">{item.sacks || 0}</td>
                                     <td className="p-2 text-right font-mono font-black text-sky-400">
                                       {p.totalWeight.toFixed(2)} kg
-                                    </td>
-                                    <td className="p-2 font-mono text-[10px] text-slate-400 max-w-[200px] truncate" title={sackWeightsStr}>
-                                      {sackWeightsStr}
                                     </td>
                                   </tr>
                                 );
@@ -5198,7 +5306,7 @@ export default function OperationsDashboard() {
                 )}
 
                 {/* WAREHOUSE WEIGHING & COMPARISON WITH TOLERANCE COLOR HIGHLIGHTING */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-slate-400 font-bold uppercase mb-1">Warehouse Gross Weight (kg) *</label>
                     <input
@@ -5207,8 +5315,9 @@ export default function OperationsDashboard() {
                       required
                       value={whGrossWeight}
                       onChange={(e) => setWhGrossWeight(e.target.value)}
+                      onWheel={(e) => e.currentTarget.blur()}
                       placeholder="e.g. 15400"
-                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold"
+                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-spinners"
                     />
                   </div>
 
@@ -5220,15 +5329,41 @@ export default function OperationsDashboard() {
                       required
                       value={whTareWeight}
                       onChange={(e) => setWhTareWeight(e.target.value)}
+                      onWheel={(e) => e.currentTarget.blur()}
                       placeholder="e.g. 5400"
-                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold"
+                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-spinners"
                     />
                   </div>
 
                   <div>
                     <label className="block text-slate-400 font-bold uppercase mb-1">Warehouse Net Weight (Auto)</label>
-                    <div className="p-2.5 bg-sky-500/10 border border-sky-500/30 rounded-lg text-sky-400 font-extrabold text-sm">
+                    <div className="p-2.5 bg-sky-500/10 border border-sky-500/30 rounded-lg text-sky-400 font-extrabold text-sm h-[42px] flex items-center">
                       {whCalculatedNetWeight.toFixed(2)} kg
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-bold uppercase mb-1 flex items-center justify-between">
+                      <span>Arrived Warehouse *</span>
+                      {selectedEnRouteTransport?.destinationWarehouse && (
+                        <span className="text-[10px] text-sky-400 font-normal">
+                          (Assigned: {getWarehouseId(selectedEnRouteTransport.destinationWarehouse)})
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={whArrivedWarehouse}
+                        onChange={(e) => setWhArrivedWarehouse(e.target.value)}
+                        className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold appearance-none pr-8 text-xs sm:text-sm focus:outline-none focus:border-sky-500 h-[42px] cursor-pointer"
+                      >
+                        {DESTINATION_WAREHOUSES.map((wh) => (
+                          <option key={wh.id} value={wh.id} className="bg-[#141c2f] text-white">
+                            {wh.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
                   </div>
                 </div>
@@ -5387,7 +5522,7 @@ export default function OperationsDashboard() {
                   type="text"
                   value={whSearchQuery}
                   onChange={(e) => setWhSearchQuery(e.target.value)}
-                  placeholder="Search Warehouse ID, Transport ID, Driver, Plate, Farmer..."
+                  placeholder="Search Receiving ID, Transport ID, Driver, Plate, Farmer..."
                   className="w-full bg-[#1e293b] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -5397,7 +5532,7 @@ export default function OperationsDashboard() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
                     <tr>
-                      <th className="p-3">Receiving ID</th>
+                      <th className="p-3 whitespace-nowrap">Receiving ID</th>
                       <th className="p-3">Arrival Date</th>
                       <th className="p-3">Transport ID</th>
                       <th className="p-3">Driver & Plate Number</th>
@@ -5418,8 +5553,10 @@ export default function OperationsDashboard() {
                     ) : (
                       filteredIntakes.map((intake) => {
                         const transport = intake.transport || {};
-                        const receivingIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
-                        const transportIdFormatted = `TR-2026-${transport.id?.slice(-6).toUpperCase()}`;
+                        const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+                        const staffUsername = intake.receivingStaffName || 'staff';
+                        const receivingIdFormatted = `${staffUsername}_${arrivedWh}`;
+                        const transportIdFormatted = formatTransportId(transport);
 
                         const fieldWeight = transport.totalFieldWeight || 0;
                         const netWeight = intake.warehouseNetWeight || 0;
@@ -5434,15 +5571,18 @@ export default function OperationsDashboard() {
 
                         return (
                           <tr key={intake.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400">
-                              {receivingIdFormatted}
+                            <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1.5 bg-sky-500/10 px-2.5 py-1 rounded-lg text-xs text-sky-300 font-mono font-bold border border-sky-500/20">
+                                <UserCheck className="w-3.5 h-3.5 text-sky-400" />
+                                {receivingIdFormatted}
+                              </span>
                               {getRejectionIndicator('WarehouseIntake', intake.id, intake.transportId, intake.status === 'REJECTED' || intake.inventoryStatus === 'REJECTED' ? 'REJECTED' : intake.status)}
                             </td>
                             <td className="p-3 text-slate-400 text-[11px]">
                               {new Date(intake.createdAt).toLocaleDateString()}{' '}
                               <span className="text-slate-500">{new Date(intake.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </td>
-                            <td className="p-3 font-mono font-bold text-slate-300">{transportIdFormatted}</td>
+                            <td className="p-3 font-mono font-bold text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">{transportIdFormatted}</td>
                             <td className="p-3 font-bold text-white">
                               {transport.driverName || 'N/A'}
                               <div className="font-mono text-sky-400 text-[11px]">{transport.plateNumber || ''}</div>
@@ -5509,7 +5649,7 @@ export default function OperationsDashboard() {
                                       onClick={() =>
                                         setRejectionTarget({
                                           isOpen: true,
-                                          title: `Reject & Return Transport TR-2026-${transport.id.slice(-6).toUpperCase()} to Field Team`,
+                                          title: `Reject & Return Transport ${formatTransportId(transport)} to Field Team`,
                                           entityType: 'TransportRecord',
                                           entityId: transport.id,
                                           defaultTargetModule: 'FIELD',
@@ -5699,12 +5839,13 @@ export default function OperationsDashboard() {
                         if (!q) return matchesStatus;
 
                         const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
-                        const trId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
+                        const trId = formatTransportId(transport).toLowerCase();
+                        const legacyTrId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
                         const driver = (transport.driverName || '').toLowerCase();
                         const plate = (transport.plateNumber || '').toLowerCase();
                         const location = (intake.inventoryLocation || '').toLowerCase();
 
-                        return matchesStatus && (wrId.includes(q) || trId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
+                        return matchesStatus && (wrId.includes(q) || trId.includes(q) || legacyTrId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
                       }).map((intake) => {
                         const transport = intake.transport || {};
                         const wrIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
@@ -5763,7 +5904,10 @@ export default function OperationsDashboard() {
                               )}
                             </td>
                             <td className="p-3 text-left font-extrabold text-white">
-                              {intake.inventoryLocation || (isRecorded ? 'Main Warehouse' : '--')}
+                              <div>{intake.inventoryLocation || (isRecorded ? 'Main Warehouse' : '--')}</div>
+                              <div className="text-[10px] text-amber-300 font-mono font-bold mt-0.5">
+                                WH: {getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse)} ({getWarehouseName(intake.arrivedWarehouse || transport.destinationWarehouse)})
+                              </div>
                               {intake.inventoryStaffName && (
                                 <div className="text-[10px] text-slate-400 font-normal">By: {intake.inventoryStaffName}</div>
                               )}
@@ -5952,7 +6096,7 @@ export default function OperationsDashboard() {
                       filteredFinanceTrucks.map((truckData) => {
                         const t = truckData.transport || {};
                         const intake = truckData.intake || {};
-                        const trIdFormatted = `TR-2026-${t.id.slice(-6).toUpperCase()}`;
+                        const trIdFormatted = formatTransportId(t);
                         const wrIdFormatted = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'Awaiting Intake';
 
                         const fieldWeight = truckData.fieldWeight || 0;
@@ -6042,8 +6186,8 @@ export default function OperationsDashboard() {
 
                         return (
                           <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400">
-                              {trIdFormatted}
+                            <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap text-[11px] sm:text-xs">
+                              <span>{trIdFormatted}</span>
                               {getRejectionIndicator('TransportRecord', t.id, intake?.id, t.status)}
                             </td>
                             <td className="p-3 font-mono font-bold text-purple-400">{wrIdFormatted}</td>
@@ -6115,7 +6259,7 @@ export default function OperationsDashboard() {
                                       onClick={() =>
                                         setRejectionTarget({
                                           isOpen: true,
-                                          title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()}`,
+                                          title: `Reject & Return Transport ${formatTransportId(t)}`,
                                           entityType: 'TransportRecord',
                                           entityId: t.id,
                                           defaultTargetModule: 'INVENTORY',
@@ -6151,7 +6295,7 @@ export default function OperationsDashboard() {
                                     onClick={() =>
                                       setRejectionTarget({
                                         isOpen: true,
-                                        title: `Reject & Return Transport TR-2026-${t.id.slice(-6).toUpperCase()}`,
+                                        title: `Reject & Return Transport ${formatTransportId(t)}`,
                                         entityType: 'TransportRecord',
                                         entityId: t.id,
                                         defaultTargetModule: 'INVENTORY',
@@ -7022,6 +7166,12 @@ export default function OperationsDashboard() {
                 <div className="flex justify-between">
                   <span className="text-slate-400">Delivered Net Weight:</span>
                   <strong className="text-emerald-400 text-sm">{invConfirmModalIntake.warehouseNetWeight.toFixed(2)} kg</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Arrived Warehouse:</span>
+                  <strong className="text-amber-300 font-bold">
+                    {getWarehouseDisplay(invConfirmModalIntake.arrivedWarehouse || invConfirmModalIntake.transport?.destinationWarehouse)}
+                  </strong>
                 </div>
               </div>
 

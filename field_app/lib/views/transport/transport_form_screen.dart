@@ -401,7 +401,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
         truckPhotoUrl: _truckPhotoPath,
         driverSignature: driverSigBase64,
         loadingLocation: _loadingLocation!,
-        destinationWarehouse: _destinationWarehouse!,
+        destinationWarehouse: _destinationWarehouse!.contains(' - ') ? _destinationWarehouse!.split(' - ').first.trim() : _destinationWarehouse!,
         notes: _notesController.text.trim(),
         totalSacks: totalSacks,
         totalFieldWeight: totalFieldWeight,
@@ -438,7 +438,11 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
       _mobileNumberController.text = item.mobileNumber ?? '';
       _notesController.text = item.notes ?? '';
       _loadingLocation = item.loadingLocation;
-      _destinationWarehouse = item.destinationWarehouse;
+      final warehouses = ConfigDao.instance.destinationWarehouses;
+      _destinationWarehouse = warehouses.firstWhere(
+        (wh) => wh.startsWith(item.destinationWarehouse) || wh.contains(item.destinationWarehouse) || wh == item.destinationWarehouse,
+        orElse: () => item.destinationWarehouse,
+      );
       _truckCleaned = item.truckCleaned;
       _truckPhotoPath = item.truckPhotoUrl;
       _existingDriverSignatureBase64 = item.driverSignature;

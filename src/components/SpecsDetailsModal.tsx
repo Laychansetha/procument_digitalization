@@ -8,6 +8,7 @@ interface SpecsDetailsModalProps {
   spec: any;
   onEdit?: (spec: any) => void;
   isUsedForPurchase?: boolean;
+  isLocked?: boolean;
 }
 
 export default function SpecsDetailsModal({
@@ -16,6 +17,7 @@ export default function SpecsDetailsModal({
   spec,
   onEdit,
   isUsedForPurchase = false,
+  isLocked = false,
 }: SpecsDetailsModalProps) {
   if (!isOpen || !spec) return null;
 
@@ -130,16 +132,20 @@ export default function SpecsDetailsModal({
         {/* Footer Actions */}
         <div className="p-4 bg-white/5 border-t border-white/10 flex items-center justify-between gap-3">
           <div className="text-[11px] text-slate-400">
-            {isUsedForPurchase ? (
+            {isLocked ? (
               <span className="text-amber-400 font-bold flex items-center gap-1">
-                <Lock className="w-3.5 h-3.5" /> Used in Purchase Record (Locked)
+                <Lock className="w-3.5 h-3.5" /> Dispatched in Transport (Locked)
+              </span>
+            ) : isUsedForPurchase ? (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Linked to Purchase (Updates will sync)
               </span>
             ) : (
               'Ready for purchase link'
             )}
           </div>
           <div className="flex items-center gap-2">
-            {onEdit && !isUsedForPurchase && (
+            {onEdit && !isLocked && (
               <button
                 onClick={() => {
                   onClose();

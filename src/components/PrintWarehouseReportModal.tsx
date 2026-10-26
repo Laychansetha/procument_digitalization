@@ -2,6 +2,9 @@
 
 import { X, Printer } from 'lucide-react';
 import { getReportTranslation } from '@/lib/report-translations';
+import { formatTransportId } from '@/lib/transport-id';
+import { formatPurchaseId } from '@/lib/purchase-id';
+import { getWarehouseDisplay, getWarehouseId } from '@/lib/warehouse-config';
 
 interface PrintWarehouseReportModalProps {
   isOpen: boolean;
@@ -21,8 +24,10 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
     window.print();
   };
 
-  const intakeId = `WR-2026-${intake.id?.slice(-6).toUpperCase()}`;
-  const transportId = `TR-2026-${transport.id?.slice(-6).toUpperCase()}`;
+  const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+  const staffUsername = intake.receivingStaffName || 'staff';
+  const intakeId = `${staffUsername}_${arrivedWh}`;
+  const transportId = formatTransportId(transport);
 
   const fieldWeight = transport.totalFieldWeight || 0;
   const netWeight = intake.warehouseNetWeight || 0;
@@ -73,6 +78,7 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
               <div>
                 <p><strong className="text-slate-600">{t.dateTime}</strong> {new Date(intake.createdAt).toLocaleString()}</p>
                 <p><strong className="text-slate-600">Receiving Staff:</strong> {intake.receivingStaffName || 'Warehouse Scale Staff'}</p>
+                <p><strong className="text-slate-600">Arrived Warehouse:</strong> <span className="font-mono font-bold text-slate-800">{getWarehouseDisplay(intake.arrivedWarehouse || transport.destinationWarehouse)}</span></p>
                 <p><strong className="text-slate-600">Loaded Farmers:</strong> {purchases.length} Invoices Loaded</p>
                 <p><strong className="text-slate-600">Total Loaded Sacks:</strong> {transport.totalSacks} Sacks</p>
               </div>
@@ -127,7 +133,7 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
                     const item = p.items?.[0] || {};
                     return (
                       <tr key={p.id}>
-                        <td className="p-2 font-mono text-purple-900 font-bold">PR-2026-{p.id.slice(-6).toUpperCase()}</td>
+                        <td className="p-2 font-mono text-purple-900 font-bold whitespace-nowrap">{formatPurchaseId(p)}</td>
                         <td className="p-2 font-bold text-emerald-800">{p.familyCode}</td>
                         <td className="p-2 font-bold">{p.farmerName}</td>
                         <td className="p-2">{p.village}</td>
@@ -185,6 +191,7 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
           <div className="space-y-1">
             <p><strong className="text-slate-700">{t.dateTime}</strong> {new Date(intake.createdAt).toLocaleString()}</p>
             <p><strong className="text-slate-700">Receiving Staff:</strong> {intake.receivingStaffName || 'Warehouse Scale Staff'}</p>
+            <p><strong className="text-slate-700">Arrived Warehouse:</strong> <span className="font-mono font-bold text-slate-800">{getWarehouseDisplay(intake.arrivedWarehouse || transport.destinationWarehouse)}</span></p>
             <p><strong className="text-slate-700">Loaded Farmers:</strong> {purchases.length} Invoices Loaded</p>
             <p><strong className="text-slate-700">Total Loaded Sacks:</strong> {transport.totalSacks} Sacks</p>
           </div>
@@ -238,7 +245,7 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
               const item = p.items?.[0] || {};
               return (
                 <tr key={p.id}>
-                  <td className="p-2 font-mono text-purple-900 font-bold border-r border-slate-200">PR-2026-{p.id.slice(-6).toUpperCase()}</td>
+                  <td className="p-2 font-mono text-purple-900 font-bold border-r border-slate-200 whitespace-nowrap">{formatPurchaseId(p)}</td>
                   <td className="p-2 font-bold text-emerald-800 border-r border-slate-200">{p.familyCode}</td>
                   <td className="p-2 font-bold border-r border-slate-200">{p.farmerName}</td>
                   <td className="p-2 border-r border-slate-200">{p.village}</td>

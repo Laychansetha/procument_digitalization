@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 import { processAndSaveImage } from '@/lib/image-upload-server';
+import { generateTransportId } from '@/lib/transport-id';
+import { getWarehouseId } from '@/lib/warehouse-config';
 
 export async function GET() {
   try {
@@ -60,6 +62,7 @@ export async function POST(request: Request) {
       truckPhotoUrl,
       driverSignature,
       selectedPurchaseIds, // Array of purchase IDs assigned to this truck
+      fieldStaffName,
     } = body;
 
     if (!driverName || !plateNumber) {
@@ -90,9 +93,20 @@ export async function POST(request: Request) {
 
     const savedTruckPhoto = await processAndSaveImage(truckPhotoUrl, 'truck_loading');
 
+    // Generate Transport ID combining truck plate number and dispatch date in DDMMYY format
+    // Example: Truck plate: 3A-8899, Dispatch date: 26 October 2026 -> 3A-8899_261026
+    const baseId = generateTransportId(plateNumber, body.date || new Date());
+    let transportId = baseId;
+    let counter = 2;
+    while (await db.transportRecord.findUnique({ where: { id: transportId } })) {
+      transportId = `${baseId}_${counter}`;
+      counter++;
+    }
+
     // Create Transport Record
     const transport = await db.transportRecord.create({
       data: {
+        id: transportId,
         driverName: driverName.trim(),
         plateNumber: plateNumber.toUpperCase().trim(),
         mobileNumber: mobileNumber || null,
@@ -100,11 +114,11 @@ export async function POST(request: Request) {
         truckPhotoUrl: savedTruckPhoto || truckPhotoUrl || null,
         driverSignature: driverSignature || null,
         loadingLocation: loadingLocation || 'Chhaeb Buying Station',
-        destinationWarehouse: destinationWarehouse || 'Central Mill Warehouse, Preah Vihear',
+        destinationWarehouse: getWarehouseId(destinationWarehouse),
         notes: notes || null,
         totalSacks,
         totalFieldWeight,
-        fieldStaffName: userName || 'Field Inspector',
+        fieldStaffName: fieldStaffName?.trim() || userName || 'Field Inspector',
         fieldStaffDate: new Date().toISOString().split('T')[0],
         fieldStaffTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'EN_ROUTE',

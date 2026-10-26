@@ -38,17 +38,20 @@ export async function PUT(
       return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
     }
 
-    // LOCKING RULE: Cannot edit SpecsRecord if an active (unrejected) PurchaseRecord is linked to it
+    // LOCKING RULE: Cannot edit SpecsRecord if linked purchase has already been assigned to transport or dispatched
     const linkedPurchase = await db.purchaseRecord.findFirst({
       where: {
         specsRecordId: id,
         status: { notIn: ['REJECTED'] },
       },
+      include: {
+        items: true,
+      },
     });
 
-    if (linkedPurchase) {
+    if (linkedPurchase && (linkedPurchase.status !== 'PENDING' || linkedPurchase.transportRecordId)) {
       return NextResponse.json(
-        { error: 'This Specs Record has already been used for an active purchase and can no longer be edited unless the purchase is removed or rejected.' },
+        { error: 'This Specs Record cannot be edited because its linked purchase has already been assigned to transport or dispatched.' },
         { status: 400 }
       );
     }
@@ -90,6 +93,50 @@ export async function PUT(
         bestQualifyingGrade: body.bestQualifyingGrade || body.selectedGrade || existing.bestQualifyingGrade,
       },
     });
+
+    // If a pending purchase is linked, update it to reflect the updated specs
+    if (linkedPurchase) {
+      const item = linkedPurchase.items?.[0];
+      if (item) {
+        const newStandardPrice = parsedFinalPrice;
+        const newFinalPrice = newStandardPrice + item.additionalPrice;
+        const newTotalValue = item.quantity * newFinalPrice;
+        const newSeedDeduction = Math.round(linkedPurchase.seedRepayment * newFinalPrice);
+        const newNetPayment = Math.max(0, newTotalValue - newSeedDeduction);
+
+        await db.purchaseItem.update({
+          where: { id: item.id },
+          data: {
+            variety: updated.paddyType,
+            grade: updated.selectedGrade,
+            standardPrice: newStandardPrice,
+            finalPrice: newFinalPrice,
+            totalValue: newTotalValue,
+          },
+        });
+
+        await db.purchaseRecord.update({
+          where: { id: linkedPurchase.id },
+          data: {
+            familyCode: updated.familyCode,
+            farmerName: updated.farmerName,
+            village: updated.village,
+            totalPayment: newTotalValue,
+            seedDeduction: newSeedDeduction,
+            netPayment: newNetPayment,
+          },
+        });
+      } else {
+        await db.purchaseRecord.update({
+          where: { id: linkedPurchase.id },
+          data: {
+            familyCode: updated.familyCode,
+            farmerName: updated.farmerName,
+            village: updated.village,
+          },
+        });
+      }
+    }
 
     // Audit Log
     await logAudit({

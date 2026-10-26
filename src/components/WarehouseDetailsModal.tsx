@@ -4,6 +4,9 @@ import { X, Scale, Camera, Eye, MapPin, User, Package, CheckCircle2, AlertTriang
 import { formatImageSrc } from '@/lib/image-utils';
 
 import RejectionHistorySection from '@/components/RejectionHistorySection';
+import { formatTransportId } from '@/lib/transport-id';
+import { formatPurchaseId } from '@/lib/purchase-id';
+import { getWarehouseId } from '@/lib/warehouse-config';
 
 interface WarehouseDetailsModalProps {
   isOpen: boolean;
@@ -22,8 +25,10 @@ export default function WarehouseDetailsModal({
 
   const transport = intake.transport || {};
   const purchases = transport.purchases || [];
-  const receivingIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
-  const transportIdFormatted = `TR-2026-${transport.id?.slice(-6).toUpperCase()}`;
+  const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+  const staffUsername = intake.receivingStaffName || 'staff';
+  const receivingIdFormatted = `${staffUsername}_${arrivedWh}`;
+  const transportIdFormatted = formatTransportId(transport);
 
   const fieldWeight = transport.totalFieldWeight || 0;
   const netWeight = intake.warehouseNetWeight || 0;
@@ -62,6 +67,8 @@ export default function WarehouseDetailsModal({
       'Driver Name',
       'Truck Plate Number',
       'Receiving Staff',
+      'Field Destination',
+      'Arrived Warehouse',
       'Warehouse Gross Weight (Kg)',
       'Warehouse Tare Weight (Kg)',
       'Warehouse Net Weight (Kg)',
@@ -79,6 +86,8 @@ export default function WarehouseDetailsModal({
       transport.driverName || '',
       transport.plateNumber || '',
       intake.receivingStaffName || 'Warehouse Staff',
+      getWarehouseId(transport.destinationWarehouse),
+      getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse),
       intake.warehouseGrossWeight || 0,
       intake.warehouseTareWeight || 0,
       netWeight,
@@ -111,7 +120,7 @@ export default function WarehouseDetailsModal({
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
       const f = p.farmerProfile || {};
-      const pIdFormatted = `PR-2026-${p.id.slice(-6).toUpperCase()}`;
+      const pIdFormatted = formatPurchaseId(p);
 
       rows.push([
         pIdFormatted,
@@ -187,7 +196,7 @@ export default function WarehouseDetailsModal({
           {/* Rejection Audit History */}
           <RejectionHistorySection entityType="WarehouseIntake" entityId={intake.id} />
           {/* Transport Details Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
             <div>
               <span className="text-slate-400 font-bold uppercase text-[10px] block">Transport ID</span>
               <span className="text-sky-400 font-mono font-bold">{transportIdFormatted}</span>
@@ -203,6 +212,14 @@ export default function WarehouseDetailsModal({
             <div>
               <span className="text-slate-400 font-bold uppercase text-[10px] block">Receiving Staff</span>
               <span className="text-emerald-400 font-bold">👤 {intake.receivingStaffName || 'Warehouse Staff'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 font-bold uppercase text-[10px] block">Field Destination</span>
+              <span className="text-slate-300 font-mono font-bold">{getWarehouseId(transport.destinationWarehouse)}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 font-bold uppercase text-[10px] block">Arrived Warehouse</span>
+              <span className="text-amber-300 font-mono font-bold">{getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse)}</span>
             </div>
           </div>
 
@@ -384,7 +401,7 @@ export default function WarehouseDetailsModal({
                     const item = p.items?.[0] || {};
                     return (
                       <tr key={p.id} className="hover:bg-white/5">
-                        <td className="p-2.5 font-mono font-bold text-sky-400">PR-2026-{p.id.slice(-6).toUpperCase()}</td>
+                        <td className="p-2.5 font-mono font-bold text-sky-400 whitespace-nowrap">{formatPurchaseId(p)}</td>
                         <td className="p-2.5 font-extrabold text-amber-400">{p.familyCode}</td>
                         <td className="p-2.5 font-bold text-white">{p.farmerName}</td>
                         <td className="p-2.5 text-slate-300">{p.village}</td>

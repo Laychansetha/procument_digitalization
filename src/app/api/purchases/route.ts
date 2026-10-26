@@ -6,6 +6,8 @@ import { getResolvedUser } from '@/lib/sync-auth';
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 
+import { generatePurchaseId } from '@/lib/purchase-id';
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -97,8 +99,18 @@ export async function POST(request: Request) {
     const savedFarmerSig = await processAndSaveImage(signatureFarmer, 'sig_farmer');
     const savedStaffSig = await processAndSaveImage(signatureStaff, 'sig_staff');
 
+    // Generate unique Purchase ID in FamilyCode_DDMMYY_24H format
+    const basePurchaseId = generatePurchaseId(normCode);
+    let purchaseId = basePurchaseId;
+    let dupCounter = 2;
+    while (await db.purchaseRecord.findUnique({ where: { id: purchaseId } })) {
+      purchaseId = `${basePurchaseId}_${dupCounter}`;
+      dupCounter++;
+    }
+
     const purchase = await db.purchaseRecord.create({
       data: {
+        id: purchaseId,
         familyCode: normCode,
         farmerName: farmerName.trim(),
         village: normVillage,

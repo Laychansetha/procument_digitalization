@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { logAudit } from '@/lib/audit';
+import { getWarehouseId } from '@/lib/warehouse-config';
 
 export async function PUT(
   request: Request,
@@ -52,6 +53,7 @@ export async function PUT(
       truckPhotoUrl,
       driverSignature,
       selectedPurchaseIds,
+      fieldStaffName,
     } = body;
 
     if (!driverName || !plateNumber) {
@@ -116,11 +118,12 @@ export async function PUT(
         driverName,
         plateNumber,
         mobileNumber: mobileNumber !== undefined ? mobileNumber : existing.mobileNumber,
+        fieldStaffName: fieldStaffName !== undefined ? fieldStaffName.trim() : existing.fieldStaffName,
         truckCleaned: truckCleaned !== undefined ? Boolean(truckCleaned) : existing.truckCleaned,
         truckPhotoUrl: savedTruckPhoto !== undefined ? savedTruckPhoto : existing.truckPhotoUrl,
         driverSignature: driverSignature !== undefined ? driverSignature : existing.driverSignature,
         loadingLocation: loadingLocation || existing.loadingLocation,
-        destinationWarehouse: destinationWarehouse || existing.destinationWarehouse,
+        destinationWarehouse: destinationWarehouse ? getWarehouseId(destinationWarehouse) : existing.destinationWarehouse,
         notes: notes !== undefined ? notes : existing.notes,
         totalSacks,
         totalFieldWeight,

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/audit';
+import { getWarehouseId } from '@/lib/warehouse-config';
 
 export async function GET() {
   try {
@@ -65,6 +66,8 @@ export async function POST(request: Request) {
       tareScalePhotoUrl,
       transportInvoiceUrl,
       notes,
+      receivingStaffName,
+      arrivedWarehouse,
     } = body;
 
     if (!transportId || warehouseGrossWeight === undefined || warehouseTareWeight === undefined) {
@@ -97,6 +100,8 @@ export async function POST(request: Request) {
     const savedTarePhoto = await processAndSaveImage(tareScalePhotoUrl, 'tare_scale');
     const savedInvoicePhoto = await processAndSaveImage(transportInvoiceUrl, 'invoice');
 
+    const actualArrivedWarehouse = arrivedWarehouse ? getWarehouseId(arrivedWarehouse) : (getWarehouseId(transport.destinationWarehouse) || 'W002');
+
     // Check if an intake record already exists for this transportId
     const existingIntake = await db.warehouseIntake.findUnique({
       where: { transportId },
@@ -116,7 +121,8 @@ export async function POST(request: Request) {
           tareScalePhotoUrl: savedTarePhoto || existingIntake.tareScalePhotoUrl,
           transportInvoiceUrl: savedInvoicePhoto || existingIntake.transportInvoiceUrl,
           receivingStaffId: userId,
-          receivingStaffName: session.user?.name || existingIntake.receivingStaffName,
+          receivingStaffName: receivingStaffName?.trim() || session.user?.name || existingIntake.receivingStaffName || 'Warehouse Staff',
+          arrivedWarehouse: actualArrivedWarehouse,
           notes: notes !== undefined ? notes : existingIntake.notes,
           status: 'RECEIVED',
           inventoryStatus: 'WAITING_FOR_INVENTORY',
@@ -149,7 +155,8 @@ export async function POST(request: Request) {
           tareScalePhotoUrl: savedTarePhoto || null,
           transportInvoiceUrl: savedInvoicePhoto || null,
           receivingStaffId: userId,
-          receivingStaffName: session.user?.name || 'Warehouse Staff',
+          receivingStaffName: receivingStaffName?.trim() || session.user?.name || 'Warehouse Staff',
+          arrivedWarehouse: actualArrivedWarehouse,
           notes: notes || null,
           status: 'RECEIVED',
           inventoryStatus: 'WAITING_FOR_INVENTORY',

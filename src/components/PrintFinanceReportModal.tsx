@@ -2,6 +2,8 @@
 
 import { X, Printer } from 'lucide-react';
 import { getReportTranslation } from '@/lib/report-translations';
+import { formatTransportId } from '@/lib/transport-id';
+import { formatPurchaseId } from '@/lib/purchase-id';
 
 interface PrintFinanceReportModalProps {
   isOpen: boolean;
@@ -22,7 +24,7 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
     window.print();
   };
 
-  const transportId = `TR-2026-${transport.id?.slice(-6).toUpperCase()}`;
+  const transportId = formatTransportId(transport);
   const intakeId = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'N/A';
 
   const fieldWeight = truckData.fieldWeight || 0;
@@ -96,7 +98,7 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
                     const f = p.farmerProfile || {};
                     return (
                       <tr key={p.id}>
-                        <td className="p-2 font-mono text-sky-900 font-bold">PR-2026-{p.id.slice(-6).toUpperCase()}</td>
+                        <td className="p-2 font-mono text-sky-900 font-bold whitespace-nowrap">{formatPurchaseId(p)}</td>
                         <td className="p-2 font-bold text-emerald-800">{p.familyCode}</td>
                         <td className="p-2 font-bold">{p.farmerName}</td>
                         <td className="p-2 font-bold text-slate-800">{f.accountHolder || p.farmerName}</td>
@@ -181,7 +183,7 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
               const f = p.farmerProfile || {};
               return (
                 <tr key={p.id}>
-                  <td className="p-2 font-mono text-sky-900 font-bold border-r border-slate-200">PR-2026-{p.id.slice(-6).toUpperCase()}</td>
+                  <td className="p-2 font-mono text-sky-900 font-bold border-r border-slate-200 whitespace-nowrap">{formatPurchaseId(p)}</td>
                   <td className="p-2 font-bold text-emerald-800 border-r border-slate-200">{p.familyCode}</td>
                   <td className="p-2 font-bold border-r border-slate-200">{p.farmerName}</td>
                   <td className="p-2 font-bold text-slate-800 border-r border-slate-200">{f.accountHolder || p.farmerName}</td>

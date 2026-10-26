@@ -57,9 +57,10 @@ class ConfigDao {
   ];
 
   List<String> _destinationWarehouses = [
-    'CACC (KPT)',
-    'Amru Nature (KPG)',
-    'Other'
+    'W002 - CACC (KPT)',
+    'W003 - Amru Nature (KPG)',
+    'W004 - Koh Nhek',
+    'W005 - Other'
   ];
 
   final Map<String, double> _basePrices = {
