@@ -1,12 +1,12 @@
 'use client';
 
-import { X, Scale, Camera, Eye, MapPin, User, Package, CheckCircle2, AlertTriangle, XCircle, FileSpreadsheet } from 'lucide-react';
+import { X, Scale, Camera, CheckCircle2, AlertTriangle, XCircle, FileSpreadsheet } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
 
 import RejectionHistorySection from '@/components/RejectionHistorySection';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
-import { getWarehouseId } from '@/lib/warehouse-config';
+import { getWarehouseId, formatReceivingIdWithDate } from '@/lib/warehouse-config';
 
 interface WarehouseDetailsModalProps {
   isOpen: boolean;
@@ -28,6 +28,7 @@ export default function WarehouseDetailsModal({
   const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
   const staffUsername = intake.receivingStaffName || 'staff';
   const receivingIdFormatted = `${staffUsername}_${arrivedWh}`;
+  const receivingIdWithDate = formatReceivingIdWithDate(intake);
   const transportIdFormatted = formatTransportId(transport);
 
   const fieldWeight = transport.totalFieldWeight || 0;
@@ -61,7 +62,7 @@ export default function WarehouseDetailsModal({
     // TOP SUMMARY SECTION
     rows.push(['=== WAREHOUSE SCALE RECEIVING MANIFEST ===']);
     rows.push([
-      'Warehouse Intake ID',
+      'Warehouse Receiving ID',
       'Transport ID',
       'Receiving Date & Time',
       'Driver Name',
@@ -75,12 +76,9 @@ export default function WarehouseDetailsModal({
       'Field Dispatch Weight (Kg)',
       'Weight Variance (Kg)',
       'Weight Variance (%)',
-      'Tolerance Audit Status',
-      'Inventory Status',
-      'Storage Location',
     ]);
     rows.push([
-      receivingIdFormatted,
+      receivingIdWithDate,
       transportIdFormatted,
       new Date(intake.createdAt).toLocaleString(),
       transport.driverName || '',
@@ -94,15 +92,13 @@ export default function WarehouseDetailsModal({
       fieldWeight,
       diffKg,
       `${diffPercent.toFixed(2)}%`,
-      toleranceText,
-      intake.inventoryStatus || 'WAITING_FOR_INVENTORY',
-      intake.inventoryLocation || 'Main Warehouse',
     ]);
 
     // ITEMIZED PURCHASE INVOICES SECTION
     rows.push([]);
     rows.push(['--- ASSIGNED FARMER PURCHASE INVOICES ---']);
     rows.push([
+      'Warehouse Receiving ID',
       'Purchase ID',
       'Family Code',
       'Farmer Name',
@@ -112,8 +108,6 @@ export default function WarehouseDetailsModal({
       'Number of Sacks',
       'Field Net Weight (Kg)',
       'Total Net Payment (KHR)',
-      'Bank Name',
-      'Account Number',
       'Account Holder',
     ]);
 
@@ -123,6 +117,7 @@ export default function WarehouseDetailsModal({
       const pIdFormatted = formatPurchaseId(p);
 
       rows.push([
+        receivingIdWithDate,
         pIdFormatted,
         p.familyCode || '',
         p.farmerName || '',
@@ -132,8 +127,6 @@ export default function WarehouseDetailsModal({
         item.sacks || 0,
         p.totalWeight || 0,
         p.netPayment || 0,
-        f.bankName || 'N/A',
-        f.accountNumber || 'N/A',
         f.accountHolder || p.farmerName,
       ]);
     });
@@ -145,7 +138,7 @@ export default function WarehouseDetailsModal({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().split('T')[0];
-    const safeWrId = receivingIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
+    const safeWrId = receivingIdWithDate.replace(/[^a-zA-Z0-9-]/g, '_');
 
     link.setAttribute('href', encodedUri);
     link.setAttribute('download', `Warehouse_Receiving_${safeWrId}_${dateStr}.csv`);
@@ -371,17 +364,9 @@ export default function WarehouseDetailsModal({
 
           {/* Assigned Cargo Manifest */}
           <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h4 className="font-extrabold text-xs text-slate-200 uppercase tracking-wider">
-                📦 Received Cargo Manifest ({purchases.length} Purchase Records)
-              </h4>
-              <button
-                onClick={exportTruckManifestCSV}
-                className="bg-emerald-600/90 hover:bg-emerald-600 text-white px-3 py-1 rounded-lg font-extrabold text-[11px] flex items-center gap-1.5 self-start sm:self-auto transition-colors"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5" /> Export {receivingIdFormatted} CSV
-              </button>
-            </div>
+            <h4 className="font-extrabold text-xs text-slate-200 uppercase tracking-wider">
+              📦 Received Cargo Manifest ({purchases.length} Purchase Records)
+            </h4>
 
             <div className="overflow-x-auto border border-white/10 rounded-xl">
               <table className="w-full text-left text-xs">

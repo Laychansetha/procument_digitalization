@@ -14,6 +14,11 @@ export async function GET() {
 
     const specs = await db.specsRecord.findMany({
       where: whereClause,
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json(specs);
@@ -90,6 +95,12 @@ export async function POST(request: Request) {
           basePrice: bPrice,
           finalPrice: fPrice,
           bestQualifyingGrade: bestQualifyingGrade || selectedGrade,
+          createdBy: userId,
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
         },
       });
     } else {
@@ -112,6 +123,11 @@ export async function POST(request: Request) {
           finalPrice: fPrice,
           bestQualifyingGrade: bestQualifyingGrade || selectedGrade,
           createdBy: userId,
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
         },
       });
     }

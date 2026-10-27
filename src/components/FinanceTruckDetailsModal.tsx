@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { X, Scale, Camera, CheckCircle2, AlertTriangle, XCircle, FileSpreadsheet } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
 
 import RejectionHistorySection from '@/components/RejectionHistorySection';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
+import { formatReceivingIdWithDate } from '@/lib/warehouse-config';
 
 interface FinanceTruckDetailsModalProps {
   isOpen: boolean;
@@ -24,14 +26,19 @@ export default function FinanceTruckDetailsModal({
   truckData,
   scaleToleranceConfig = { acceptableKg: 300, warningKg: 500, criticalKg: 500 },
 }: FinanceTruckDetailsModalProps) {
+  const [exchangeRate, setExchangeRate] = useState<number | ''>('');
+
   if (!isOpen || !truckData) return null;
+
+  const rate = exchangeRate !== '' && Number(exchangeRate) > 0 ? Number(exchangeRate) : 0;
+  const isUSD = rate > 0;
 
   const transport = truckData.transport || {};
   const intake = truckData.intake || {};
   const purchases = truckData.purchases || [];
 
   const transportIdFormatted = formatTransportId(transport);
-  const intakeIdFormatted = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'Awaiting Intake';
+  const intakeIdFormatted = intake.id ? formatReceivingIdWithDate({ ...intake, transport }) : 'Awaiting Intake';
 
   const fieldWeight = truckData.fieldWeight || 0;
   const netWeight = truckData.warehouseNetWeight || 0;
@@ -62,9 +69,12 @@ export default function FinanceTruckDetailsModal({
     const rows: any[][] = [];
 
     rows.push(['=== TRUCK DISBURSEMENT & BANK PAYMENT REPORT ===']);
+    if (isUSD) {
+      rows.push(['Exchange Rate', `1 USD = ${rate} KHR`]);
+    }
     rows.push([
       'Transport ID',
-      'Warehouse Intake ID',
+      'Receiving ID',
       'Driver Name',
       'Truck Plate Number',
       'Total Farmers',
@@ -75,6 +85,7 @@ export default function FinanceTruckDetailsModal({
       'Absolute Variance (Kg)',
       'Tolerance Status',
       'Total Truck Net Payment (KHR)',
+      ...(isUSD ? ['Total Truck Net Payment (USD)', 'Exchange Rate (KHR/USD)'] : []),
     ]);
     rows.push([
       transportIdFormatted,
@@ -89,6 +100,7 @@ export default function FinanceTruckDetailsModal({
       absDiffKg.toFixed(2),
       toleranceText,
       truckData.totalTruckNetPayment || 0,
+      ...(isUSD ? [((truckData.totalTruckNetPayment || 0) / rate).toFixed(2), rate] : []),
     ]);
 
     rows.push([]);
@@ -102,7 +114,8 @@ export default function FinanceTruckDetailsModal({
       'Grade',
       'Sacks',
       'Field Net Weight (Kg)',
-      'Total Net Payment (KHR)',
+      'Net Payment (KHR)',
+      ...(isUSD ? ['Net Payment (USD)'] : []),
       'Bank Name',
       'Account Number',
       'Account Holder',
@@ -126,6 +139,7 @@ export default function FinanceTruckDetailsModal({
         item.sacks || 0,
         p.totalWeight || 0,
         p.netPayment || 0,
+        ...(isUSD ? [((p.netPayment || 0) / rate).toFixed(2)] : []),
         f.bankName || 'N/A',
         f.accountNumber || 'N/A',
         f.accountHolder || p.farmerName,
@@ -177,15 +191,6 @@ export default function FinanceTruckDetailsModal({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={exportTruckFinanceCSV}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1.5 shadow-md transition-colors"
-              title="Export Truck Farmer Payment CSV for Bank Transfers"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-              <span>Export Payment CSV</span>
-            </button>
-
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg">
               <X className="w-5 h-5" />
             </button>
@@ -220,31 +225,35 @@ export default function FinanceTruckDetailsModal({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Field Weight</span>
-                <span className="font-mono font-bold text-white text-sm">{fieldWeight.toFixed(2)} kg</span>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+              <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg space-y-0.5">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold truncate">Field Weight</span>
+                <span className="font-mono font-bold text-white text-xs sm:text-[13px] block truncate">{fieldWeight.toFixed(2)} kg</span>
               </div>
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Warehouse Net Weight</span>
-                <span className="font-mono font-bold text-sky-400 text-sm">{netWeight.toFixed(2)} kg</span>
+              <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg space-y-0.5">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold truncate">Warehouse Net</span>
+                <span className="font-mono font-bold text-sky-400 text-xs sm:text-[13px] block truncate">{netWeight.toFixed(2)} kg</span>
               </div>
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Weight Diff (+/- kg)</span>
-                <span className={`font-mono font-extrabold text-sm ${diffKg >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg space-y-0.5">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold truncate">Diff (+/- kg)</span>
+                <span className={`font-mono font-extrabold text-xs sm:text-[13px] block truncate ${diffKg >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
                   {diffKg >= 0 ? '+' : ''}{diffKg.toFixed(2)} kg
                 </span>
               </div>
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Absolute Diff (ABS)</span>
-                <span className={`font-mono font-extrabold text-sm ${absDiffKg <= acceptableKg ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg space-y-0.5">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold truncate">Diff (ABS)</span>
+                <span className={`font-mono font-extrabold text-xs sm:text-[13px] block truncate ${absDiffKg <= acceptableKg ? 'text-emerald-400' : 'text-amber-400'}`}>
                   {absDiffKg.toFixed(2)} kg
                 </span>
               </div>
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
-                <span className="text-amber-400 block text-[10px] uppercase font-bold">Total Net Payment</span>
-                <span className="font-mono font-black text-amber-400 text-sm">
-                  {truckData.totalTruckNetPayment.toLocaleString()} KHR
+              <div className="px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-0.5">
+                <span className="text-amber-400 block text-[10px] uppercase font-bold truncate">
+                  Net Payment {isUSD ? '(USD)' : ''}
+                </span>
+                <span className="font-mono font-black text-amber-400 text-xs sm:text-[13px] block truncate">
+                  {isUSD
+                    ? `$${((truckData.totalTruckNetPayment || 0) / rate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`
+                    : `${(truckData.totalTruckNetPayment || 0).toLocaleString()} KHR`}
                 </span>
               </div>
             </div>
@@ -274,45 +283,66 @@ export default function FinanceTruckDetailsModal({
             )}
           </div>
 
-          {/* Scale Display Photos & Transport Invoice Document */}
+          {/* Scale Display Photos, Transport Invoice Document & Exchange Rate */}
           {intake && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-sky-400 uppercase block">Gross Weight Scale Photo</span>
-                  {intake.grossScalePhotoUrl ? (
-                    <a href={intake.grossScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 mt-1">
-                      <Camera className="w-3.5 h-3.5" /> View Gross Photo
-                    </a>
-                  ) : (
-                    <span className="text-slate-500 text-[10px]">No Photo Attached</span>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <div className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg space-y-0.5 flex flex-col justify-center">
+                <span className="text-[9.5px] font-bold text-sky-400 uppercase tracking-tight block truncate">Gross Scale Photo</span>
+                {intake.grossScalePhotoUrl ? (
+                  <a href={intake.grossScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
+                    <Camera className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">View Gross Photo</span>
+                  </a>
+                ) : (
+                  <span className="text-slate-500 text-[10px] italic">No Photo Attached</span>
+                )}
               </div>
 
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-sky-400 uppercase block">Tare Weight Scale Photo</span>
-                  {intake.tareScalePhotoUrl ? (
-                    <a href={intake.tareScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 mt-1">
-                      <Camera className="w-3.5 h-3.5" /> View Tare Photo
-                    </a>
-                  ) : (
-                    <span className="text-slate-500 text-[10px]">No Photo Attached</span>
-                  )}
-                </div>
+              <div className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg space-y-0.5 flex flex-col justify-center">
+                <span className="text-[9.5px] font-bold text-sky-400 uppercase tracking-tight block truncate">Tare Scale Photo</span>
+                {intake.tareScalePhotoUrl ? (
+                  <a href={intake.tareScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
+                    <Camera className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">View Tare Photo</span>
+                  </a>
+                ) : (
+                  <span className="text-slate-500 text-[10px] italic">No Photo Attached</span>
+                )}
               </div>
 
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-sky-400 uppercase block">Transport Invoice Photo</span>
-                  {intake.transportInvoiceUrl ? (
-                    <a href={intake.transportInvoiceUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 mt-1">
-                      <FileSpreadsheet className="w-3.5 h-3.5" /> View Transport Invoice
-                    </a>
-                  ) : (
-                    <span className="text-slate-500 text-[10px]">No Invoice Photo Attached</span>
-                  )}
+              <div className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg space-y-0.5 flex flex-col justify-center">
+                <span className="text-[9.5px] font-bold text-sky-400 uppercase tracking-tight block truncate">Transport Invoice</span>
+                {intake.transportInvoiceUrl ? (
+                  <a href={intake.transportInvoiceUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
+                    <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">View Invoice</span>
+                  </a>
+                ) : (
+                  <span className="text-slate-500 text-[10px] italic">No Invoice Attached</span>
+                )}
+              </div>
+
+              <div className="px-2.5 py-1.5 bg-white/5 border border-amber-500/30 rounded-lg space-y-0.5 flex flex-col justify-center">
+                <span className="text-[9.5px] font-bold text-amber-400 uppercase tracking-tight block truncate">Exchange Rate (USD)</span>
+                <div className="flex items-center gap-1 whitespace-nowrap">
+                  <span className="text-[11px] font-bold text-slate-300 font-mono shrink-0">$1 =</span>
+                  <input
+                    type="number"
+                    value={exchangeRate}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setExchangeRate('');
+                      } else {
+                        const num = parseFloat(val);
+                        setExchangeRate(isNaN(num) || num <= 0 ? '' : num);
+                      }
+                    }}
+                    placeholder="4000"
+                    className="w-full min-w-0 bg-[#1e293b] border border-amber-500/40 rounded px-1.5 py-0.5 text-[11px] text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400 no-spinners"
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
+                  />
+                  <span className="text-[10px] font-bold text-slate-400 shrink-0">KHR</span>
                 </div>
               </div>
             </div>
@@ -369,7 +399,7 @@ export default function FinanceTruckDetailsModal({
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <h4 className="font-extrabold text-xs text-white uppercase tracking-wider">
-                🌾 Farmer Purchase Invoices & Commercial Bank Account Verification ({purchases.length} Invoices)
+                🌾 Farmer Purchase Invoices & Bank Account Verification ({purchases.length} Invoices)
               </h4>
               <button
                 onClick={exportTruckFinanceCSV}
@@ -380,20 +410,20 @@ export default function FinanceTruckDetailsModal({
             </div>
 
             <div className="overflow-x-auto border border-white/10 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+              <table className="w-full text-left text-[10.5px]">
+                <thead className="bg-white/5 text-slate-400 uppercase font-bold text-[10px] tracking-wider border-b border-white/10">
                   <tr>
-                    <th className="p-2.5">Purchase ID</th>
-                    <th className="p-2.5">Family Code & Farmer</th>
-                    <th className="p-2.5">Variety / Grade</th>
-                    <th className="p-2.5 text-center">Sacks</th>
-                    <th className="p-2.5 text-right">Field Weight</th>
-                    <th className="p-2.5 text-right">Net Payment</th>
-                    <th className="p-2.5">Bank Information</th>
-                    <th className="p-2.5 text-center">Proof Docs</th>
+                    <th className="py-2 px-2.5 whitespace-nowrap">Purchase ID</th>
+                    <th className="py-2 px-2.5 whitespace-nowrap">Family Code & Farmer</th>
+                    <th className="py-2 px-2.5 whitespace-nowrap">Variety / Grade</th>
+                    <th className="py-2 px-2 text-center whitespace-nowrap">Sacks</th>
+                    <th className="py-2 px-2.5 text-right whitespace-nowrap">Field Weight</th>
+                    <th className="py-2 px-2.5 text-right whitespace-nowrap">Net Payment {isUSD ? '(USD)' : '(KHR)'}</th>
+                    <th className="py-2 px-2.5 whitespace-nowrap">Bank Information</th>
+                    <th className="py-2 px-2 text-center whitespace-nowrap">Proof Docs</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-white/10">
                   {purchases.map((p: any) => {
                     const item = p.items?.[0] || {};
                     const f = p.farmerProfile || {};
@@ -401,39 +431,57 @@ export default function FinanceTruckDetailsModal({
 
                     return (
                       <tr key={p.id} className="hover:bg-white/5">
-                        <td className="p-2.5 font-mono font-bold text-sky-400 whitespace-nowrap">{pIdFormatted}</td>
-                        <td className="p-2.5 font-bold text-[#ffffff]">
-                          <div>{p.farmerName} ({p.village})</div>
-                          <div className="font-extrabold text-amber-400 text-[10px]">🆔 {p.familyCode}</div>
+                        <td className="py-2 px-2.5 font-mono font-bold text-sky-400 whitespace-nowrap text-[10.5px]">
+                          {pIdFormatted}
                         </td>
-                        <td className="p-2.5">
-                          <span className="font-bold text-sky-300">{item.variety || 'Red Jasmine'}</span>
-                          <span className="ml-1 font-extrabold text-purple-400">({item.grade || 'A1'})</span>
+                        <td className="py-2 px-2.5 font-bold text-white whitespace-nowrap text-[10.5px]">
+                          <div className="truncate max-w-[150px]">{p.farmerName} ({p.village})</div>
+                          <div className="font-extrabold text-amber-400 text-[9.5px]">🆔 {p.familyCode}</div>
                         </td>
-                        <td className="p-2.5 text-center font-bold">{item.sacks || 0}</td>
-                        <td className="p-2.5 text-right font-mono font-bold text-slate-200">{p.totalWeight.toFixed(2)} kg</td>
-                        <td className="p-2.5 text-right font-mono font-black text-amber-400">
-                          {p.netPayment.toLocaleString()} KHR
+                        <td className="py-2 px-2.5 whitespace-nowrap text-[10.5px]">
+                          <div className="font-bold text-sky-300">{item.variety || 'Red Jasmine'}</div>
+                          <div className="font-extrabold text-purple-400 text-[9.5px]">Grade: {item.grade || 'A1'}</div>
                         </td>
-                        <td className="p-2.5">
+                        <td className="py-2 px-2 text-center font-bold text-slate-200 whitespace-nowrap text-[10.5px]">
+                          {item.sacks || 0}
+                        </td>
+                        <td className="py-2 px-2.5 text-right font-mono font-bold text-slate-200 whitespace-nowrap text-[10.5px]">
+                          {p.totalWeight.toFixed(2)} kg
+                        </td>
+                        <td className="py-2 px-2.5 text-right font-mono font-bold text-amber-400 whitespace-nowrap text-[10.5px]">
+                          {isUSD
+                            ? `$${((p.netPayment || 0) / rate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : `${(p.netPayment || 0).toLocaleString()} KHR`}
+                        </td>
+                        <td className="py-2 px-2.5 whitespace-nowrap text-[10.5px]">
                           {f.bankName ? (
                             <div>
-                              <span className="font-bold text-sky-400">{f.bankName}</span>
-                              <div className="font-mono text-slate-300 text-[11px]">{f.accountNumber}</div>
-                              <div className="text-[10px] text-slate-400">{f.accountHolder || p.farmerName} ({f.relationship})</div>
+                              <div className="font-bold text-sky-300">
+                                {f.bankName} · <span className="font-mono text-slate-200">{f.accountNumber}</span>
+                              </div>
+                              <div className="text-[9.5px] text-slate-400">
+                                {f.accountHolder || p.farmerName} ({f.relationship || 'Self'})
+                              </div>
                             </div>
                           ) : (
-                            <span className="text-slate-500 italic">No Profile</span>
+                            <span className="text-slate-500 italic text-[10px]">No Profile</span>
                           )}
                         </td>
-                        <td className="p-2.5 text-center space-y-1">
+                        <td className="py-2 px-2 text-center whitespace-nowrap">
                           {formatImageSrc(f?.bankDocumentUrl) ? (
-                            <a href={formatImageSrc(f.bankDocumentUrl)} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[10px] block">
+                            <a
+                              href={formatImageSrc(f.bankDocumentUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-emerald-400 font-bold underline text-[9.5px] block leading-tight hover:text-emerald-300"
+                            >
                               📄 Bank Paper Photo
                             </a>
                           ) : null}
                           {formatImageSrc(p.signatureFarmer) ? (
-                            <span className="text-emerald-400 font-bold text-[10px] block">✓ Farmer Signed</span>
+                            <span className="text-emerald-400 font-bold text-[9.5px] block leading-tight">
+                              ✓ Farmer Signed
+                            </span>
                           ) : null}
                         </td>
                       </tr>

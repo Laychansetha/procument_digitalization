@@ -108,8 +108,8 @@ export const reportTranslations: Record<SupportedLanguage, ReportTranslationDict
     relationship: 'Relationship',
     bankAccount: 'Bank & Account Number',
     netPaymentKhr: 'Net Payment (KHR)',
-    financeOfficer: 'Finance Verification Officer',
-    treasuryApprover: 'Treasury Payment Approver',
+    financeOfficer: 'Finance Verification',
+    treasuryApprover: 'Payment Approver',
   },
 
   km: {
@@ -161,8 +161,8 @@ export const reportTranslations: Record<SupportedLanguage, ReportTranslationDict
     relationship: 'ទំនាក់ទំនង',
     bankAccount: 'ធនាគារ និងលេខគណនី',
     netPaymentKhr: 'ប្រាក់ទូទាត់សុទ្ធ (រៀល)',
-    financeOfficer: 'មន្ត្រីផ្ទៀងផ្ទាត់ហិរញ្ញវត្ថុ',
-    treasuryApprover: 'អ្នកអនុម័តការទូទាត់បេឡា',
+    financeOfficer: 'ការផ្ទៀងផ្ទាត់ហិរញ្ញវត្ថុ',
+    treasuryApprover: 'អ្នកអនុម័តការទូទាត់',
   },
 };
 

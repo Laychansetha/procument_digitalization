@@ -48,6 +48,12 @@ export async function PUT(
         village: body.village !== undefined ? body.village : existing.village,
         phone: body.phone !== undefined ? body.phone : existing.phone,
         notes: body.notes !== undefined ? body.notes : existing.notes,
+        ...(userId ? { createdBy: userId } : {}),
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
       },
     });
 

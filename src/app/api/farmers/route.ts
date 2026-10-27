@@ -15,6 +15,11 @@ export async function GET() {
 
     const profiles = await db.farmerProfile.findMany({
       where: whereClause,
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
       orderBy: { updatedAt: 'desc' },
     });
     return NextResponse.json(profiles);
@@ -79,6 +84,12 @@ export async function POST(request: Request) {
           relationship: relationship || existing.relationship,
           bankDocumentUrl: savedDocUrl || existing.bankDocumentUrl,
           notes: notes || existing.notes,
+          createdBy: userId,
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
         },
       });
     } else {
@@ -96,6 +107,11 @@ export async function POST(request: Request) {
           bankDocumentUrl: savedDocUrl || null,
           notes: notes || '',
           createdBy: userId,
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
         },
       });
     }

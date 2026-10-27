@@ -91,6 +91,12 @@ export async function PUT(
         basePrice: parsedBasePrice,
         finalPrice: parsedFinalPrice,
         bestQualifyingGrade: body.bestQualifyingGrade || body.selectedGrade || existing.bestQualifyingGrade,
+        ...(userId ? { createdBy: userId } : {}),
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
       },
     });
 

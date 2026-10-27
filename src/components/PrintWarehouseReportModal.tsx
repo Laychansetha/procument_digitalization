@@ -65,7 +65,6 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
                 {t.companyName}
               </h1>
               <p className="text-[11px] text-slate-700 font-extrabold uppercase tracking-wider">{t.warehouseTitle}</p>
-              <p className="text-[10px] text-slate-500">{t.warehouseSubtitle}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
@@ -178,7 +177,6 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
             {t.companyName}
           </h1>
           <h2 className="text-xs font-black uppercase text-slate-800 tracking-wider">{t.warehouseTitle}</h2>
-          <p className="text-[10px] text-slate-600 font-bold">{t.warehouseSubtitle}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 border border-slate-300 rounded-lg mb-4 text-xs">

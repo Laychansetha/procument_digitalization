@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { formatImageSrc } from '@/lib/image-utils';
@@ -8,20 +8,14 @@ import {
   Search,
   CreditCard,
   Truck,
-  FileCheck,
-  Building2,
-  DollarSign,
   ShieldAlert,
   LogOut,
   Upload,
   CheckCircle2,
   AlertTriangle,
-  RefreshCw,
   Eye,
   ChevronDown,
   FileSpreadsheet,
-  Layers,
-  Sparkles,
   Plus,
   Trash2,
   Settings,
@@ -45,8 +39,6 @@ import {
   Users as UsersIcon,
   KeyRound,
   UserPlus,
-  ShieldCheck,
-  User,
   Lock as LockIcon,
   AlertOctagon,
 } from 'lucide-react';
@@ -66,10 +58,9 @@ import PrintFinanceReportModal from '@/components/PrintFinanceReportModal';
 import SpecsDetailsModal from '@/components/SpecsDetailsModal';
 import FarmerProfileDetailsModal from '@/components/FarmerProfileDetailsModal';
 import RejectionModal from '@/components/RejectionModal';
-import IbisLogo from '@/components/IbisLogo';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
-import { DESTINATION_WAREHOUSES, getWarehouseId, getWarehouseName, getWarehouseDisplay } from '@/lib/warehouse-config';
+import { DESTINATION_WAREHOUSES, getWarehouseId, getWarehouseName, getWarehouseDisplay, formatReceivingIdWithDate } from '@/lib/warehouse-config';
 
 export default function OperationsDashboard() {
   const { data: session, status } = useSession();
@@ -101,25 +92,6 @@ export default function OperationsDashboard() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
-  // Role-Based Access Control: Automatically set initial module based on user account role
-  useEffect(() => {
-    if (status === 'authenticated' && session?.user) {
-      const role = (session.user as { role?: string })?.role;
-      if (role === 'WAREHOUSE') {
-        setActiveModule('warehouse');
-      } else if (role === 'INVENTORY') {
-        setActiveModule('inventory');
-      } else if (role === 'FINANCE') {
-        setActiveModule('finance');
-      } else if (role === 'FIELD') {
-        setActiveModule('field');
-      }
-      if (session.user.name) {
-        if (!tFieldStaffName) setTFieldStaffName(session.user.name);
-      }
-    }
-  }, [status, session]);
 
   const handleSelectModule = (mod: 'field' | 'warehouse' | 'inventory' | 'finance' | 'admin') => {
     if (currentUserRole !== 'ADMIN') {
@@ -157,7 +129,7 @@ export default function OperationsDashboard() {
 
   // Inventory Module State
   const [invSearchQuery, setInvSearchQuery] = useState('');
-  const [invStatusFilter, setInvStatusFilter] = useState<'ALL' | 'WAITING_FOR_INVENTORY' | 'INVENTORY_RECORDED'>('ALL');
+  const [invStatusFilter, setInvStatusFilter] = useState<'ALL' | 'WAITING_FOR_INVENTORY' | 'INVENTORY_RECORDED' | 'REJECTED'>('ALL');
   const [invConfirmModalIntake, setInvConfirmModalIntake] = useState<any>(null);
   const [invLocationInput, setInvLocationInput] = useState('');
   const [invNotesInput, setInvNotesInput] = useState('');
@@ -245,7 +217,7 @@ export default function OperationsDashboard() {
   // Form states - Purchase Invoice
   const [pFamilyCode, setPFamilyCode] = useState('');
   const [pFarmerName, setPFarmerName] = useState('');
-  const [pVillage, PVillage] = useState('');
+  const [pVillage, setPVillage] = useState('');
   const [pVariety, setPVariety] = useState('');
   const [pGrade, setPGrade] = useState('');
   const [pStandardPrice, setPStandardPrice] = useState(0);
@@ -287,7 +259,7 @@ export default function OperationsDashboard() {
   const [uploadingTarePhoto, setUploadingTarePhoto] = useState(false);
   const [uploadingInvoicePhoto, setUploadingInvoicePhoto] = useState(false);
   const [whNotes, setWhNotes] = useState('');
-  const [whArrivedWarehouse, setWhArrivedWarehouse] = useState('W002');
+  const [whArrivedWarehouse, setWhArrivedWarehouse] = useState('');
   const [editingIntakeId, setEditingIntakeId] = useState<string | null>(null);
 
   // Admin Configurable Scale Weight Tolerance Settings (kg)
@@ -365,16 +337,21 @@ export default function OperationsDashboard() {
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
-    } else if (status === 'authenticated') {
-      const role = currentUserRole;
+    } else if (status === 'authenticated' && session?.user) {
+      const role = (session.user as { role?: string })?.role || currentUserRole;
       if (role === 'FIELD') setActiveModule('field');
       else if (role === 'WAREHOUSE') setActiveModule('warehouse');
+      else if (role === 'INVENTORY') setActiveModule('inventory');
       else if (role === 'FINANCE') setActiveModule('finance');
       else if (role === 'ADMIN') setActiveModule('field');
 
+      if (session.user.name) {
+        setTFieldStaffName((prev) => prev || session.user?.name || '');
+      }
+
       refreshAllData();
     }
-  }, [status]);
+  }, [status, session]);
 
   const refreshAllData = async () => {
     try {
@@ -440,6 +417,46 @@ export default function OperationsDashboard() {
   const selectedEnRouteTransport = transports.find((t) => t.id === selectedTransportId);
   const selectedTruckPurchases = selectedEnRouteTransport?.purchases || [];
   const selectedTruckFarmersCount = new Set(selectedTruckPurchases.map((p: any) => p.familyCode)).size;
+
+  // Calculated Variety Summary for Selected En-Route Truck (Grouped by Variety)
+  const selectedTruckVarietySummary = useMemo(() => {
+    if (!selectedEnRouteTransport) return [];
+    const purchases = selectedEnRouteTransport.purchases || [];
+    const map: Record<string, { variety: string; totalSacks: number; totalWeightKg: number }> = {};
+
+    if (purchases.length > 0) {
+      purchases.forEach((p: any) => {
+        if (p.items && p.items.length > 0) {
+          p.items.forEach((item: any) => {
+            const variety = (item.variety || 'Red Jasmine').trim();
+            if (!map[variety]) {
+              map[variety] = { variety, totalSacks: 0, totalWeightKg: 0 };
+            }
+            map[variety].totalSacks += parseInt(item.sacks, 10) || 0;
+            const itemWeight = parseFloat(item.quantity) || (p.items.length === 1 ? parseFloat(p.totalWeight) : 0) || 0;
+            map[variety].totalWeightKg += itemWeight;
+          });
+        } else {
+          const variety = 'Red Jasmine';
+          if (!map[variety]) {
+            map[variety] = { variety, totalSacks: 0, totalWeightKg: 0 };
+          }
+          map[variety].totalWeightKg += parseFloat(p.totalWeight) || 0;
+        }
+      });
+    } else if (selectedEnRouteTransport.lots && selectedEnRouteTransport.lots.length > 0) {
+      selectedEnRouteTransport.lots.forEach((lot: any) => {
+        const variety = (lot.variety || 'Red Jasmine').trim();
+        if (!map[variety]) {
+          map[variety] = { variety, totalSacks: 0, totalWeightKg: 0 };
+        }
+        map[variety].totalSacks += parseInt(lot.sacks, 10) || 0;
+        map[variety].totalWeightKg += parseFloat(lot.weight) || 0;
+      });
+    }
+
+    return Object.values(map);
+  }, [selectedEnRouteTransport]);
 
   // Calculated Warehouse Net Weight & Comparison
   const whGrossVal = parseFloat(whGrossWeight) || 0;
@@ -645,12 +662,12 @@ export default function OperationsDashboard() {
     const match = findFarmerByFamilyCode(codeVal, pVillage);
     if (match) {
       if (match.farmerName) setPFarmerName(match.farmerName);
-      if (match.village && !pVillage) PVillage(match.village);
+      if (match.village && !pVillage) setPVillage(match.village);
     }
   };
 
   const handlePVillageChange = (vName: string) => {
-    PVillage(vName);
+    setPVillage(vName);
     if (pFamilyCode) {
       const match = findFarmerByFamilyCode(pFamilyCode, vName);
       if (match) {
@@ -760,7 +777,7 @@ export default function OperationsDashboard() {
   const handleSelectSpecsRecord = (spec: any) => {
     setPFamilyCode(spec.familyCode);
     setPFarmerName(spec.farmerName);
-    PVillage(spec.village);
+    setPVillage(spec.village);
     setPVariety(spec.paddyType);
     setPGrade(spec.selectedGrade);
     setPStandardPrice(spec.finalPrice);
@@ -804,7 +821,7 @@ export default function OperationsDashboard() {
     setEditingPurchaseId(null);
     setPFamilyCode('');
     setPFarmerName('');
-    PVillage('');
+    setPVillage('');
     setPVariety('');
     setPGrade('');
     setPStandardPrice(0);
@@ -1262,11 +1279,13 @@ export default function OperationsDashboard() {
         'Account Holder Name',
         'Relationship to Farmer',
         'Bank Document Photo Attached',
+        'Registered By (Staff)',
         'Created Date',
       ],
     ];
 
     farmerProfiles.forEach((p) => {
+      const staffUser = p.user?.name || (p.user?.email ? p.user.email.split('@')[0] : '') || 'Field Staff';
       rows.push([
         p.familyCode,
         p.farmerName,
@@ -1278,6 +1297,7 @@ export default function OperationsDashboard() {
         p.accountHolder || p.farmerName,
         p.relationship || 'Self',
         p.bankDocumentUrl ? 'Yes' : 'No',
+        staffUser,
         new Date(p.createdAt).toLocaleDateString(),
       ]);
     });
@@ -1383,7 +1403,7 @@ export default function OperationsDashboard() {
     const item = purchase.items?.[0] || {};
     setPFamilyCode(purchase.familyCode);
     setPFarmerName(purchase.farmerName);
-    PVillage(purchase.village);
+    setPVillage(purchase.village);
     setPVariety(item.variety || 'Red Jasmine');
     setPGrade(item.grade || 'A1');
     setPStandardPrice(item.standardPrice || 1997.5);
@@ -1817,7 +1837,7 @@ export default function OperationsDashboard() {
     setWhTarePhotoUrl('');
     setWhInvoicePhotoUrl('');
     setWhNotes('');
-    setWhArrivedWarehouse('W002');
+    setWhArrivedWarehouse('');
   };
 
   // Edit Warehouse Receiving Record
@@ -1837,7 +1857,7 @@ export default function OperationsDashboard() {
     setWhTarePhotoUrl(intake.tareScalePhotoUrl || '');
     setWhInvoicePhotoUrl(intake.transportInvoiceUrl || '');
     setWhNotes(intake.notes || '');
-    setWhArrivedWarehouse(getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002'));
+    setWhArrivedWarehouse(intake.arrivedWarehouse ? getWarehouseId(intake.arrivedWarehouse) : '');
 
     const wrIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
     setSuccessBanner(`Editing Warehouse Receiving Record ${wrIdFormatted}. Update weights or photos above.`);
@@ -1849,6 +1869,10 @@ export default function OperationsDashboard() {
     e.preventDefault();
     if (!selectedTransportId || !whGrossWeight || !whTareWeight) {
       alert('Select an en-route truck and enter scale gross & tare weights.');
+      return;
+    }
+    if (!whArrivedWarehouse) {
+      alert('Please select the Arrived Warehouse.');
       return;
     }
 
@@ -1925,9 +1949,9 @@ export default function OperationsDashboard() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        const wrIdFormatted = `WR-2026-${invConfirmModalIntake.id.slice(-6).toUpperCase()}`;
-        setSuccessBanner(`✅ Inventory confirmed & recorded for ${wrIdFormatted}! Storage Location: ${invLocationInput.trim()}. Record unlocked for Finance Verification.`);
+        const arrivedWh = getWarehouseId(invConfirmModalIntake.arrivedWarehouse || invConfirmModalIntake.transport?.destinationWarehouse || 'W002');
+        const receivingIdFormatted = `${invConfirmModalIntake.receivingStaffName || 'staff'}_${arrivedWh}`;
+        setSuccessBanner(`✅ Inventory confirmed & recorded for ${receivingIdFormatted}! Storage Location: ${invLocationInput.trim()}. Record unlocked for Finance Verification.`);
         setInvConfirmModalIntake(null);
         setInvNotesInput('');
         refreshAllData();
@@ -2063,7 +2087,7 @@ export default function OperationsDashboard() {
     const rows = [
       [
         'Transport ID',
-        'Warehouse ID',
+        'Receiving ID',
         'Truck Plate Number',
         'Driver Name',
         'Dispatch Date',
@@ -2081,7 +2105,7 @@ export default function OperationsDashboard() {
 
     filteredFinanceTrucks.forEach((t) => {
       const trId = formatTransportId(t.transport);
-      const wrId = t.intake ? `WR-2026-${t.intake.id.slice(-6).toUpperCase()}` : 'N/A';
+      const wrId = t.intake ? formatReceivingIdWithDate({ ...t.intake, transport: t.transport }) : 'N/A';
 
       rows.push([
         trId,
@@ -2214,7 +2238,7 @@ export default function OperationsDashboard() {
       return;
     }
 
-    const receivingIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
+    const receivingIdFormatted = formatReceivingIdWithDate(intake);
     const transportIdFormatted = formatTransportId(transport);
     const fieldWeight = transport.totalFieldWeight || 0;
     const grossWeight = intake.warehouseGrossWeight || 0;
@@ -2325,6 +2349,7 @@ export default function OperationsDashboard() {
     const headers = [
       'Specs Record ID',
       'Inspection Date & Time',
+      'Recorded By (Staff)',
       'Family Code',
       'Farmer Name',
       'Village',
@@ -2342,9 +2367,11 @@ export default function OperationsDashboard() {
 
     const rows = specsList.map((rec) => {
       const specId = `SPEC-2026-${rec.id.slice(-6).toUpperCase()}`;
+      const staffUser = rec.user?.name || (rec.user?.email ? rec.user.email.split('@')[0] : '') || 'Field Staff';
       return [
         specId,
         new Date(rec.createdAt || rec.date).toLocaleString(),
+        staffUser,
         rec.familyCode || '',
         rec.farmerName || '',
         rec.village || '',
@@ -2394,22 +2421,27 @@ export default function OperationsDashboard() {
       'Account Number',
       'Payment Method',
       'Passbook Photo Uploaded',
+      'Registered By (Staff)',
       'Registration Date',
     ];
 
-    const rows = farmerProfiles.map((p) => [
-      p.familyCode || '',
-      p.farmerName || '',
-      p.village || '',
-      p.phone || '',
-      p.accountHolder || p.farmerName || '',
-      p.relationship || 'Self',
-      p.bankName || 'Direct Cash',
-      p.accountNumber || '',
-      p.paymentMethod || 'Bank Transfer',
-      p.bankDocumentUrl ? 'Yes' : 'No',
-      new Date(p.createdAt || Date.now()).toLocaleDateString(),
-    ]);
+    const rows = farmerProfiles.map((p) => {
+      const staffUser = p.user?.name || (p.user?.email ? p.user.email.split('@')[0] : '') || 'Field Staff';
+      return [
+        p.familyCode || '',
+        p.farmerName || '',
+        p.village || '',
+        p.phone || '',
+        p.accountHolder || p.farmerName || '',
+        p.relationship || 'Self',
+        p.bankName || 'Direct Cash',
+        p.accountNumber || '',
+        p.paymentMethod || 'Bank Transfer',
+        p.bankDocumentUrl ? 'Yes' : 'No',
+        staffUser,
+        new Date(p.createdAt || Date.now()).toLocaleDateString(),
+      ];
+    });
 
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
@@ -2629,6 +2661,7 @@ export default function OperationsDashboard() {
     const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
     const staffUsername = intake.receivingStaffName || 'staff';
     const receivingIdFormatted = `${staffUsername}_${arrivedWh}`.toLowerCase();
+    const fullReceivingId = formatReceivingIdWithDate(intake).toLowerCase();
     const trIdFormatted = formatTransportId(transport).toLowerCase();
     const legacyTrId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
 
@@ -2638,6 +2671,7 @@ export default function OperationsDashboard() {
     );
 
     return (
+      fullReceivingId.includes(q) ||
       receivingIdFormatted.includes(q) ||
       wrIdFormatted.includes(q) ||
       trIdFormatted.includes(q) ||
@@ -2649,6 +2683,44 @@ export default function OperationsDashboard() {
       getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse).toLowerCase().includes(q) ||
       getWarehouseName(intake.arrivedWarehouse || transport.destinationWarehouse).toLowerCase().includes(q) ||
       matchesFarmer
+    );
+  });
+
+  // Filtered & Searchable Inventory Intakes
+  const filteredInventoryIntakes = warehouseIntakes.filter((intake) => {
+    const transport = intake.transport || {};
+    const matchesStatus =
+      invStatusFilter === 'ALL' ||
+      (invStatusFilter === 'WAITING_FOR_INVENTORY' && intake.inventoryStatus !== 'INVENTORY_RECORDED') ||
+      (invStatusFilter === 'INVENTORY_RECORDED' && intake.inventoryStatus === 'INVENTORY_RECORDED') ||
+      (invStatusFilter === 'REJECTED' && (intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED'));
+
+    const q = invSearchQuery.trim().toLowerCase();
+    if (!q) return matchesStatus;
+
+    const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+    const staffUsername = (intake.receivingStaffName || 'staff').toLowerCase();
+    const receivingId = `${staffUsername}_${arrivedWh.toLowerCase()}`;
+    const fullReceivingId = formatReceivingIdWithDate(intake).toLowerCase();
+    const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
+    const trId = formatTransportId(transport).toLowerCase();
+    const legacyTrId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
+    const driver = (transport.driverName || '').toLowerCase();
+    const plate = (transport.plateNumber || '').toLowerCase();
+    const location = (intake.inventoryLocation || '').toLowerCase();
+
+    return (
+      matchesStatus &&
+      (fullReceivingId.includes(q) ||
+        receivingId.includes(q) ||
+        staffUsername.includes(q) ||
+        arrivedWh.toLowerCase().includes(q) ||
+        wrId.includes(q) ||
+        trId.includes(q) ||
+        legacyTrId.includes(q) ||
+        driver.includes(q) ||
+        plate.includes(q) ||
+        location.includes(q))
     );
   });
 
@@ -2689,12 +2761,14 @@ export default function OperationsDashboard() {
   const filteredSpecsList = specsList.filter((rec) => {
     const q = specsSearchQuery.toLowerCase().trim();
     if (!q) return true;
+    const staffUser = rec.user?.name || (rec.user?.email ? rec.user.email.split('@')[0] : '');
     return (
       rec.familyCode.toLowerCase().includes(q) ||
       rec.farmerName.toLowerCase().includes(q) ||
       (rec.village || '').toLowerCase().includes(q) ||
       (rec.paddyType || '').toLowerCase().includes(q) ||
-      (rec.selectedGrade || '').toLowerCase().includes(q)
+      (rec.selectedGrade || '').toLowerCase().includes(q) ||
+      staffUser.toLowerCase().includes(q)
     );
   });
 
@@ -2702,13 +2776,15 @@ export default function OperationsDashboard() {
   const filteredFarmerProfiles = farmerProfiles.filter((p) => {
     const q = farmerProfileSearchQuery.toLowerCase().trim();
     if (!q) return true;
+    const staffUser = p.user?.name || (p.user?.email ? p.user.email.split('@')[0] : '');
     return (
       p.familyCode.toLowerCase().includes(q) ||
       p.farmerName.toLowerCase().includes(q) ||
       (p.village || '').toLowerCase().includes(q) ||
       (p.accountHolder || '').toLowerCase().includes(q) ||
       (p.bankName || '').toLowerCase().includes(q) ||
-      (p.accountNumber || '').toLowerCase().includes(q)
+      (p.accountNumber || '').toLowerCase().includes(q) ||
+      staffUser.toLowerCase().includes(q)
     );
   });
 
@@ -3026,9 +3102,9 @@ export default function OperationsDashboard() {
           </div>
         )}
 
-        {/* ROLE-BASED NAVIGATION MENU SWITCHER */}
-        <div className="bg-[#141c2f] border border-white/10 rounded-xl p-1.5 flex flex-wrap gap-1">
-          {(currentUserRole === 'FIELD' || currentUserRole === 'ADMIN') && (
+        {/* ROLE-BASED NAVIGATION MENU SWITCHER - ONLY VISIBLE TO ADMIN */}
+        {currentUserRole === 'ADMIN' && (
+          <div className="bg-[#141c2f] border border-white/10 rounded-xl p-1.5 flex flex-wrap gap-1">
             <button
               onClick={() => handleSelectModule('field')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
@@ -3039,9 +3115,7 @@ export default function OperationsDashboard() {
             >
               🌾 Field Operations
             </button>
-          )}
 
-          {(currentUserRole === 'WAREHOUSE' || currentUserRole === 'ADMIN') && (
             <button
               onClick={() => handleSelectModule('warehouse')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
@@ -3052,9 +3126,7 @@ export default function OperationsDashboard() {
             >
               🏬 Warehouse Receiving
             </button>
-          )}
 
-          {(currentUserRole === 'INVENTORY' || currentUserRole === 'ADMIN') && (
             <button
               onClick={() => handleSelectModule('inventory')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
@@ -3065,9 +3137,7 @@ export default function OperationsDashboard() {
             >
               📦 Inventory Record
             </button>
-          )}
 
-          {(currentUserRole === 'FINANCE' || currentUserRole === 'ADMIN') && (
             <button
               onClick={() => handleSelectModule('finance')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
@@ -3078,9 +3148,7 @@ export default function OperationsDashboard() {
             >
               💳 Finance Verification
             </button>
-          )}
 
-          {currentUserRole === 'ADMIN' && (
             <button
               onClick={() => handleSelectModule('admin')}
               className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
@@ -3091,8 +3159,8 @@ export default function OperationsDashboard() {
             >
               ⚙️ Admin Master Settings
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* ACCESS RESTRICTED FALLBACK BANNER */}
         {currentUserRole !== 'ADMIN' && (
@@ -3484,7 +3552,12 @@ export default function OperationsDashboard() {
                                 </div>
                               </div>
                               <div className="font-bold text-white">{rec.farmerName} ({rec.village})</div>
-                              <div className="text-slate-400 text-[11px]">🌾 {rec.paddyType} ({rec.selectedGrade}) · {rec.finalPrice.toLocaleString()} KHR/kg</div>
+                              <div className="flex items-center justify-between text-slate-400 text-[11px] pt-0.5">
+                                <span className="truncate pr-1">🌾 {rec.paddyType} ({rec.selectedGrade}) · {rec.finalPrice.toLocaleString()} KHR/kg</span>
+                                <span className="text-slate-300 font-medium flex items-center gap-1 text-[10.5px] shrink-0 font-mono">
+                                  👤 {rec.user?.name || (rec.user?.email ? rec.user.email.split('@')[0] : 'Staff')}
+                                </span>
+                              </div>
                             </div>
                           );
                         })
@@ -3824,11 +3897,16 @@ export default function OperationsDashboard() {
                             <div className="text-[11px] text-purple-300 font-bold">
                               Owner: {p.accountHolder || p.farmerName} ({p.relationship || 'Self'})
                             </div>
-                            {p.bankDocumentUrl && (
-                              <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 pt-0.5">
-                                📷 Photo Verified
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between pt-0.5 text-[10.5px]">
+                              {p.bankDocumentUrl ? (
+                                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                  📷 Photo Verified
+                                </span>
+                              ) : <span />}
+                              <span className="text-slate-300 font-medium flex items-center gap-1 font-mono">
+                                👤 {p.user?.name || (p.user?.email ? p.user.email.split('@')[0] : 'Staff')}
+                              </span>
+                            </div>
                           </div>
                         ))
                       )}
@@ -4216,16 +4294,16 @@ export default function OperationsDashboard() {
                     </div>
 
                     {/* NET PAYMENT TO FARMER BANNER */}
-                    <div className="p-3.5 sm:p-4 bg-gradient-to-r from-emerald-950/80 to-[#141c2f] border-2 border-emerald-500 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+                    <div className="py-2.5 px-3.5 bg-gradient-to-r from-emerald-950/80 to-[#141c2f] border border-emerald-500/80 rounded-xl flex flex-row items-center justify-between gap-3 shadow-lg">
                       <div>
-                        <h4 className="text-sm sm:text-base font-extrabold text-emerald-400 flex items-center gap-2">
+                        <h4 className="text-xs sm:text-sm font-extrabold text-emerald-400 flex items-center gap-1.5">
                           💰 Net Payment to Farmer
                         </h4>
-                        <p className="text-[11px] text-slate-300 mt-0.5">
+                        <p className="text-[10px] text-slate-400 mt-0.5">
                           Subtotal A (Total Paddy Value) - Subtotal B (Seed Deduction)
                         </p>
                       </div>
-                      <div className="text-xl sm:text-2xl font-black text-emerald-400 tracking-tight font-mono">
+                      <div className="text-base sm:text-lg font-black text-emerald-400 tracking-tight font-mono">
                         {netPaymentToFarmer.toLocaleString()} KHR
                       </div>
                     </div>
@@ -4346,19 +4424,19 @@ export default function OperationsDashboard() {
                   {/* Searchable Purchase Table */}
                   <div className="overflow-x-auto border border-white/10 rounded-xl">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+                      <thead className="bg-white/5 text-slate-400 uppercase text-[10.5px] font-bold tracking-wider border-b border-white/10">
                         <tr>
-                          <th className="p-3 whitespace-nowrap">Purchase ID</th>
-                          <th className="p-3 whitespace-nowrap">Family Code</th>
-                          <th className="p-3 whitespace-nowrap">Farmer Name</th>
-                          <th className="p-3 whitespace-nowrap">Variety / Grade</th>
-                          <th className="p-3 text-center whitespace-nowrap">Sacks</th>
-                          <th className="p-3 text-right whitespace-nowrap">Total Weight</th>
-                          <th className="p-3 text-right whitespace-nowrap">Final Price</th>
-                          <th className="p-3 text-right whitespace-nowrap">Gross Value</th>
-                          <th className="p-3 text-right whitespace-nowrap">Net Payment</th>
-                          <th className="p-3 whitespace-nowrap">Purchasing Staff</th>
-                          <th className="p-3 text-right whitespace-nowrap">Actions</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Purchase ID</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Family Code</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Farmer Name</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Variety / Grade</th>
+                          <th className="py-2.5 px-3 text-center whitespace-nowrap">Sacks</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Weight</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Final Price</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Gross Value</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Net Payment</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Purchasing Staff</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
@@ -4375,35 +4453,35 @@ export default function OperationsDashboard() {
 
                             return (
                               <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                                <td className="p-3 font-mono font-bold text-emerald-400 whitespace-nowrap text-[11px] sm:text-xs">
+                                <td className="py-2.5 px-3 font-mono font-bold text-emerald-400 whitespace-nowrap text-[11px] sm:text-xs">
                                   {pIdFormatted}
                                   {getRejectionIndicator('PurchaseRecord', p.id, p.transportRecordId, p.status)}
                                 </td>
-                                <td className="p-3 font-extrabold text-amber-400">{p.familyCode}</td>
-                                <td className="p-3 font-bold text-white">
+                                <td className="py-2.5 px-3 font-extrabold text-amber-400 whitespace-nowrap">{p.familyCode}</td>
+                                <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
                                   {p.farmerName}
                                   <div className="text-[10px] text-slate-400">{p.village}</div>
                                 </td>
-                                <td className="p-3">
+                                <td className="py-2.5 px-3 whitespace-nowrap">
                                   <span className="font-bold text-sky-400">{item.variety || 'Red Jasmine'}</span>
                                   <span className="ml-1 font-extrabold text-purple-400">({item.grade || 'A1'})</span>
                                 </td>
-                                <td className="p-3 text-center font-bold text-slate-200">{item.sacks || 0}</td>
-                                <td className="p-3 text-right font-mono font-bold text-slate-200 whitespace-nowrap">{p.totalWeight.toFixed(2)} kg</td>
-                                <td className="p-3 text-right font-mono text-emerald-400 whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-center font-bold text-slate-200 whitespace-nowrap">{item.sacks || 0}</td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-200 whitespace-nowrap">{p.totalWeight.toFixed(2)} kg</td>
+                                <td className="py-2.5 px-3 text-right font-mono text-emerald-400 whitespace-nowrap">
                                   {(item.finalPrice || 2047.5).toLocaleString()} KHR
                                 </td>
-                                <td className="p-3 text-right font-mono text-slate-300 whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-right font-mono text-slate-300 whitespace-nowrap">
                                   {p.totalPayment.toLocaleString()} KHR
                                 </td>
-                                <td className="p-3 text-right font-mono font-bold text-emerald-400 text-xs whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-400 text-xs whitespace-nowrap">
                                   {p.netPayment.toLocaleString()} KHR
                                 </td>
-                                <td className="p-3 font-bold text-slate-300 whitespace-nowrap">
+                                <td className="py-2.5 px-3 font-bold text-slate-300 whitespace-nowrap">
                                   👤 {p.purchasingStaffName || 'Field Staff'}
                                 </td>
 
-                                <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
                                   <button
                                     onClick={() => setSelectedPurchaseForDetails(p)}
                                     className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
@@ -4894,18 +4972,18 @@ export default function OperationsDashboard() {
                   {/* Searchable Transport History Table */}
                   <div className="overflow-x-auto border border-white/10 rounded-xl">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+                      <thead className="bg-white/5 text-slate-400 uppercase text-[10.5px] font-bold tracking-wider border-b border-white/10">
                         <tr>
-                          <th className="p-3 whitespace-nowrap">Transport ID</th>
-                          <th className="p-3 whitespace-nowrap">Driver & Plate Number</th>
-                          <th className="p-3 whitespace-nowrap">Loading Staff</th>
-                          <th className="p-3 whitespace-nowrap">Loading Location</th>
-                          <th className="p-3 whitespace-nowrap">Destination</th>
-                          <th className="p-3 text-center whitespace-nowrap">Purchases</th>
-                          <th className="p-3 text-center whitespace-nowrap">Sacks</th>
-                          <th className="p-3 text-right whitespace-nowrap">Field Weight</th>
-                          <th className="p-3 text-center whitespace-nowrap">Status</th>
-                          <th className="p-3 text-right whitespace-nowrap">Actions</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Transport ID</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Driver</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Loading Staff</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Loading Location</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Destination</th>
+                          <th className="py-2.5 px-3 text-center whitespace-nowrap">Purchases</th>
+                          <th className="py-2.5 px-3 text-center whitespace-nowrap">Sacks</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Field Weight</th>
+                          <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
@@ -4922,11 +5000,11 @@ export default function OperationsDashboard() {
 
                             return (
                               <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                                <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap text-[11px] sm:text-xs">
+                                <td className="py-2.5 px-3 font-mono font-bold text-sky-400 whitespace-nowrap text-[11px] sm:text-xs">
                                   <span>{tIdFormatted}</span>
                                   {getRejectionIndicator('TransportRecord', t.id, null, t.status)}
                                 </td>
-                                <td className="p-3 font-bold text-white">
+                                <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
                                   {t.driverName}
                                   <div className="font-mono text-sky-400 text-[11px] flex items-center gap-1.5">
                                     <span>{t.plateNumber}</span>
@@ -4943,15 +5021,15 @@ export default function OperationsDashboard() {
                                     )}
                                   </div>
                                 </td>
-                                <td className="p-3">
+                                <td className="py-2.5 px-3 whitespace-nowrap">
                                   <div className="flex items-center gap-1.5 font-bold text-emerald-400">
                                     <UserCheck className="w-3.5 h-3.5 flex-shrink-0" />
                                     <span>{t.fieldStaffName || 'Field Staff'}</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400 block font-normal">Loading Supervisor</span>
                                 </td>
-                                <td className="p-3 text-slate-300">{t.loadingLocation || 'Chhaeb Buying Station'}</td>
-                                <td className="p-3">
+                                <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">{t.loadingLocation || 'Chhaeb Buying Station'}</td>
+                                <td className="py-2.5 px-3 whitespace-nowrap">
                                   <span className="font-mono font-bold text-sky-400">
                                     {getWarehouseId(t.destinationWarehouse)}
                                   </span>
@@ -4959,12 +5037,12 @@ export default function OperationsDashboard() {
                                     {getWarehouseName(t.destinationWarehouse)}
                                   </span>
                                 </td>
-                                <td className="p-3 text-center font-bold text-emerald-400">{purchaseCount} Purchases</td>
-                                <td className="p-3 text-center font-bold text-amber-400">{t.totalSacks} Sacks</td>
-                                <td className="p-3 text-right font-mono font-black text-sky-400">
+                                <td className="py-2.5 px-3 text-center font-bold text-emerald-400 whitespace-nowrap">{purchaseCount} Purchases</td>
+                                <td className="py-2.5 px-3 text-center font-bold text-amber-400 whitespace-nowrap">{t.totalSacks} Sacks</td>
+                                <td className="py-2.5 px-3 text-right font-mono font-black text-sky-400 whitespace-nowrap">
                                   {t.totalFieldWeight.toFixed(2)} kg
                                 </td>
-                                <td className="p-3 text-center">
+                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                                     t.status === 'REJECTED'
                                       ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
@@ -4975,7 +5053,7 @@ export default function OperationsDashboard() {
                                     {t.status === 'EN_ROUTE' ? '🚛 IN TRANSIT' : t.status === 'REJECTED' ? '🔴 RETURNED FOR CORRECTION' : t.status}
                                   </span>
                                 </td>
-                                <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
                                   <button
                                     onClick={() => setSelectedTransportForDetails(t)}
                                     className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
@@ -5076,26 +5154,32 @@ export default function OperationsDashboard() {
                   </div>
                 )}
                 {/* WAREHOUSE RECEIVING DASHBOARD METRICS CARD */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-[#0f172a] border border-white/10 rounded-2xl shadow-lg">
-                  <div className="p-3 bg-gradient-to-r from-sky-500/10 to-sky-500/5 border border-sky-500/30 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs sm:text-sm font-black text-sky-400 font-mono">🚚 Trucks En Route:</span>
-                      <strong className="text-2xl sm:text-3xl font-black text-white font-mono">{enRouteTrucksCount}</strong>
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 bg-[#0f172a] border border-white/10 rounded-xl shadow-md">
+                  <div className="py-1.5 px-3 bg-gradient-to-r from-sky-500/10 to-sky-500/5 border border-sky-500/30 rounded-lg flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-sky-400 font-mono flex items-center gap-1.5">
+                      🚚 Trucks En Route:
+                    </span>
+                    <strong className="text-base font-black text-white font-mono ml-2">
+                      {enRouteTrucksCount}
+                    </strong>
                   </div>
 
-                  <div className="p-3 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs sm:text-sm font-black text-emerald-400 font-mono">📍 Trucks Received Today:</span>
-                      <strong className="text-2xl sm:text-3xl font-black text-white font-mono">{trucksReceivedTodayCount}</strong>
-                    </div>
+                  <div className="py-1.5 px-3 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-lg flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-400 font-mono flex items-center gap-1.5">
+                      📍 Trucks Received Today:
+                    </span>
+                    <strong className="text-base font-black text-white font-mono ml-2">
+                      {trucksReceivedTodayCount}
+                    </strong>
                   </div>
 
-                  <div className="p-3 bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs sm:text-sm font-black text-amber-400 font-mono">⏳ Waiting for Receiving:</span>
-                      <strong className="text-2xl sm:text-3xl font-black text-white font-mono">{enRouteTrucksCount}</strong>
-                    </div>
+                  <div className="py-1.5 px-3 bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-lg flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-400 font-mono flex items-center gap-1.5">
+                      ⏳ Waiting for Receiving:
+                    </span>
+                    <strong className="text-base font-black text-white font-mono ml-2">
+                      {enRouteTrucksCount}
+                    </strong>
                   </div>
                 </div>
 
@@ -5117,10 +5201,6 @@ export default function OperationsDashboard() {
                       onChange={(e) => {
                         const tId = e.target.value;
                         setSelectedTransportId(tId);
-                        const tr = transports.find((t) => t.id === tId);
-                        if (tr?.destinationWarehouse) {
-                          setWhArrivedWarehouse(getWarehouseId(tr.destinationWarehouse));
-                        }
                       }}
                       className="w-full bg-[#142036] hover:bg-[#1a2a47] border-2 border-sky-500/40 hover:border-sky-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-500/20 rounded-xl px-4 py-3.5 text-white font-extrabold text-xs sm:text-sm shadow-inner transition-all cursor-pointer appearance-none pr-10"
                     >
@@ -5218,34 +5298,90 @@ export default function OperationsDashboard() {
                       </div>
                     </div>
 
-                    {/* FIELD LOADED TRUCK PHOTO VERIFICATION FOR WAREHOUSE */}
-                    {selectedEnRouteTransport.truckPhotoUrl && (
-                      <div className="p-2.5 bg-white/5 border border-sky-500/30 rounded-xl flex items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <img
-                            src={selectedEnRouteTransport.truckPhotoUrl}
-                            alt="Loaded Truck"
-                            className="w-12 h-12 object-cover rounded-lg border border-white/20 flex-shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <span className="font-bold text-white block text-xs truncate">
-                              📷 Loaded Truck Photo (Field Dispatch)
-                            </span>
-                            <span className="text-[10px] text-emerald-400 block">
-                              Plate: {selectedEnRouteTransport.plateNumber} · {selectedEnRouteTransport.driverName}
-                            </span>
-                          </div>
+                    {/* FIELD LOADED TRUCK PHOTO & VARIETY SUMMARY FOR WAREHOUSE */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-stretch">
+                      {/* TRUCK PHOTO */}
+                      <div className="md:col-span-5 p-2 bg-white/5 border border-sky-500/30 rounded-xl flex flex-col justify-between text-xs">
+                        <div className="flex items-center justify-between border-b border-sky-500/20 pb-1 mb-1">
+                          <span className="font-extrabold text-[10px] text-sky-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <Camera className="w-3 h-3" /> Truck Photo
+                          </span>
+                          <span className="text-[9px] text-emerald-400 font-mono font-bold truncate">
+                            {selectedEnRouteTransport.plateNumber} · {selectedEnRouteTransport.driverName}
+                          </span>
                         </div>
-                        <a
-                          href={selectedEnRouteTransport.truckPhotoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 font-bold rounded-lg transition-colors text-[11px] flex-shrink-0"
-                        >
-                          View Photo ↗
-                        </a>
+
+                        {selectedEnRouteTransport.truckPhotoUrl ? (
+                          <div className="relative group w-full h-[72px] rounded-lg overflow-hidden border border-white/10 bg-black/40">
+                            <img
+                              src={formatImageSrc(selectedEnRouteTransport.truckPhotoUrl)}
+                              alt="Truck"
+                              className="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                              onClick={() => window.open(formatImageSrc(selectedEnRouteTransport.truckPhotoUrl), '_blank')}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity" />
+                            <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between pointer-events-none">
+                              <span className="text-[9px] text-slate-200 font-medium drop-shadow truncate">
+                                Click to enlarge
+                              </span>
+                              <a
+                                href={formatImageSrc(selectedEnRouteTransport.truckPhotoUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-1.5 py-0.5 bg-sky-500 hover:bg-sky-400 text-[#0b0f19] font-black rounded text-[9px] shadow pointer-events-auto transition-colors whitespace-nowrap"
+                              >
+                                View Photo ↗
+                              </a>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="h-[72px] flex flex-col items-center justify-center p-2 text-slate-500 border border-dashed border-white/10 rounded-lg bg-black/20">
+                            <Camera className="w-4 h-4 mb-0.5 opacity-40 text-slate-400" />
+                            <span className="text-[9.5px] italic">No truck photo attached</span>
+                          </div>
+                        )}
                       </div>
-                    )}
+
+                      {/* VARIETY SUMMARY */}
+                      <div className="md:col-span-7 p-2 bg-sky-950/30 border border-sky-500/30 rounded-xl flex flex-col text-xs">
+                        <div className="flex items-center justify-between border-b border-sky-500/20 pb-1 mb-1">
+                          <span className="font-extrabold text-[10px] text-sky-300 uppercase tracking-wider flex items-center gap-1.5">
+                            🌾 Variety Summary
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400">
+                            {selectedTruckVarietySummary.length} {selectedTruckVarietySummary.length === 1 ? 'Variety' : 'Varieties'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1">
+                          {selectedTruckVarietySummary.length === 0 ? (
+                            <div className="text-slate-400 italic text-[10.5px] py-0.5 text-center">
+                              No variety records found on this truck.
+                            </div>
+                          ) : (
+                            selectedTruckVarietySummary.map((v) => (
+                              <div
+                                key={v.variety}
+                                className="flex items-center justify-between px-2 py-0.5 bg-white/5 rounded-md border border-white/5 text-[11px]"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0"></span>
+                                  <span className="font-extrabold text-white truncate">{v.variety}</span>
+                                </div>
+                                <div className="flex items-center gap-2 sm:gap-2.5 font-mono flex-shrink-0">
+                                  <span className="text-amber-300 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded text-[10px]">
+                                    {v.totalSacks} Sacks
+                                  </span>
+                                  <span className="text-sky-300 font-black text-[11px]">
+                                    {v.totalWeightKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
                     {/* EXPANDABLE FARMER INVOICES & SACK DETAILS TABLE */}
                     <div className="pt-2 border-t border-sky-500/20">
@@ -5306,9 +5442,11 @@ export default function OperationsDashboard() {
                 )}
 
                 {/* WAREHOUSE WEIGHING & COMPARISON WITH TOLERANCE COLOR HIGHLIGHTING */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   <div>
-                    <label className="block text-slate-400 font-bold uppercase mb-1">Warehouse Gross Weight (kg) *</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Warehouse Gross Weight (kg) *
+                    </label>
                     <input
                       type="number"
                       step="0.1"
@@ -5317,12 +5455,14 @@ export default function OperationsDashboard() {
                       onChange={(e) => setWhGrossWeight(e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
                       placeholder="e.g. 15400"
-                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-spinners"
+                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg py-1 px-2.5 text-xs text-white font-bold h-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-spinners placeholder:text-slate-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-400 font-bold uppercase mb-1">Warehouse Tare Weight (kg) *</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Warehouse Tare Weight (kg) *
+                    </label>
                     <input
                       type="number"
                       step="0.1"
@@ -5331,52 +5471,58 @@ export default function OperationsDashboard() {
                       onChange={(e) => setWhTareWeight(e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
                       placeholder="e.g. 5400"
-                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-spinners"
+                      className="w-full bg-[#1e293b] border border-slate-700 rounded-lg py-1 px-2.5 text-xs text-white font-bold h-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-spinners placeholder:text-slate-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-400 font-bold uppercase mb-1">Warehouse Net Weight (Auto)</label>
-                    <div className="p-2.5 bg-sky-500/10 border border-sky-500/30 rounded-lg text-sky-400 font-extrabold text-sm h-[42px] flex items-center">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Warehouse Net Weight (Auto)
+                    </label>
+                    <div className="py-1 px-2.5 bg-sky-500/10 border border-sky-500/30 rounded-lg text-sky-400 font-extrabold text-xs h-8 flex items-center">
                       {whCalculatedNetWeight.toFixed(2)} kg
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-slate-400 font-bold uppercase mb-1 flex items-center justify-between">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
                       <span>Arrived Warehouse *</span>
                       {selectedEnRouteTransport?.destinationWarehouse && (
-                        <span className="text-[10px] text-sky-400 font-normal">
+                        <span className="text-[9px] text-sky-400 font-normal">
                           (Assigned: {getWarehouseId(selectedEnRouteTransport.destinationWarehouse)})
                         </span>
                       )}
                     </label>
                     <div className="relative">
                       <select
+                        required
                         value={whArrivedWarehouse}
                         onChange={(e) => setWhArrivedWarehouse(e.target.value)}
-                        className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold appearance-none pr-8 text-xs sm:text-sm focus:outline-none focus:border-sky-500 h-[42px] cursor-pointer"
+                        className={`w-full bg-[#1e293b] border ${!whArrivedWarehouse ? 'border-amber-500/50 text-slate-400' : 'border-slate-700 text-white'} rounded-lg py-1 px-2.5 font-bold appearance-none pr-7 text-xs focus:outline-none focus:border-sky-500 h-8 cursor-pointer`}
                       >
+                        <option value="" disabled className="bg-[#141c2f] text-slate-400">
+                          -- Select Arrived Warehouse --
+                        </option>
                         {DESTINATION_WAREHOUSES.map((wh) => (
                           <option key={wh.id} value={wh.id} className="bg-[#141c2f] text-white">
                             {wh.label}
                           </option>
                         ))}
                       </select>
-                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
                   </div>
                 </div>
 
                 {/* WEIGHT COMPARISON & TOLERANCE BADGE */}
                 {selectedEnRouteTransport && whCalculatedNetWeight > 0 && (
-                  <div className="p-4 bg-[#0f172a] border border-white/10 rounded-2xl space-y-3">
+                  <div className="p-3 bg-[#0f172a] border border-white/10 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
-                        <Scale className="w-4 h-4 text-sky-400" /> Weighbridge Scale Difference vs Field Dispatch Weight
+                        <Scale className="w-3.5 h-3.5 text-sky-400" /> Weighbridge Scale Difference vs Field Dispatch Weight
                       </span>
                       <span
-                        className={`px-3 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 ${
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 ${
                           whToleranceStatus === 'green'
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                             : whToleranceStatus === 'yellow'
@@ -5384,30 +5530,30 @@ export default function OperationsDashboard() {
                             : 'bg-red-500/10 text-red-400 border border-red-500/30'
                         }`}
                       >
-                        {whToleranceStatus === 'green' && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        {whToleranceStatus === 'yellow' && <AlertTriangle className="w-3.5 h-3.5" />}
-                        {whToleranceStatus === 'red' && <XCircle className="w-3.5 h-3.5" />}
+                        {whToleranceStatus === 'green' && <CheckCircle2 className="w-3 h-3" />}
+                        {whToleranceStatus === 'yellow' && <AlertTriangle className="w-3 h-3" />}
+                        {whToleranceStatus === 'red' && <XCircle className="w-3 h-3" />}
                         {whToleranceBadgeText}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Field Dispatch</span>
+                        <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Field Dispatch</span>
                         <span className="font-bold text-white">{whFieldWeight.toFixed(2)} kg</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Warehouse Net</span>
+                        <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Warehouse Net</span>
                         <span className="font-bold text-sky-400">{whCalculatedNetWeight.toFixed(2)} kg</span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Difference (kg)</span>
+                        <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Difference (kg)</span>
                         <span className={`font-extrabold ${whWeightDiffKg >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
                           {whWeightDiffKg >= 0 ? '+' : ''}{whWeightDiffKg.toFixed(2)} kg
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Variance (%)</span>
+                        <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Variance (%)</span>
                         <span className={`font-black ${
                           whToleranceStatus === 'green' ? 'text-emerald-400' :
                           (whToleranceStatus === 'yellow' ? 'text-amber-400' : 'text-red-400')
@@ -5420,60 +5566,60 @@ export default function OperationsDashboard() {
                 )}
 
                 {/* SCALE DISPLAY INDICATOR & TRANSPORT INVOICE PHOTO UPLOAD AREA */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-2">
-                  <div className="p-3.5 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
-                    <label className="block text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Camera className="w-4 h-4" /> Upload Gross Weight Scale Display Photo
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
+                  <div className="p-2 bg-white/5 border border-dashed border-sky-500/30 rounded-lg space-y-1">
+                    <label className="block text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                      <Camera className="w-3 h-3" /> Upload Gross Weight Scale Display Photo
                     </label>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleScalePhotoUpload(e, 'gross')}
-                      className="text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
+                      className="text-[10px] text-slate-300 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-[9.5px] file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer w-full"
                     />
-                    {uploadingGrossPhoto && <div className="text-[11px] text-amber-400">Uploading gross scale photo...</div>}
+                    {uploadingGrossPhoto && <div className="text-[9.5px] text-amber-400">Uploading gross scale photo...</div>}
                     {whGrossPhotoUrl && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <img src={formatImageSrc(whGrossPhotoUrl)} alt="Gross Scale Display" className="w-12 h-12 object-cover rounded-lg border border-sky-500/50" />
-                        <span className="text-[11px] text-emerald-400 font-bold">✓ Gross Photo Attached</span>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <img src={formatImageSrc(whGrossPhotoUrl)} alt="Gross Scale Display" className="w-7 h-7 object-cover rounded border border-sky-500/50" />
+                        <span className="text-[9.5px] text-emerald-400 font-bold">✓ Gross Photo Attached</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="p-3.5 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
-                    <label className="block text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Camera className="w-4 h-4" /> Upload Tare Weight Scale Display Photo
+                  <div className="p-2 bg-white/5 border border-dashed border-sky-500/30 rounded-lg space-y-1">
+                    <label className="block text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                      <Camera className="w-3 h-3" /> Upload Tare Weight Scale Display Photo
                     </label>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleScalePhotoUpload(e, 'tare')}
-                      className="text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
+                      className="text-[10px] text-slate-300 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-[9.5px] file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer w-full"
                     />
-                    {uploadingTarePhoto && <div className="text-[11px] text-amber-400">Uploading tare scale photo...</div>}
+                    {uploadingTarePhoto && <div className="text-[9.5px] text-amber-400">Uploading tare scale photo...</div>}
                     {whTarePhotoUrl && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <img src={formatImageSrc(whTarePhotoUrl)} alt="Tare Scale Display" className="w-12 h-12 object-cover rounded-lg border border-sky-500/50" />
-                        <span className="text-[11px] text-emerald-400 font-bold">✓ Tare Photo Attached</span>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <img src={formatImageSrc(whTarePhotoUrl)} alt="Tare Scale Display" className="w-7 h-7 object-cover rounded border border-sky-500/50" />
+                        <span className="text-[9.5px] text-emerald-400 font-bold">✓ Tare Photo Attached</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="p-3.5 bg-white/5 border border-dashed border-sky-500/40 rounded-xl space-y-2">
-                    <label className="block text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <FileSpreadsheet className="w-4 h-4" /> Upload Truck Transport Invoice Photo
+                  <div className="p-2 bg-white/5 border border-dashed border-sky-500/30 rounded-lg space-y-1">
+                    <label className="block text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                      <FileSpreadsheet className="w-3 h-3" /> Upload Truck Transport Invoice Photo
                     </label>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleScalePhotoUpload(e, 'invoice')}
-                      className="text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer"
+                      className="text-[10px] text-slate-300 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-[9.5px] file:font-bold file:bg-sky-500 file:text-[#0b0f19] hover:file:bg-sky-400 cursor-pointer w-full"
                     />
-                    {uploadingInvoicePhoto && <div className="text-[11px] text-amber-400">Uploading transport invoice photo...</div>}
+                    {uploadingInvoicePhoto && <div className="text-[9.5px] text-amber-400">Uploading transport invoice photo...</div>}
                     {whInvoicePhotoUrl && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <img src={formatImageSrc(whInvoicePhotoUrl)} alt="Truck Transport Invoice" className="w-12 h-12 object-cover rounded-lg border border-sky-500/50" />
-                        <span className="text-[11px] text-emerald-400 font-bold">✓ Invoice Photo Attached</span>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <img src={formatImageSrc(whInvoicePhotoUrl)} alt="Truck Transport Invoice" className="w-7 h-7 object-cover rounded border border-sky-500/50" />
+                        <span className="text-[9.5px] text-emerald-400 font-bold">✓ Invoice Photo Attached</span>
                       </div>
                     )}
                   </div>
@@ -5481,13 +5627,13 @@ export default function OperationsDashboard() {
 
                 <button
                   type="submit"
-                  className={`w-full font-black py-3.5 rounded-2xl shadow-xl text-sm flex items-center justify-center gap-2 transition-all ${
+                  className={`w-full font-black py-2.5 rounded-xl shadow-lg text-xs flex items-center justify-center gap-2 transition-all ${
                     editingIntakeId
                       ? 'bg-amber-500 hover:bg-amber-400 text-[#0b0f19] shadow-amber-500/20'
                       : 'bg-[#38bdf8] hover:bg-sky-500 text-[#0b0f19] shadow-sky-500/20'
                   }`}
                 >
-                  <Scale className="w-5 h-5" />
+                  <Scale className="w-4 h-4" />
                   {editingIntakeId
                     ? `Update Warehouse Receiving Record (WR-2026-${editingIntakeId.slice(-6).toUpperCase()})`
                     : 'Confirm & Save Warehouse Intake Scale Record & Photos'}
@@ -5530,17 +5676,17 @@ export default function OperationsDashboard() {
               {/* Searchable Warehouse Receiving Table */}
               <div className="overflow-x-auto border border-white/10 rounded-xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+                  <thead className="bg-white/5 text-slate-400 uppercase text-[10.5px] font-bold tracking-wider border-b border-white/10">
                     <tr>
-                      <th className="p-3 whitespace-nowrap">Receiving ID</th>
-                      <th className="p-3">Arrival Date</th>
-                      <th className="p-3">Transport ID</th>
-                      <th className="p-3">Driver & Plate Number</th>
-                      <th className="p-3 text-right">Field Weight</th>
-                      <th className="p-3 text-right">Warehouse Net Weight</th>
-                      <th className="p-3 text-right">Weight Diff (kg / %)</th>
-                      <th className="p-3 text-center">Scale Photos</th>
-                      <th className="p-3 text-right">Actions</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Receiving ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Arrival Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Transport ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Driver</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Field Weight</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Warehouse Net Weight</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Weight Diff (kg / %)</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">Scale Photos</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -5555,7 +5701,7 @@ export default function OperationsDashboard() {
                         const transport = intake.transport || {};
                         const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
                         const staffUsername = intake.receivingStaffName || 'staff';
-                        const receivingIdFormatted = `${staffUsername}_${arrivedWh}`;
+                        const receivingIdFormatted = formatReceivingIdWithDate(intake);
                         const transportIdFormatted = formatTransportId(transport);
 
                         const fieldWeight = transport.totalFieldWeight || 0;
@@ -5571,30 +5717,30 @@ export default function OperationsDashboard() {
 
                         return (
                           <tr key={intake.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap">
-                              <span className="inline-flex items-center gap-1.5 bg-sky-500/10 px-2.5 py-1 rounded-lg text-xs text-sky-300 font-mono font-bold border border-sky-500/20">
-                                <UserCheck className="w-3.5 h-3.5 text-sky-400" />
+                            <td className="py-2.5 px-3 font-mono font-bold text-sky-400 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 bg-sky-500/10 px-2 py-0.5 rounded-md text-[10px] text-sky-300 font-mono font-bold border border-sky-500/20">
+                                <UserCheck className="w-3 h-3 text-sky-400" />
                                 {receivingIdFormatted}
                               </span>
                               {getRejectionIndicator('WarehouseIntake', intake.id, intake.transportId, intake.status === 'REJECTED' || intake.inventoryStatus === 'REJECTED' ? 'REJECTED' : intake.status)}
                             </td>
-                            <td className="p-3 text-slate-400 text-[11px]">
+                            <td className="py-2.5 px-3 text-slate-400 text-[11px] whitespace-nowrap">
                               {new Date(intake.createdAt).toLocaleDateString()}{' '}
                               <span className="text-slate-500">{new Date(intake.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </td>
-                            <td className="p-3 font-mono font-bold text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">{transportIdFormatted}</td>
-                            <td className="p-3 font-bold text-white">
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">{transportIdFormatted}</td>
+                            <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
                               {transport.driverName || 'N/A'}
                               <div className="font-mono text-sky-400 text-[11px]">{transport.plateNumber || ''}</div>
                             </td>
-                            <td className="p-3 text-right font-mono font-bold text-slate-300">{fieldWeight.toFixed(2)} kg</td>
-                            <td className="p-3 text-right font-mono font-black text-sky-400">{netWeight.toFixed(2)} kg</td>
-                            <td className="p-3 text-right">
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-300 whitespace-nowrap">{fieldWeight.toFixed(2)} kg</td>
+                            <td className="py-2.5 px-3 text-right font-mono font-black text-sky-400 whitespace-nowrap">{netWeight.toFixed(2)} kg</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap">
                               <span className={`font-mono font-bold px-2 py-0.5 rounded-full text-[11px] ${statusColor}`}>
                                 {diffKg >= 0 ? '+' : ''}{diffKg.toFixed(2)} kg ({diffPercent.toFixed(2)}%)
                               </span>
                             </td>
-                            <td className="p-3 text-center">
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               {intake.grossScalePhotoUrl || intake.tareScalePhotoUrl ? (
                                 <span className="text-emerald-400 font-bold text-[10px] flex items-center justify-center gap-1">
                                   <Camera className="w-3.5 h-3.5" /> 📸 Photos Attached
@@ -5603,7 +5749,7 @@ export default function OperationsDashboard() {
                                 <span className="text-slate-500 text-[10px]">No Photos</span>
                               )}
                             </td>
-                            <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                            <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
                               <button
                                 onClick={() => setSelectedIntakeForDetails(intake)}
                                 className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
@@ -5695,37 +5841,37 @@ export default function OperationsDashboard() {
             MODULE 3: INVENTORY RECORD & VERIFICATION
         ══════════════════════════════════════════════════ */}
         {activeModule === 'inventory' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* INVENTORY METRICS CARDS */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 bg-[#141c2f] border border-amber-500/30 rounded-2xl space-y-1 shadow-lg">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-amber-500/30 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock className="w-4 h-4" /> Waiting for Inventory Recording
+                  <Clock className="w-3.5 h-3.5" /> Waiting for Inventory Recording
                 </div>
-                <div className="text-2xl font-black text-amber-400">
+                <div className="text-lg sm:text-xl font-black text-amber-400 font-mono">
                   {warehouseIntakes.filter((i) => i.inventoryStatus !== 'INVENTORY_RECORDED').length} Records
                 </div>
-                <p className="text-[11px] text-slate-400">Warehouse intake completed, awaiting inventory staff confirmation.</p>
+                <p className="text-[10px] text-slate-400 leading-tight">Warehouse intake completed, awaiting inventory staff confirmation.</p>
               </div>
 
-              <div className="p-4 bg-[#141c2f] border border-purple-500/30 rounded-2xl space-y-1 shadow-lg">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-purple-500/30 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> Inventory Recorded
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Inventory Recorded
                 </div>
-                <div className="text-2xl font-black text-purple-400">
+                <div className="text-lg sm:text-xl font-black text-purple-400 font-mono">
                   {warehouseIntakes.filter((i) => i.inventoryStatus === 'INVENTORY_RECORDED').length} Records
                 </div>
-                <p className="text-[11px] text-slate-400">Paddy officially logged into inventory. Unlocked for Finance.</p>
+                <p className="text-[10px] text-slate-400 leading-tight">Paddy officially logged into inventory. Unlocked for Finance.</p>
               </div>
 
-              <div className="p-4 bg-[#141c2f] border border-emerald-500/30 rounded-2xl space-y-1 shadow-lg">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-emerald-500/30 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Scale className="w-4 h-4" /> Total Received Net Weight
+                  <Scale className="w-3.5 h-3.5" /> Total Received Net Weight
                 </div>
-                <div className="text-2xl font-black text-emerald-400">
+                <div className="text-lg sm:text-xl font-black text-emerald-400 font-mono">
                   {(warehouseIntakes.reduce((sum, i) => sum + (i.warehouseNetWeight || 0), 0) / 1000).toFixed(2)} MT
                 </div>
-                <p className="text-[11px] text-slate-400">Total metric tons verified and stored in warehouse silos & stacks.</p>
+                <p className="text-[10px] text-slate-400 leading-tight">Total metric tons verified and stored in warehouse silos & stacks.</p>
               </div>
             </div>
 
@@ -5734,26 +5880,7 @@ export default function OperationsDashboard() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
                 <div>
                   <h2 className="text-base font-extrabold text-purple-400 flex items-center gap-2">
-                    📦 Warehouse Inventory Recording & Verification ({
-                      warehouseIntakes.filter((intake) => {
-                        const transport = intake.transport || {};
-                        const matchesStatus =
-                          invStatusFilter === 'ALL' ||
-                          (invStatusFilter === 'WAITING_FOR_INVENTORY' && intake.inventoryStatus !== 'INVENTORY_RECORDED') ||
-                          (invStatusFilter === 'INVENTORY_RECORDED' && intake.inventoryStatus === 'INVENTORY_RECORDED');
-
-                        const q = invSearchQuery.trim().toLowerCase();
-                        if (!q) return matchesStatus;
-
-                        const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
-                        const trId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
-                        const driver = (transport.driverName || '').toLowerCase();
-                        const plate = (transport.plateNumber || '').toLowerCase();
-                        const location = (intake.inventoryLocation || '').toLowerCase();
-
-                        return matchesStatus && (wrId.includes(q) || trId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
-                      }).length
-                    })
+                    📦 Warehouse Inventory Recording & Verification ({filteredInventoryIntakes.length})
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Verify received paddy from warehouse intake, assign storage silo/stack location, and confirm inventory records before Finance payment verification.
@@ -5769,7 +5896,7 @@ export default function OperationsDashboard() {
                     type="text"
                     value={invSearchQuery}
                     onChange={(e) => setInvSearchQuery(e.target.value)}
-                    placeholder="Search Warehouse ID, Transport ID, Driver, Plate, Storage Location..."
+                    placeholder="Search Receiving ID, Transport ID, Driver, Plate, Storage Location..."
                     className="w-full bg-[#1e293b] border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
@@ -5791,81 +5918,51 @@ export default function OperationsDashboard() {
               {/* Inventory Table */}
               <div className="overflow-x-auto border border-white/10 rounded-xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+                  <thead className="bg-white/5 text-slate-400 uppercase text-[10.5px] font-bold tracking-wider border-b border-white/10">
                     <tr>
-                      <th className="p-3">Receiving ID</th>
-                      <th className="p-3">Arrival Date</th>
-                      <th className="p-3">Truck Driver & Plate</th>
-                      <th className="p-3 text-right">Net Weight (kg)</th>
-                      <th className="p-3 text-center">Intake Proof Photos</th>
-                      <th className="p-3 text-center">Inventory Status</th>
-                      <th className="p-3 text-left">Storage Location</th>
-                      <th className="p-3 text-right">Actions</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Receiving ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Arrival Date</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Driver</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Net Weight (kg)</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">Intake Proof Photos</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">Inventory Status</th>
+                      <th className="py-2.5 px-3 text-left whitespace-nowrap">Storage Location</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {warehouseIntakes.filter((intake) => {
-                      const transport = intake.transport || {};
-                      const matchesStatus =
-                        invStatusFilter === 'ALL' ||
-                        (invStatusFilter === 'WAITING_FOR_INVENTORY' && intake.inventoryStatus !== 'INVENTORY_RECORDED') ||
-                        (invStatusFilter === 'INVENTORY_RECORDED' && intake.inventoryStatus === 'INVENTORY_RECORDED');
-
-                      const q = invSearchQuery.trim().toLowerCase();
-                      if (!q) return matchesStatus;
-
-                      const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
-                      const trId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
-                      const driver = (transport.driverName || '').toLowerCase();
-                      const plate = (transport.plateNumber || '').toLowerCase();
-                      const location = (intake.inventoryLocation || '').toLowerCase();
-
-                      return matchesStatus && (wrId.includes(q) || trId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
-                    }).length === 0 ? (
+                    {filteredInventoryIntakes.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="p-8 text-center text-slate-500 text-xs">
                           No warehouse intake records found matching your filter.
                         </td>
                       </tr>
                     ) : (
-                      warehouseIntakes.filter((intake) => {
+                      filteredInventoryIntakes.map((intake) => {
                         const transport = intake.transport || {};
-                        const matchesStatus =
-                          invStatusFilter === 'ALL' ||
-                          (invStatusFilter === 'WAITING_FOR_INVENTORY' && intake.inventoryStatus !== 'INVENTORY_RECORDED') ||
-                          (invStatusFilter === 'INVENTORY_RECORDED' && intake.inventoryStatus === 'INVENTORY_RECORDED');
-
-                        const q = invSearchQuery.trim().toLowerCase();
-                        if (!q) return matchesStatus;
-
-                        const wrId = `wr-2026-${intake.id.slice(-6)}`.toLowerCase();
-                        const trId = formatTransportId(transport).toLowerCase();
-                        const legacyTrId = `tr-2026-${transport.id?.slice(-6)}`.toLowerCase();
-                        const driver = (transport.driverName || '').toLowerCase();
-                        const plate = (transport.plateNumber || '').toLowerCase();
-                        const location = (intake.inventoryLocation || '').toLowerCase();
-
-                        return matchesStatus && (wrId.includes(q) || trId.includes(q) || legacyTrId.includes(q) || driver.includes(q) || plate.includes(q) || location.includes(q));
-                      }).map((intake) => {
-                        const transport = intake.transport || {};
-                        const wrIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
+                        const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+                        const staffUsername = intake.receivingStaffName || 'staff';
+                        const receivingIdFormatted = formatReceivingIdWithDate(intake);
                         const isRecorded = intake.inventoryStatus === 'INVENTORY_RECORDED';
 
                         return (
-                          <tr key={intake.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400">
-                              {wrIdFormatted}
+                          <tr key={intake.id}>
+                            <td className="py-2.5 px-3 font-mono font-bold text-sky-400 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 bg-sky-500/10 px-2 py-0.5 rounded-md text-[10px] text-sky-300 font-mono font-bold border border-sky-500/20">
+                                <UserCheck className="w-3 h-3 text-sky-400" />
+                                {receivingIdFormatted}
+                              </span>
                               {getRejectionIndicator('WarehouseIntake', intake.id, intake.transportId, intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED' ? 'REJECTED' : intake.inventoryStatus)}
                             </td>
-                            <td className="p-3 text-slate-300">{new Date(intake.createdAt).toLocaleString()}</td>
-                            <td className="p-3 font-bold text-white">
+                            <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">{new Date(intake.createdAt).toLocaleString()}</td>
+                            <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
                               {transport.driverName}
                               <div className="font-mono text-sky-400 text-[11px]">{transport.plateNumber}</div>
                             </td>
-                            <td className="p-3 text-right font-mono font-black text-emerald-400 text-sm">
+                            <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
                               {intake.warehouseNetWeight.toFixed(2)} kg
                             </td>
-                            <td className="p-3 text-center">
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5 text-[10px]">
                                 {intake.grossScalePhotoUrl && (
                                   <a href={intake.grossScalePhotoUrl} target="_blank" rel="noreferrer" className="px-1.5 py-0.5 bg-sky-500/20 text-sky-300 rounded font-bold hover:bg-sky-500/30">
@@ -5884,7 +5981,7 @@ export default function OperationsDashboard() {
                                 )}
                               </div>
                             </td>
-                            <td className="p-3 text-center">
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               {intake.inventoryStatus === 'REJECTED' && intake.status === 'REJECTED' ? (
                                 <span className="bg-red-500/20 text-red-400 border border-red-500/40 px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1 justify-center animate-pulse" title="Returned to Warehouse team for scale or photo correction">
                                   <AlertOctagon className="w-3.5 h-3.5 text-red-400" /> Returned to Warehouse
@@ -5899,64 +5996,76 @@ export default function OperationsDashboard() {
                                 </span>
                               ) : (
                                 <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center animate-pulse">
-                                  <Clock className="w-3.5 h-3.5" /> Waiting for Inventory
+                                  <Clock className="w-3.5 h-3.5" /> Waiting
                                 </span>
                               )}
                             </td>
-                            <td className="p-3 text-left font-extrabold text-white">
-                              <div>{intake.inventoryLocation || (isRecorded ? 'Main Warehouse' : '--')}</div>
-                              <div className="text-[10px] text-amber-300 font-mono font-bold mt-0.5">
-                                WH: {getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse)} ({getWarehouseName(intake.arrivedWarehouse || transport.destinationWarehouse)})
+                            <td className="py-2.5 px-3 text-left font-extrabold text-white whitespace-nowrap">
+                              <div className="text-amber-300 font-mono font-bold text-xs">
+                                WH: {arrivedWh} ({arrivedWh === 'W002' ? 'KPT' : arrivedWh === 'W003' ? 'KPG' : getWarehouseName(intake.arrivedWarehouse || transport.destinationWarehouse)})
                               </div>
+                              {intake.inventoryLocation ? (
+                                <div className="text-[11px] text-slate-300 font-semibold mt-0.5">
+                                  Location: {intake.inventoryLocation}
+                                </div>
+                              ) : isRecorded ? (
+                                <div className="text-[10px] text-slate-400 font-normal mt-0.5">Main Warehouse</div>
+                              ) : null}
                               {intake.inventoryStaffName && (
                                 <div className="text-[10px] text-slate-400 font-normal">By: {intake.inventoryStaffName}</div>
                               )}
                             </td>
-                            <td className="p-3 text-right whitespace-nowrap space-x-1">
-                              <button
-                                onClick={() => setSelectedIntakeForDetails(intake)}
-                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
-                                title="Inspect Warehouse Scale & Invoice Proof"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 justify-end">
+                                <button
+                                  onClick={() => setSelectedIntakeForDetails(intake)}
+                                  className={
+                                    !isRecorded
+                                      ? "px-3 py-1.5 bg-sky-500/25 hover:bg-sky-500/35 text-sky-200 border border-sky-400/70 rounded-lg transition-all font-black text-xs shadow-md shadow-sky-500/25 ring-1 ring-sky-400/40"
+                                      : "px-2.5 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-lg transition-colors font-bold text-[10px]"
+                                  }
+                                  title="Inspect Warehouse Scale & Invoice Proof"
+                                >
+                                  Verify
+                                </button>
 
-                              {!isRecorded && (currentUserRole === 'INVENTORY' || currentUserRole === 'ADMIN') ? (
-                                <div className="inline-flex items-center gap-1">
-                                  <button
-                                    onClick={() => {
-                                      setInvConfirmModalIntake(intake);
-                                      setInvLocationInput(intake.inventoryLocation || '');
-                                      setInvNotesInput(intake.inventoryNotes || '');
-                                    }}
-                                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-extrabold text-[10px] shadow-sm shadow-purple-600/30 transition-all"
-                                  >
-                                    Confirm Inventory Record
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      setRejectionTarget({
-                                        isOpen: true,
-                                        title: `Reject & Return Warehouse Intake WR-2026-${intake.id.slice(-6).toUpperCase()}`,
-                                        entityType: 'WarehouseIntake',
-                                        entityId: intake.id,
-                                        defaultTargetModule: 'WAREHOUSE',
-                                        availableTargetModules: ['WAREHOUSE', 'FIELD'],
-                                      })
-                                    }
-                                    className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
-                                    title="Reject Warehouse Scale Intake & Return to Warehouse Receiver or Field Team for Correction"
-                                  >
-                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject / Return
-                                  </button>
-                                </div>
-                              ) : isRecorded ? (
-                                <span className="text-[10px] text-purple-400 font-bold px-2 py-1 bg-purple-500/10 rounded-lg border border-purple-500/20">
-                                  ✓ Unlocked for Finance
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-slate-500 italic">Inventory Staff Only</span>
-                              )}
+                                {!isRecorded && (currentUserRole === 'INVENTORY' || currentUserRole === 'ADMIN') ? (
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      onClick={() => {
+                                        setInvConfirmModalIntake(intake);
+                                        setInvLocationInput(intake.inventoryLocation || '');
+                                        setInvNotesInput(intake.inventoryNotes || '');
+                                      }}
+                                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-extrabold text-[10px] shadow-sm shadow-purple-600/30 transition-all"
+                                    >
+                                      Confirm
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        setRejectionTarget({
+                                          isOpen: true,
+                                          title: `Reject & Return Warehouse Intake ${receivingIdFormatted}`,
+                                          entityType: 'WarehouseIntake',
+                                          entityId: intake.id,
+                                          defaultTargetModule: 'WAREHOUSE',
+                                          availableTargetModules: ['WAREHOUSE', 'FIELD'],
+                                        })
+                                      }
+                                      className="px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                                      title="Reject Warehouse Scale Intake & Return to Warehouse Receiver or Field Team for Correction"
+                                    >
+                                      <AlertOctagon className="w-3 h-3" /> Reject
+                                    </button>
+                                  </div>
+                                ) : isRecorded ? (
+                                  <span className="text-[10px] text-purple-400 font-bold px-2 py-1 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                                    ✓ Unlocked for Finance
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 italic">Inventory Staff Only</span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -5973,47 +6082,45 @@ export default function OperationsDashboard() {
             MODULE 4: TRUCK-LEVEL FINANCE VERIFICATION
         ══════════════════════════════════════════════════ */}
         {activeModule === 'finance' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* DASHBOARD SUMMARY STATS (TOP OF PAGE) */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className="p-4 bg-[#141c2f] border border-amber-500/30 rounded-2xl space-y-1 shadow-lg">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-amber-500/30 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-amber-400" /> Waiting for Inventory
                 </div>
-                <div className="text-xl md:text-2xl font-black text-amber-400">{trucksWaitingInventoryRecord} Trucks</div>
-                <div className="text-[10px] text-slate-400">Pending Recording</div>
+                <div className="text-base sm:text-lg font-black text-amber-400 font-mono">{trucksWaitingInventoryRecord} Trucks</div>
               </div>
 
-              <div className="p-4 bg-[#141c2f] border border-purple-500/40 rounded-2xl space-y-1 shadow-lg">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-purple-500/40 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" /> Inventory Recorded
                 </div>
-                <div className="text-xl md:text-2xl font-black text-purple-400">{trucksInventoryRecorded} Trucks</div>
-                <div className="text-[10px] text-slate-400">Ready for Finance</div>
+                <div className="text-base sm:text-lg font-black text-purple-400 font-mono">{trucksInventoryRecorded} Trucks</div>
               </div>
 
-              <div className="p-4 bg-[#141c2f] border border-emerald-500/30 rounded-2xl space-y-1 shadow-lg">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-emerald-500/30 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
                   <CheckSquare className="w-3.5 h-3.5" /> Trucks Verified
                 </div>
-                <div className="text-xl md:text-2xl font-black text-emerald-400">{trucksVerified} Trucks</div>
+                <div className="text-base sm:text-lg font-black text-emerald-400 font-mono">{trucksVerified} Trucks</div>
               </div>
 
-              <div className="p-4 bg-[#141c2f] border border-sky-500/30 rounded-2xl space-y-1 shadow-lg">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-sky-500/30 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
                   <CreditCard className="w-3.5 h-3.5" /> Trucks Fully Paid
                 </div>
-                <div className="text-xl md:text-2xl font-black text-sky-400">{trucksFullyPaid} Trucks</div>
+                <div className="text-base sm:text-lg font-black text-sky-400 font-mono">{trucksFullyPaid} Trucks</div>
               </div>
 
-              <div className="p-4 bg-[#141c2f] border border-white/10 rounded-2xl space-y-1 shadow-lg">
+              <div className="px-3.5 py-2.5 bg-[#141c2f] border border-white/10 rounded-xl space-y-0.5 shadow-md">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Farmers Paid</div>
-                <div className="text-xl md:text-2xl font-black text-white">{totalFarmersPaidCount} Farmers</div>
+                <div className="text-base sm:text-lg font-black text-white font-mono">{totalFarmersPaidCount} Farmers</div>
               </div>
 
-              <div className="p-4 bg-gradient-to-r from-amber-950/80 to-[#141c2f] border border-amber-500/50 rounded-2xl space-y-1 shadow-xl col-span-2 sm:col-span-1 lg:col-span-1">
+              <div className="px-3.5 py-2.5 bg-gradient-to-r from-amber-950/80 to-[#141c2f] border border-amber-500/50 rounded-xl space-y-0.5 shadow-md col-span-2 sm:col-span-1 lg:col-span-1">
                 <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Total Disbursed</div>
-                <div className="text-base md:text-lg font-black text-amber-400">{totalAmountPaidKHR.toLocaleString()} KHR</div>
+                <div className="text-base sm:text-lg font-black text-amber-400 font-mono">{totalAmountPaidKHR.toLocaleString()} KHR</div>
               </div>
             </div>
 
@@ -6058,7 +6165,7 @@ export default function OperationsDashboard() {
                   >
                     <option value="ALL">All Truck Statuses</option>
                     <option value="EN_ROUTE">🚛 En Route</option>
-                    <option value="WAITING_FOR_INVENTORY">⏳ Pending Inventory</option>
+                    <option value="WAITING_FOR_INVENTORY">⏳ Pending</option>
                     <option value="INVENTORY_RECORDED">📦 Inventory Recorded</option>
                     <option value="VERIFIED">🟢 Verified</option>
                     <option value="DISBURSED">✅ Payment Complete</option>
@@ -6069,26 +6176,25 @@ export default function OperationsDashboard() {
               {/* Searchable Truck-Level Finance Table */}
               <div className="overflow-x-auto border border-white/10 rounded-xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+                  <thead className="bg-white/5 text-slate-400 uppercase text-[10.5px] font-bold tracking-wider border-b border-white/10">
                     <tr>
-                      <th className="p-3">Transport ID</th>
-                      <th className="p-3">Warehouse ID</th>
-                      <th className="p-3">Truck Driver & Plate</th>
-                      <th className="p-3 text-center">Farmers / Invoices</th>
-                      <th className="p-3 text-right">Field Weight</th>
-                      <th className="p-3 text-right">Warehouse Net</th>
-                      <th className="p-3 text-right">Weight Diff (+/- kg)</th>
-                      <th className="p-3 text-right">Absolute Diff (ABS)</th>
-                      <th className="p-3 text-center">Tolerance Status</th>
-                      <th className="p-3 text-right">Total Net Payment</th>
-                      <th className="p-3 text-center">Truck & Inventory Status</th>
-                      <th className="p-3 text-right">Actions</th>
+                      <th className="py-2.5 px-2.5 whitespace-nowrap">Transport ID</th>
+                      <th className="py-2.5 px-2.5 whitespace-nowrap">Receiving ID</th>
+                      <th className="py-2.5 px-2.5 whitespace-nowrap">Driver</th>
+                      <th className="py-2.5 px-2.5 text-center whitespace-nowrap">Farmer</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Field Weight</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Warehouse Net</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Diff (+/- kg)</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Diff (ABS)</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Net Payment</th>
+                      <th className="py-2.5 px-2.5 text-center whitespace-nowrap">Inventory Status</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {filteredFinanceTrucks.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="p-8 text-center text-slate-500 text-xs">
+                        <td colSpan={11} className="p-8 text-center text-slate-500 text-xs">
                           No trucks found matching your search. Complete field dispatch and warehouse receiving to verify trucks.
                         </td>
                       </tr>
@@ -6097,7 +6203,9 @@ export default function OperationsDashboard() {
                         const t = truckData.transport || {};
                         const intake = truckData.intake || {};
                         const trIdFormatted = formatTransportId(t);
-                        const wrIdFormatted = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'Awaiting Intake';
+                        const wrIdFormatted = intake.id
+                          ? formatReceivingIdWithDate({ ...intake, transport: t })
+                          : 'Awaiting Intake';
 
                         const fieldWeight = truckData.fieldWeight || 0;
                         const netWeight = truckData.warehouseNetWeight || 0;
@@ -6158,7 +6266,7 @@ export default function OperationsDashboard() {
                                 title="Warehouse has received the truck, but Inventory has not recorded it yet."
                               >
                                 <Clock className="w-3.5 h-3.5" />
-                                ⏳ Pending Inventory
+                                ⏳ Pending
                               </span>
                             );
                           }
@@ -6185,25 +6293,34 @@ export default function OperationsDashboard() {
                         }
 
                         return (
-                          <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap text-[11px] sm:text-xs">
+                          <tr key={t.id}>
+                            <td className="py-2.5 px-2.5 font-mono font-bold text-sky-400 whitespace-nowrap text-[11px] sm:text-xs">
                               <span>{trIdFormatted}</span>
                               {getRejectionIndicator('TransportRecord', t.id, intake?.id, t.status)}
                             </td>
-                            <td className="p-3 font-mono font-bold text-purple-400">{wrIdFormatted}</td>
-                            <td className="p-3 font-bold text-white">
+                            <td className="py-2.5 px-2.5 font-mono font-bold whitespace-nowrap">
+                              {intake?.id ? (
+                                <span className="inline-flex items-center gap-1 bg-sky-500/10 px-2 py-0.5 rounded-md text-[10px] text-sky-300 font-mono font-bold border border-sky-500/20">
+                                  <UserCheck className="w-3 h-3 text-sky-400" />
+                                  {wrIdFormatted}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500 italic text-[11px]">Awaiting Intake</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2.5 font-bold text-white whitespace-nowrap">
                               {t.driverName}
                               <div className="font-mono text-sky-400 text-[11px]">{t.plateNumber}</div>
                             </td>
-                            <td className="p-3 text-center">
+                            <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
                               <span className="font-bold text-emerald-400">{truckData.totalFarmersCount} Farmers</span>
                               <div className="text-[10px] text-slate-400">({truckData.purchases.length} Invoices)</div>
                             </td>
-                            <td className="p-3 text-right font-mono font-bold text-slate-200">{fieldWeight.toFixed(2)} kg</td>
-                            <td className="p-3 text-right font-mono font-black text-sky-400">
+                            <td className="py-2.5 px-2.5 text-right font-mono font-bold text-slate-200 whitespace-nowrap">{fieldWeight.toFixed(2)} kg</td>
+                            <td className="py-2.5 px-2.5 text-right font-mono font-black text-sky-400 whitespace-nowrap">
                               {intake.id ? `${netWeight.toFixed(2)} kg` : 'Pending Intake'}
                             </td>
-                            <td className="p-3 text-right font-mono font-bold">
+                            <td className="py-2.5 px-2.5 text-right font-mono font-bold whitespace-nowrap">
                               {intake.id ? (
                                 <span className={diffKg >= 0 ? 'text-emerald-400' : 'text-amber-400'}>
                                   {diffKg >= 0 ? '+' : ''}{diffKg.toFixed(2)} kg
@@ -6212,37 +6329,36 @@ export default function OperationsDashboard() {
                                 <span className="text-slate-500 text-[10px]">--</span>
                               )}
                             </td>
-                            <td className="p-3 text-right font-mono font-black text-white">
+                            <td className="py-2.5 px-2.5 text-right font-mono font-black text-white whitespace-nowrap">
                               {intake.id ? `${absDiffKg.toFixed(2)} kg` : '--'}
                             </td>
-                            <td className="p-3 text-center">{intake.id ? toleranceBadge : <span className="text-slate-500 text-[10px]">--</span>}</td>
-                            <td className="p-3 text-right font-mono font-black text-amber-400 text-sm">
+                            <td className="py-2.5 px-2.5 text-right font-mono font-bold text-amber-400 text-xs whitespace-nowrap">
                               {truckData.totalTruckNetPayment.toLocaleString()} KHR
                             </td>
-                            <td className="p-3 text-center">{statusBadge}</td>
-                            <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                            <td className="py-2.5 px-2.5 text-center whitespace-nowrap">{statusBadge}</td>
+                            <td className="py-2.5 px-2.5 text-right space-x-1 whitespace-nowrap">
                               <button
                                 onClick={() => setSelectedFinanceTruckForDetails(truckData)}
-                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
+                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors inline-flex items-center justify-center"
                                 title="View Truck Invoices & Scale Proof"
                               >
-                                <Eye className="w-3.5 h-3.5" />
+                                <Eye className="w-[18px] h-[18px]" />
                               </button>
 
                               <button
                                 onClick={() => setSelectedFinanceTruckForPrint(truckData)}
-                                className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg transition-colors"
+                                className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg transition-colors inline-flex items-center justify-center"
                                 title="Print Payment Authorization Report"
                               >
-                                <Printer className="w-3.5 h-3.5" />
+                                <Printer className="w-[18px] h-[18px]" />
                               </button>
 
                               <button
                                 onClick={() => exportSingleTruckCSV(truckData)}
-                                className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors"
+                                className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors inline-flex items-center justify-center"
                                 title="Export Truck Farmer Payment CSV for Bank Transfers"
                               >
-                                <FileSpreadsheet className="w-3.5 h-3.5" />
+                                <FileSpreadsheet className="w-[18px] h-[18px]" />
                               </button>
 
                               {t.status === 'RECEIVED' && (
@@ -6278,7 +6394,7 @@ export default function OperationsDashboard() {
                                     className="px-2.5 py-1 bg-slate-800 text-slate-500 border border-slate-700 rounded-lg font-bold text-[10px] cursor-not-allowed flex items-center gap-1 inline-flex"
                                     title="Paddy must be confirmed & recorded into inventory system before Finance verification."
                                   >
-                                    <Clock className="w-3 h-3 text-amber-500" /> Pending Inventory
+                                    <Clock className="w-3 h-3 text-amber-500" /> Pending
                                   </button>
                                 )
                               )}
@@ -7155,9 +7271,12 @@ export default function OperationsDashboard() {
               </div>
 
               <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2 font-mono">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-400">Warehouse Receiving ID:</span>
-                  <strong className="text-sky-400">WR-2026-{invConfirmModalIntake.id.slice(-6).toUpperCase()}</strong>
+                  <strong className="text-sky-400 inline-flex items-center gap-1 font-mono">
+                    <UserCheck className="w-3.5 h-3.5 text-sky-400" />
+                    {formatReceivingIdWithDate(invConfirmModalIntake)}
+                  </strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Truck Plate & Driver:</span>

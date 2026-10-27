@@ -4,6 +4,7 @@ import { X, Printer } from 'lucide-react';
 import { getReportTranslation } from '@/lib/report-translations';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
+import { formatReceivingIdWithDate } from '@/lib/warehouse-config';
 
 interface PrintFinanceReportModalProps {
   isOpen: boolean;
@@ -25,7 +26,7 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
   };
 
   const transportId = formatTransportId(transport);
-  const intakeId = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'N/A';
+  const intakeId = intake?.id ? formatReceivingIdWithDate({ ...intake, transport }) : 'N/A';
 
   const fieldWeight = truckData.fieldWeight || 0;
   const netWeight = truckData.warehouseNetWeight || 0;
@@ -62,7 +63,6 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
                 {t.companyName}
               </h1>
               <p className="text-[11px] text-slate-700 font-extrabold uppercase tracking-wider">{t.financeTitle}</p>
-              <p className="text-[10px] text-slate-500">{t.financeSubtitle}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
@@ -122,7 +122,6 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
                 <p className="font-bold text-slate-800 text-xs mb-2">{t.financeOfficer}</p>
                 <div className="w-full h-20" />
                 <div className="w-full border-b border-slate-400 my-1" />
-                <p className="text-[11px] text-slate-700 font-bold">Finance Verification Staff</p>
                 <p className="text-[10px] text-slate-400 italic">Signature & Date</p>
               </div>
 
@@ -130,7 +129,6 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
                 <p className="font-bold text-slate-800 text-xs mb-2">{t.treasuryApprover}</p>
                 <div className="w-full h-20" />
                 <div className="w-full border-b border-slate-400 my-1" />
-                <p className="text-[11px] text-slate-700 font-bold">Treasury & Payment Approver</p>
                 <p className="text-[10px] text-slate-400 italic">Signature & Date</p>
               </div>
             </div>
@@ -148,7 +146,6 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
             {t.companyName}
           </h1>
           <h2 className="text-xs font-black uppercase text-slate-800 tracking-wider">{t.financeTitle}</h2>
-          <p className="text-[10px] text-slate-600 font-bold">{t.financeSubtitle}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 border border-slate-300 rounded-lg mb-4 text-xs">
@@ -206,7 +203,6 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
             <p className="font-bold text-slate-800 text-xs mb-2">{t.financeOfficer}</p>
             <div className="w-full h-20" />
             <div className="w-full border-b border-slate-400 my-1" />
-            <p className="text-[11px] text-slate-700 font-bold">Finance Verification Staff</p>
             <p className="text-[10px] text-slate-500 italic">Signature & Date</p>
           </div>
 
@@ -214,7 +210,6 @@ export default function PrintFinanceReportModal({ isOpen, onClose, truckData, la
             <p className="font-bold text-slate-800 text-xs mb-2">{t.treasuryApprover}</p>
             <div className="w-full h-20" />
             <div className="w-full border-b border-slate-400 my-1" />
-            <p className="text-[11px] text-slate-700 font-bold">Treasury & Payment Approver</p>
             <p className="text-[10px] text-slate-500 italic">Signature & Date</p>
           </div>
         </div>

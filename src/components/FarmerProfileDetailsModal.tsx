@@ -56,6 +56,10 @@ export default function FarmerProfileDetailsModal({
                 <span className="text-slate-400">Phone Number:</span>{' '}
                 <span className="text-slate-200">{profile.phone || 'N/A'}</span>
               </div>
+              <div className="col-span-2 pt-1 border-t border-white/5 flex items-center justify-between">
+                <span className="text-slate-400">Registered By (Staff):</span>{' '}
+                <strong className="text-sky-400 font-mono">👤 {profile.user?.name || (profile.user?.email ? profile.user.email.split('@')[0] : 'Field Staff')}</strong>
+              </div>
             </div>
           </div>
 

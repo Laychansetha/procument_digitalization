@@ -76,6 +76,10 @@ export default function SpecsDetailsModal({
                 <span className="text-slate-400">Date & Time:</span>{' '}
                 <span className="text-slate-200">{new Date(spec.createdAt || spec.date).toLocaleString()}</span>
               </div>
+              <div className="col-span-2 pt-1 border-t border-white/5 flex items-center justify-between">
+                <span className="text-slate-400">Recorded By (Staff):</span>{' '}
+                <strong className="text-sky-400 font-mono">👤 {spec.user?.name || (spec.user?.email ? spec.user.email.split('@')[0] : 'Field Staff')}</strong>
+              </div>
             </div>
           </div>
 

@@ -68,3 +68,31 @@ export function getWarehouseDisplay(val?: string | null): string {
   if (found) return found.label;
   return val ? `${id} - ${val}` : 'W002 - CACC (KPT)';
 }
+
+/**
+ * Generates the standardized Warehouse Receiving ID with arrival date in DDMMYY format.
+ * Format: username_WarehouseCode_DDMMYY
+ * Example: phearun_W003_271026
+ */
+export function formatReceivingIdWithDate(intake: {
+  receivingStaffName?: string | null;
+  arrivedWarehouse?: string | null;
+  arrivalTime?: string | Date | null;
+  createdAt?: string | Date | null;
+  transport?: {
+    destinationWarehouse?: string | null;
+  } | null;
+} | null | undefined): string {
+  if (!intake) return '';
+  const username = (intake.receivingStaffName || 'staff').trim();
+  const warehouseCode = getWarehouseId(intake.arrivedWarehouse || intake.transport?.destinationWarehouse || 'W002');
+
+  const d = intake.arrivalTime || intake.createdAt ? new Date(intake.arrivalTime || intake.createdAt!) : new Date();
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  const day = String(validDate.getDate()).padStart(2, '0');
+  const month = String(validDate.getMonth() + 1).padStart(2, '0');
+  const year = String(validDate.getFullYear()).slice(-2);
+  const dateStr = `${day}${month}${year}`;
+
+  return `${username}_${warehouseCode}_${dateStr}`;
+}

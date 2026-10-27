@@ -15,6 +15,11 @@ interface SpecsRecordItem {
   finalPrice: number;
   isValid: boolean;
   date: string;
+  user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+  } | null;
 }
 
 interface SpecsSelectorModalProps {
@@ -76,7 +81,9 @@ export default function SpecsSelectorModal({
       s.familyCode.toLowerCase().includes(search.toLowerCase()) ||
       s.farmerName.toLowerCase().includes(search.toLowerCase()) ||
       s.village.toLowerCase().includes(search.toLowerCase()) ||
-      s.paddyType.toLowerCase().includes(search.toLowerCase())
+      s.paddyType.toLowerCase().includes(search.toLowerCase()) ||
+      (s.user?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.user?.email || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -102,7 +109,7 @@ export default function SpecsSelectorModal({
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by Family Code (e.g. TB034), Farmer Name, or Village..."
+              placeholder="Search by Family Code (e.g. TB034), Farmer Name, Village, or Staff..."
               className="w-full bg-[#1e293b] border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
             />
           </div>
@@ -119,6 +126,7 @@ export default function SpecsSelectorModal({
               const linkedPurchase = findPurchasedMatch(spec);
               const isPurchased = Boolean(linkedPurchase);
               const pIdFormatted = linkedPurchase ? formatPurchaseId(linkedPurchase) : '';
+              const staffUsername = spec.user?.name || (spec.user?.email ? spec.user.email.split('@')[0] : '');
 
               return (
                 <div
@@ -136,11 +144,16 @@ export default function SpecsSelectorModal({
                       <span className="font-bold text-white">{spec.farmerName}</span>
                       <span className="text-slate-400">({spec.village})</span>
                     </div>
-                    <div className="text-slate-300 text-[11px]">
-                      🌾 <strong className="text-sky-400">{spec.paddyType}</strong> · Grade:{' '}
+                    <div className="text-slate-300 text-[11px] flex flex-wrap items-center gap-1.5">
+                      <span>🌾 <strong className="text-sky-400">{spec.paddyType}</strong> · Grade:{' '}
                       <strong className="text-purple-400">{spec.selectedGrade}</strong> · Price:{' '}
-                      <strong className="text-amber-400">{spec.finalPrice.toLocaleString()} KHR/kg</strong>
-                      {spec.isOrganic && <span className="ml-2 text-emerald-400 font-bold">🌿 Organic</span>}
+                      <strong className="text-amber-400">{spec.finalPrice.toLocaleString()} KHR/kg</strong></span>
+                      {spec.isOrganic && <span className="text-emerald-400 font-bold">🌿 Organic</span>}
+                      {staffUsername && (
+                        <span className="text-slate-400 font-medium text-[10.5px]">
+                          · 👤 {staffUsername}
+                        </span>
+                      )}
                     </div>
                   </div>
 

@@ -70,9 +70,9 @@ export async function POST(request: Request) {
       arrivedWarehouse,
     } = body;
 
-    if (!transportId || warehouseGrossWeight === undefined || warehouseTareWeight === undefined) {
+    if (!transportId || warehouseGrossWeight === undefined || warehouseTareWeight === undefined || !arrivedWarehouse?.toString().trim()) {
       return NextResponse.json(
-        { error: 'Transport ID, Gross Weight, and Tare Weight are required.' },
+        { error: 'Transport ID, Gross Weight, Tare Weight, and Arrived Warehouse are required.' },
         { status: 400 }
       );
     }
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     const savedTarePhoto = await processAndSaveImage(tareScalePhotoUrl, 'tare_scale');
     const savedInvoicePhoto = await processAndSaveImage(transportInvoiceUrl, 'invoice');
 
-    const actualArrivedWarehouse = arrivedWarehouse ? getWarehouseId(arrivedWarehouse) : (getWarehouseId(transport.destinationWarehouse) || 'W002');
+    const actualArrivedWarehouse = getWarehouseId(arrivedWarehouse.toString().trim());
 
     // Check if an intake record already exists for this transportId
     const existingIntake = await db.warehouseIntake.findUnique({

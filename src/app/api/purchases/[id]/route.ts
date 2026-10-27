@@ -102,6 +102,8 @@ export async function PUT(
         netPayment: netPaymentToFarmer,
         signatureFarmer: signatureFarmer || existing.signatureFarmer,
         signatureStaff: signatureStaff || existing.signatureStaff,
+        purchasingStaffId: userId,
+        purchasingStaffName: session.user?.name || existing.purchasingStaffName,
         specsRecordId: specsRecordId || existing.specsRecordId,
         status: nextStatus,
       },

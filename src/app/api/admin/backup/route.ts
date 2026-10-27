@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { masterData, transactionData } = payload;
+    const { masterData } = payload;
 
     // Restore Master Data (Upserting to prevent primary key conflicts)
     if (masterData) {
