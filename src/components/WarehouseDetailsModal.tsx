@@ -176,7 +176,7 @@ export default function WarehouseDetailsModal({
               title="Export Truck Manifest to CSV for Warehouse Record-Keeping"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-              <span>Export Truck Manifest (CSV)</span>
+              <span>Export Truck {transportIdFormatted}</span>
             </button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg">
               <X className="w-5 h-5" />

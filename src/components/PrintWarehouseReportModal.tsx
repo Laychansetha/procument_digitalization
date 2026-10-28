@@ -151,7 +151,6 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
                 <p className="font-bold text-slate-800 text-xs mb-2">Warehouse Scale Inspector</p>
                 <div className="w-full h-20" />
                 <div className="w-full border-b border-slate-400 my-1" />
-                <p className="text-[11px] text-slate-700 font-bold">{intake.receivingStaffName || 'Warehouse Scale Operator'}</p>
                 <p className="text-[10px] text-slate-400 italic">Signature & Date</p>
               </div>
 
@@ -159,7 +158,6 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
                 <p className="font-bold text-slate-800 text-xs mb-2">Warehouse Operations Manager</p>
                 <div className="w-full h-20" />
                 <div className="w-full border-b border-slate-400 my-1" />
-                <p className="text-[11px] text-slate-700 font-bold">Operations Manager</p>
                 <p className="text-[10px] text-slate-400 italic">Signature & Date</p>
               </div>
             </div>
@@ -261,7 +259,6 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
             <p className="font-bold text-slate-800 text-xs mb-2">Warehouse Scale Inspector</p>
             <div className="w-full h-20" />
             <div className="w-full border-b border-slate-400 my-1" />
-            <p className="text-[11px] text-slate-700 font-bold">{intake.receivingStaffName || 'Warehouse Scale Operator'}</p>
             <p className="text-[10px] text-slate-500 italic">Signature & Date</p>
           </div>
 
@@ -269,7 +266,6 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
             <p className="font-bold text-slate-800 text-xs mb-2">Warehouse Operations Manager</p>
             <div className="w-full h-20" />
             <div className="w-full border-b border-slate-400 my-1" />
-            <p className="text-[11px] text-slate-700 font-bold">Operations Manager</p>
             <p className="text-[10px] text-slate-500 italic">Signature & Date</p>
           </div>
         </div>

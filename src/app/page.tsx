@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { formatImageSrc } from '@/lib/image-utils';
@@ -106,6 +106,32 @@ export default function OperationsDashboard() {
       }
     }
     setActiveModule(mod);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ibis_active_module', mod);
+    }
+  };
+
+  const handleSelectFieldTab = (tab: 'specs' | 'payment' | 'purchase' | 'transport') => {
+    setFieldTab(tab);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ibis_field_tab', tab);
+    }
+  };
+
+  const handleSelectAdminTab = (tab: 'users' | 'villages' | 'banks' | 'prices' | 'tolerance' | 'audit' | 'backup') => {
+    setAdminTab(tab);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ibis_admin_tab', tab);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ibis_active_module');
+      localStorage.removeItem('ibis_field_tab');
+      localStorage.removeItem('ibis_admin_tab');
+    }
+    await signOut({ callbackUrl: '/login' });
   };
 
   // Modals state
@@ -333,17 +359,73 @@ export default function OperationsDashboard() {
   const [newSpecMaxForeign, setNewSpecMaxForeign] = useState<number | string>(5.0);
   const [newSpecMaxMoisture, setNewSpecMaxMoisture] = useState<number | string>(14.0);
 
+  // Track whether initial module resolution for this browser session has run
+  const hasInitializedModule = useRef(false);
+
   // ROLE-BASED ACCESS GUARD & INITIAL MODULE SETTING
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     } else if (status === 'authenticated' && session?.user) {
       const role = (session.user as { role?: string })?.role || currentUserRole;
-      if (role === 'FIELD') setActiveModule('field');
-      else if (role === 'WAREHOUSE') setActiveModule('warehouse');
-      else if (role === 'INVENTORY') setActiveModule('inventory');
-      else if (role === 'FINANCE') setActiveModule('finance');
-      else if (role === 'ADMIN') setActiveModule('field');
+
+      const isAllowedForRole = (mod: string) => {
+        if (role === 'ADMIN') return ['field', 'warehouse', 'inventory', 'finance', 'admin'].includes(mod);
+        if (role === 'FIELD') return mod === 'field';
+        if (role === 'WAREHOUSE') return mod === 'warehouse';
+        if (role === 'INVENTORY') return mod === 'inventory';
+        if (role === 'FINANCE') return mod === 'finance';
+        return false;
+      };
+
+      const getDefaultModule = (): 'field' | 'warehouse' | 'inventory' | 'finance' | 'admin' => {
+        if (role === 'WAREHOUSE') return 'warehouse';
+        if (role === 'INVENTORY') return 'inventory';
+        if (role === 'FINANCE') return 'finance';
+        return 'field';
+      };
+
+      // Perform initial module setting ONLY once per session mount or when restoring from storage
+      if (!hasInitializedModule.current) {
+        hasInitializedModule.current = true;
+
+        let targetModule = getDefaultModule();
+        const savedModule = typeof window !== 'undefined' ? localStorage.getItem('ibis_active_module') : null;
+
+        if (savedModule && isAllowedForRole(savedModule)) {
+          targetModule = savedModule as any;
+        }
+
+        setActiveModule(targetModule);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ibis_active_module', targetModule);
+
+          const savedFieldTab = localStorage.getItem('ibis_field_tab');
+          if (savedFieldTab && ['specs', 'payment', 'purchase', 'transport'].includes(savedFieldTab)) {
+            setFieldTab(savedFieldTab as any);
+          }
+
+          const savedAdminTab = localStorage.getItem('ibis_admin_tab');
+          if (savedAdminTab && ['users', 'villages', 'banks', 'prices', 'tolerance', 'audit', 'backup'].includes(savedAdminTab)) {
+            setAdminTab(savedAdminTab as any);
+          }
+        }
+      } else {
+        // Subsequent session updates (e.g. window focus refetch) - DO NOT force Admin back to 'field'!
+        // Only guard non-admin users if their current active module is not permitted for their role.
+        if (role !== 'ADMIN') {
+          setActiveModule((current) => {
+            if (!isAllowedForRole(current)) {
+              const defaultMod = getDefaultModule();
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('ibis_active_module', defaultMod);
+              }
+              return defaultMod;
+            }
+            return current;
+          });
+        }
+      }
 
       if (session.user.name) {
         setTFieldStaffName((prev) => prev || session.user?.name || '');
@@ -930,7 +1012,6 @@ export default function OperationsDashboard() {
         if (type === 'gross') setWhGrossPhotoUrl(data.url);
         else if (type === 'tare') setWhTarePhotoUrl(data.url);
         else setWhInvoicePhotoUrl(data.url);
-        setSyncStatus(`✅ ${type === 'gross' ? 'Gross scale' : type === 'tare' ? 'Tare scale' : 'Transport invoice'} photo uploaded!`);
       } else {
         alert('Photo upload failed: ' + data.error);
       }
@@ -964,7 +1045,6 @@ export default function OperationsDashboard() {
       const data = await res.json();
       if (data.success) {
         setPayReceiptPhotoUrl(data.url);
-        setSyncStatus('✅ Bank payment transfer receipt uploaded successfully!');
       } else {
         alert('Payment receipt upload failed: ' + data.error);
       }
@@ -1864,8 +1944,6 @@ export default function OperationsDashboard() {
     setWhNotes(intake.notes || '');
     setWhArrivedWarehouse(intake.arrivedWarehouse ? getWarehouseId(intake.arrivedWarehouse) : '');
 
-    const wrIdFormatted = `WR-2026-${intake.id.slice(-6).toUpperCase()}`;
-    setSuccessBanner(`Editing Warehouse Receiving Record ${wrIdFormatted}. Update weights or photos above.`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1902,8 +1980,6 @@ export default function OperationsDashboard() {
       });
 
       if (res.ok) {
-        const wrIdFormatted = `WR-2026-${editingIntakeId.slice(-6).toUpperCase()}`;
-        setSuccessBanner(`Warehouse Receiving Record ${wrIdFormatted} updated successfully.`);
         resetWarehouseForm();
         refreshAllData();
       } else {
@@ -1919,10 +1995,6 @@ export default function OperationsDashboard() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        const wrIdFormatted = `WR-2026-${data.id.slice(-6).toUpperCase()}`;
-
-        setSuccessBanner(`Warehouse Receiving Record saved successfully. Warehouse ID: ${wrIdFormatted}. Status: Waiting for Inventory.`);
         resetWarehouseForm();
         refreshAllData();
       } else {
@@ -1936,10 +2008,10 @@ export default function OperationsDashboard() {
   const handleConfirmInventoryRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!invConfirmModalIntake) return;
-    if (!invLocationInput.trim()) {
-      alert('Please specify the Warehouse Storage Location (e.g. Silo 01 - Stack A).');
-      return;
-    }
+
+    const arrivedWhDisplay = getWarehouseDisplay(
+      invConfirmModalIntake.arrivedWarehouse || invConfirmModalIntake.transport?.destinationWarehouse
+    );
 
     setIsSubmittingInventory(true);
     try {
@@ -1948,15 +2020,12 @@ export default function OperationsDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           intakeId: invConfirmModalIntake.id,
-          inventoryLocation: invLocationInput.trim(),
-          inventoryNotes: invNotesInput.trim(),
+          inventoryLocation: arrivedWhDisplay || 'Main Warehouse Storage',
+          inventoryNotes: null,
         }),
       });
 
       if (res.ok) {
-        const arrivedWh = getWarehouseId(invConfirmModalIntake.arrivedWarehouse || invConfirmModalIntake.transport?.destinationWarehouse || 'W002');
-        const receivingIdFormatted = `${invConfirmModalIntake.receivingStaffName || 'staff'}_${arrivedWh}`;
-        setSuccessBanner(`✅ Inventory confirmed & recorded for ${receivingIdFormatted}! Storage Location: ${invLocationInput.trim()}. Record unlocked for Finance Verification.`);
         setInvConfirmModalIntake(null);
         setInvNotesInput('');
         refreshAllData();
@@ -2045,7 +2114,6 @@ export default function OperationsDashboard() {
     });
 
     if (res.ok) {
-      setSyncStatus(`✅ Truck verified successfully! Status updated to VERIFIED.`);
       refreshAllData();
     } else {
       const err = await res.json();
@@ -2071,7 +2139,6 @@ export default function OperationsDashboard() {
     });
 
     if (res.ok) {
-      setSuccessBanner(`✅ Payment Completed for Truck ${paymentModalTruck.transport.plateNumber}! Bank transfer receipt saved.`);
       setPaymentModalTruck(null);
       setPayReceiptPhotoUrl('');
       setPayBatchInput('');
@@ -2143,46 +2210,83 @@ export default function OperationsDashboard() {
   // Export Single Truck Farmer Payment Details to CSV
   const exportSingleTruckCSV = (truckData: any) => {
     if (!truckData || !truckData.purchases || truckData.purchases.length === 0) {
-      alert('No farmer purchase invoices available for this truck.');
+      alert('No purchase records associated with this truck.');
       return;
     }
 
-    const t = truckData.transport || {};
+    const transport = truckData.transport || {};
     const intake = truckData.intake || {};
     const purchases = truckData.purchases || [];
 
-    const transportIdFormatted = formatTransportId(t);
-    const intakeIdFormatted = intake.id ? `WR-2026-${intake.id.slice(-6).toUpperCase()}` : 'N/A';
-    const hasGrossPhoto = intake.grossScalePhotoUrl ? 'Yes' : 'No';
-    const hasTarePhoto = intake.tareScalePhotoUrl ? 'Yes' : 'No';
+    const transportIdFormatted = formatTransportId(transport);
+    const intakeIdFormatted = intake.id ? formatReceivingIdWithDate({ ...intake, transport }) : 'Awaiting Intake';
 
-    const headers = [
+    const fieldWeight = truckData.fieldWeight || 0;
+    const netWeight = truckData.warehouseNetWeight || 0;
+    const diffKg =
+      truckData.weightDiffKg !== undefined && truckData.weightDiffKg !== null
+        ? truckData.weightDiffKg
+        : netWeight - fieldWeight;
+    const absDiffKg = Math.abs(diffKg);
+
+    let toleranceText = 'Within Acceptable Tolerance ✓';
+    if (absDiffKg > scaleToleranceWarning) {
+      toleranceText = `Critical Discrepancy Exceeded (> ${scaleToleranceWarning} kg)!`;
+    } else if (absDiffKg > scaleToleranceAcceptable) {
+      toleranceText = `Warning Discrepancy Exceeded (> ${scaleToleranceAcceptable} kg)`;
+    }
+
+    const rows: any[][] = [];
+
+    rows.push(['=== TRUCK DISBURSEMENT & BANK PAYMENT REPORT ===']);
+    rows.push([
       'Transport ID',
-      'Warehouse Receiving ID',
+      'Receiving ID',
+      'Driver Name',
+      'Truck Plate Number',
+      'Total Farmers',
+      'Total Purchase Invoices',
+      'Field Total Weight (Kg)',
+      'Warehouse Net Weight (Kg)',
+      'Scale Weight Variance (Kg)',
+      'Absolute Variance (Kg)',
+      'Tolerance Status',
+      'Total Truck Net Payment (KHR)',
+    ]);
+    rows.push([
+      transportIdFormatted,
+      intakeIdFormatted,
+      transport.driverName || 'N/A',
+      transport.plateNumber || 'N/A',
+      truckData.totalFarmersCount || 0,
+      purchases.length,
+      fieldWeight.toFixed(2),
+      netWeight.toFixed(2),
+      `${diffKg >= 0 ? '+' : ''}${diffKg.toFixed(2)}`,
+      absDiffKg.toFixed(2),
+      toleranceText,
+      truckData.totalTruckNetPayment || 0,
+    ]);
+
+    rows.push([]);
+    rows.push(['--- FARMER BANK DISBURSEMENT DETAILS ---']);
+    rows.push([
       'Purchase ID',
       'Family Code',
       'Farmer Name',
       'Village',
       'Paddy Variety',
       'Grade',
-      'Number of Sacks',
-      'Total Weight (Kg)',
-      'Final Purchase Price (KHR/Kg)',
-      'Gross Payment (KHR)',
-      'Seed Return Deduction (KHR)',
+      'Sacks',
+      'Field Net Weight (Kg)',
       'Net Payment (KHR)',
       'Bank Name',
-      'Bank Account Number',
-      'Account Holder Name',
-      'Relationship to Farmer',
-      'Purchasing Staff',
-      'Purchase Date',
+      'Account Number',
+      'Account Holder',
+      'Relationship',
+      'Bank Document Proof Attached',
       'Farmer Signed',
-      'Gross Weight Photo Available',
-      'Tare Weight Photo Available',
-    ];
-
-    const rows = [headers];
+    ]);
 
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
@@ -2190,8 +2294,6 @@ export default function OperationsDashboard() {
       const pIdFormatted = formatPurchaseId(p);
 
       rows.push([
-        transportIdFormatted,
-        intakeIdFormatted,
         pIdFormatted,
         p.familyCode || '',
         p.farmerName || '',
@@ -2200,19 +2302,13 @@ export default function OperationsDashboard() {
         item.grade || 'A1',
         item.sacks || 0,
         p.totalWeight || 0,
-        item.finalPrice || 0,
-        p.totalPayment || 0,
-        p.seedDeduction || 0,
         p.netPayment || 0,
-        f.bankName || 'Direct Cash',
+        f.bankName || 'N/A',
         f.accountNumber || 'N/A',
         f.accountHolder || p.farmerName,
         f.relationship || 'Self',
-        p.purchasingStaffName || 'Field Staff',
-        new Date(p.createdAt).toLocaleDateString(),
-        p.signatureFarmer ? 'Yes' : 'No',
-        hasGrossPhoto,
-        hasTarePhoto,
+        f.bankDocumentUrl ? 'YES' : 'NO',
+        p.signatureFarmer ? 'YES' : 'NO',
       ]);
     });
 
@@ -2226,7 +2322,7 @@ export default function OperationsDashboard() {
     const safeTrId = transportIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
 
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Finance_Truck_${safeTrId}_${dateStr}.csv`);
+    link.setAttribute('download', `Finance_Payment_Report_${safeTrId}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2632,6 +2728,23 @@ export default function OperationsDashboard() {
     return searchMatch && villageMatch && varietyMatch && staffMatch;
   });
 
+  // Purchase Record History Summary Calculations
+  const totalPurchaseFarmersCount = new Set(
+    filteredPurchases.map((p) => `${(p.familyCode || '').toUpperCase().trim()}___${(p.village || '').toLowerCase().trim()}`)
+  ).size;
+
+  const pendingLoadingPurchases = filteredPurchases.filter((p) => !p.transportRecordId);
+
+  const farmersPendingLoadingCount = new Set(
+    pendingLoadingPurchases.map((p) => `${(p.familyCode || '').toUpperCase().trim()}___${(p.village || '').toLowerCase().trim()}`)
+  ).size;
+
+  const pendingLoadingWeightKg = pendingLoadingPurchases.reduce(
+    (sum, p) => sum + (Number(p.totalWeight) || 0),
+    0
+  );
+  const pendingLoadingWeightMT = pendingLoadingWeightKg / 1000;
+
   // Filtered & Searchable Transports for History Table
   const filteredTransports = transports.filter((t) => {
     const q = tSearchQuery.toLowerCase();
@@ -2655,6 +2768,14 @@ export default function OperationsDashboard() {
       matchesPurchases
     );
   });
+
+  // Summary metrics for Transport Record History
+  const totalTransportTrucksCount = filteredTransports.length;
+  const totalTransportWeightKg = filteredTransports.reduce(
+    (sum, t) => sum + (Number(t.totalFieldWeight) || 0),
+    0
+  );
+  const totalTransportWeightMT = totalTransportWeightKg / 1000;
 
   // Filtered & Searchable Warehouse Intakes for History Table
   const filteredIntakes = warehouseIntakes.filter((intake) => {
@@ -2690,6 +2811,13 @@ export default function OperationsDashboard() {
       matchesFarmer
     );
   });
+
+  // Summary metrics for Warehouse Receiving History
+  const totalReceivedTrucksCount = filteredIntakes.length;
+  const totalReceivedFieldWeightMT =
+    filteredIntakes.reduce((sum, intake) => sum + (Number(intake.transport?.totalFieldWeight) || 0), 0) / 1000;
+  const totalWarehouseNetWeightMT =
+    filteredIntakes.reduce((sum, intake) => sum + (Number(intake.warehouseNetWeight) || 0), 0) / 1000;
 
   // Filtered & Searchable Inventory Intakes
   const filteredInventoryIntakes = warehouseIntakes.filter((intake) => {
@@ -2976,31 +3104,6 @@ export default function OperationsDashboard() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-slate-400 font-bold uppercase mb-1">Payment Method</label>
-                  <select
-                    value={payMethodInput}
-                    onChange={(e) => setPayMethodInput(e.target.value)}
-                    className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold"
-                  >
-                    <option>ABA Bulk Transfer</option>
-                    <option>Acleda Corporate Transfer</option>
-                    <option>Wing Bank Transfer</option>
-                    <option>Direct Cash Voucher</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-bold uppercase mb-1">Payment Batch Number (Optional)</label>
-                  <input
-                    type="text"
-                    value={payBatchInput}
-                    onChange={(e) => setPayBatchInput(e.target.value)}
-                    className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-mono"
-                    placeholder="e.g. BATCH-2026-001 or ABA Ref ID"
-                  />
-                </div>
-
                 <div className="p-3.5 bg-white/5 border border-dashed border-amber-500/40 rounded-xl space-y-2">
                   <label className="block text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                     <FileSpreadsheet className="w-4 h-4" /> Upload Bank Payment Transfer Receipt Proof (PDF or Image)
@@ -3050,7 +3153,7 @@ export default function OperationsDashboard() {
                 IBIS RICE CONSERVATION CO., LTD
               </h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                Central Operations · Integrated Paddy Operations & Field Department Portal
+                Field -&gt; Warehouse -&gt; Production -&gt; Finance Operation
               </p>
             </div>
           </div>
@@ -3070,7 +3173,7 @@ export default function OperationsDashboard() {
             </div>
 
             <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={handleLogout}
               className="p-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-full text-red-400 hover:text-red-300 transition-colors"
               title="Sign Out"
             >
@@ -3205,7 +3308,7 @@ export default function OperationsDashboard() {
             {/* Field Sub-Tabs */}
             <div className="bg-[#141c2f] border border-white/10 rounded-xl p-1 grid grid-cols-2 md:grid-cols-4 gap-1">
               <button
-                onClick={() => setFieldTab('specs')}
+                onClick={() => handleSelectFieldTab('specs')}
                 className={`py-2 px-3 rounded-lg text-xs font-bold ${
                   fieldTab === 'specs' ? 'bg-[#10b981] text-[#0b0f19]' : 'text-slate-400 hover:text-white'
                 }`}
@@ -3213,7 +3316,7 @@ export default function OperationsDashboard() {
                 🔍 Specs Record
               </button>
               <button
-                onClick={() => setFieldTab('payment')}
+                onClick={() => handleSelectFieldTab('payment')}
                 className={`py-2 px-3 rounded-lg text-xs font-bold ${
                   fieldTab === 'payment' ? 'bg-[#10b981] text-[#0b0f19]' : 'text-slate-400 hover:text-white'
                 }`}
@@ -3221,7 +3324,7 @@ export default function OperationsDashboard() {
                 💳 Farmer Payment Info
               </button>
               <button
-                onClick={() => setFieldTab('purchase')}
+                onClick={() => handleSelectFieldTab('purchase')}
                 className={`py-2 px-3 rounded-lg text-xs font-bold ${
                   fieldTab === 'purchase' ? 'bg-[#10b981] text-[#0b0f19]' : 'text-slate-400 hover:text-white'
                 }`}
@@ -3229,7 +3332,7 @@ export default function OperationsDashboard() {
                 🌾 Purchase Record
               </button>
               <button
-                onClick={() => setFieldTab('transport')}
+                onClick={() => handleSelectFieldTab('transport')}
                 className={`py-2 px-3 rounded-lg text-xs font-bold ${
                   fieldTab === 'transport' ? 'bg-[#10b981] text-[#0b0f19]' : 'text-slate-400 hover:text-white'
                 }`}
@@ -4349,10 +4452,10 @@ export default function OperationsDashboard() {
 
                 {/* PURCHASE RECORD HISTORY SECTION */}
                 <div className="bg-[#141c2f] border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3">
                     <div>
                       <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                        🌾 Purchase Record History ({filteredPurchases.length})
+                        🌾 Purchase Record History
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
                         Central location to search, verify, print receipts, edit, and export purchase invoices.
@@ -4365,6 +4468,36 @@ export default function OperationsDashboard() {
                     >
                       <FileSpreadsheet className="w-4 h-4" /> Export CSV Report
                     </button>
+                  </div>
+
+                  {/* Compact Purchase Record History Summary Strip */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="py-1.5 px-3 bg-[#0f172a] border border-emerald-500/30 rounded-lg flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-300 truncate">
+                        Total Purchase Farmers:
+                      </span>
+                      <span className="text-sm font-black text-emerald-400 font-mono ml-2 shrink-0">
+                        {totalPurchaseFarmersCount}
+                      </span>
+                    </div>
+
+                    <div className="py-1.5 px-3 bg-[#0f172a] border border-amber-500/30 rounded-lg flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-300 truncate">
+                        Farmers Pending Truck Loading:
+                      </span>
+                      <span className="text-sm font-black text-amber-400 font-mono ml-2 shrink-0">
+                        {farmersPendingLoadingCount}
+                      </span>
+                    </div>
+
+                    <div className="py-1.5 px-3 bg-[#0f172a] border border-sky-500/30 rounded-lg flex items-center justify-between" title="1 MT = 1,000 Kg">
+                      <span className="text-[11px] font-bold text-slate-300 truncate">
+                        Paddy Quantity Pending Loading (MT):
+                      </span>
+                      <span className="text-sm font-black text-sky-400 font-mono ml-2 shrink-0">
+                        {pendingLoadingWeightMT.toFixed(2)} MT
+                      </span>
+                    </div>
                   </div>
 
                   {/* Search & Filters */}
@@ -4676,18 +4809,18 @@ export default function OperationsDashboard() {
                       {/* Table of Loaded Purchases */}
                       {selectedPurchasesForTruck.length > 0 ? (
                         <div className="overflow-x-auto border border-white/10 rounded-xl">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+                          <table className="w-full text-left text-[11px]">
+                            <thead className="bg-white/5 text-slate-400 uppercase font-bold text-[10px] tracking-tight border-b border-white/10">
                               <tr>
-                                <th className="p-2">Purchase ID</th>
-                                <th className="p-2">Family Code</th>
-                                <th className="p-2">Farmer Name</th>
-                                <th className="p-2">Village</th>
-                                <th className="p-2">Variety / Grade</th>
-                                <th className="p-2 text-center">Sacks</th>
-                                <th className="p-2 text-right">Weight (kg)</th>
-                                <th className="p-2 text-right">Net Payment</th>
-                                <th className="p-2 text-center">Remove</th>
+                                <th className="py-1.5 px-2 whitespace-nowrap">Purchase ID</th>
+                                <th className="py-1.5 px-2 whitespace-nowrap">Family Code</th>
+                                <th className="py-1.5 px-2 whitespace-nowrap">Farmer Name</th>
+                                <th className="py-1.5 px-2 whitespace-nowrap">Village</th>
+                                <th className="py-1.5 px-2 whitespace-nowrap">Variety / Grade</th>
+                                <th className="py-1.5 px-2 text-center whitespace-nowrap">Sacks</th>
+                                <th className="py-1.5 px-2 text-right whitespace-nowrap">Weight (kg)</th>
+                                <th className="py-1.5 px-2 text-right whitespace-nowrap">Net Payment</th>
+                                <th className="py-1.5 px-2 text-center whitespace-nowrap">Remove</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -4695,23 +4828,23 @@ export default function OperationsDashboard() {
                                 const item = p.items?.[0] || {};
                                 return (
                                   <tr key={p.id} className="hover:bg-white/5">
-                                    <td className="p-2 font-mono font-bold text-sky-400 whitespace-nowrap">
+                                    <td className="py-1.5 px-2 font-mono font-bold text-sky-400 whitespace-nowrap">
                                       {formatPurchaseId(p)}
                                     </td>
-                                    <td className="p-2 font-extrabold text-amber-400">{p.familyCode}</td>
-                                    <td className="p-2 font-bold text-white">{p.farmerName}</td>
-                                    <td className="p-2 text-slate-300">{p.village}</td>
-                                    <td className="p-2">
+                                    <td className="py-1.5 px-2 font-extrabold text-amber-400 whitespace-nowrap">{p.familyCode}</td>
+                                    <td className="py-1.5 px-2 font-bold text-white whitespace-nowrap">{p.farmerName}</td>
+                                    <td className="py-1.5 px-2 text-slate-300 whitespace-nowrap">{p.village}</td>
+                                    <td className="py-1.5 px-2 whitespace-nowrap">
                                       {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
                                     </td>
-                                    <td className="p-2 text-center font-bold text-white">{item.sacks || 0}</td>
-                                    <td className="p-2 text-right font-mono font-bold text-sky-400">
+                                    <td className="py-1.5 px-2 text-center font-bold text-white whitespace-nowrap">{item.sacks || 0}</td>
+                                    <td className="py-1.5 px-2 text-right font-mono font-bold text-sky-400 whitespace-nowrap">
                                       {p.totalWeight.toFixed(2)} kg
                                     </td>
-                                    <td className="p-2 text-right font-mono font-bold text-emerald-400">
+                                    <td className="py-1.5 px-2 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
                                       {p.netPayment.toLocaleString()} KHR
                                     </td>
-                                    <td className="p-2 text-center">
+                                    <td className="py-1.5 px-2 text-center whitespace-nowrap">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -4947,7 +5080,7 @@ export default function OperationsDashboard() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
                     <div>
                       <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                        🚛 Transport Record History ({filteredTransports.length})
+                        🚛 Transport Record History
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
                         Track dispatched truckloads, view assigned farmer purchase manifests, print manifest, and export CSV.
@@ -4962,16 +5095,36 @@ export default function OperationsDashboard() {
                     </button>
                   </div>
 
-                  {/* Search Bar */}
-                  <div className="relative max-w-md text-xs">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={tSearchQuery}
-                      onChange={(e) => setTSearchQuery(e.target.value)}
-                      placeholder="Search Transport ID, Driver, Plate, Station..."
-                      className="w-full bg-[#1e293b] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-sky-500"
-                    />
+                  {/* Search Bar & Compact Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 items-center">
+                    <div className="relative text-xs">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={tSearchQuery}
+                        onChange={(e) => setTSearchQuery(e.target.value)}
+                        placeholder="Search Transport ID, Driver, Plate, Station..."
+                        className="w-full bg-[#1e293b] border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-white focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+
+                    <div className="py-1.5 px-3 bg-[#0f172a] border border-emerald-500/30 rounded-lg flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-300 truncate">
+                        Total Trucks:
+                      </span>
+                      <span className="text-sm font-black text-emerald-400 font-mono ml-2 shrink-0">
+                        {totalTransportTrucksCount}
+                      </span>
+                    </div>
+
+                    <div className="py-1.5 px-3 bg-[#0f172a] border border-sky-500/30 rounded-lg flex items-center justify-between" title="1 MT = 1,000 kg">
+                      <span className="text-[11px] font-bold text-slate-300 truncate">
+                        Total Quantity (MT):
+                      </span>
+                      <span className="text-sm font-black text-sky-400 font-mono ml-2 shrink-0">
+                        {totalTransportWeightMT.toFixed(2)} MT
+                      </span>
+                    </div>
                   </div>
 
                   {/* Searchable Transport History Table */}
@@ -5058,62 +5211,62 @@ export default function OperationsDashboard() {
                                     {t.status === 'EN_ROUTE' ? '🚛 IN TRANSIT' : t.status === 'REJECTED' ? '🔴 RETURNED FOR CORRECTION' : t.status}
                                   </span>
                                 </td>
-                                <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
                                   <button
                                     onClick={() => setSelectedTransportForDetails(t)}
-                                    className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
+                                    className="p-2 inline-flex items-center justify-center bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-lg transition-colors"
                                     title="View Truck Cargo Manifest"
                                   >
-                                    <Eye className="w-3.5 h-3.5" />
+                                    <Eye className="w-5 h-5" />
                                   </button>
                                   <button
                                     onClick={() => setSelectedTransportForPrint(t)}
-                                    className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors"
+                                    className="p-2 inline-flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition-colors"
                                     title="Print Transport Manifest"
                                   >
-                                    <Printer className="w-3.5 h-3.5" />
+                                    <Printer className="w-5 h-5" />
                                   </button>
                                   <button
                                     onClick={() => exportTransportTruckCSV(t)}
-                                    className="p-1.5 bg-[#10b981]/10 hover:bg-[#10b981]/20 text-[#10b981] rounded-lg transition-colors"
+                                    className="p-2 inline-flex items-center justify-center bg-[#10b981]/10 hover:bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/20 rounded-lg transition-colors"
                                     title="Export Truck CSV"
                                   >
-                                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                                    <FileSpreadsheet className="w-5 h-5" />
                                   </button>
                                   {t.status === 'REJECTED' ? (
                                     <button
                                       onClick={() => handleEditTransport(t)}
-                                      className="p-1.5 rounded-lg transition-all inline-flex items-center gap-1 font-bold text-[10px] bg-amber-500 text-[#0b0f19] hover:bg-amber-400 shadow-md shadow-amber-500/20 px-2"
+                                      className="p-2 rounded-lg transition-all inline-flex items-center gap-1.5 font-bold text-[11px] bg-amber-500 text-[#0b0f19] hover:bg-amber-400 shadow-md shadow-amber-500/20 px-2.5"
                                       title="Edit rejected transport record and resubmit to Warehouse"
                                     >
-                                      <Edit className="w-3.5 h-3.5" />
+                                      <Edit className="w-5 h-5" />
                                       Edit & Resubmit
                                     </button>
                                   ) : !t.intake && t.status === 'EN_ROUTE' ? (
                                     <button
                                       onClick={() => handleEditTransport(t)}
-                                      className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg transition-colors"
+                                      className="p-2 inline-flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg transition-colors"
                                       title="Edit Transport Record"
                                     >
-                                      <Edit className="w-3.5 h-3.5" />
+                                      <Edit className="w-5 h-5" />
                                     </button>
                                   ) : (
                                     <button
                                       type="button"
                                       onClick={() => alert('This transport record has already been received by the warehouse and can no longer be edited.')}
-                                      className="p-1.5 text-slate-500 hover:bg-white/5 rounded-lg transition-colors"
+                                      className="p-2 inline-flex items-center justify-center text-slate-500 hover:bg-white/5 border border-white/5 rounded-lg transition-colors"
                                       title="This transport record has already been received by the warehouse and can no longer be edited."
                                     >
-                                      <LockIcon className="w-3.5 h-3.5" />
+                                      <LockIcon className="w-5 h-5" />
                                     </button>
                                   )}
                                   {currentUserRole === 'ADMIN' && (
                                     <button
                                       onClick={() => handleDeleteTransportRecord(t.id, t.plateNumber)}
-                                      className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                                      className="p-2 inline-flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors"
                                       title="Delete Transport Record (Admin)"
                                     >
-                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <Trash2 className="w-5 h-5" />
                                     </button>
                                   )}
                                 </td>
@@ -5158,36 +5311,6 @@ export default function OperationsDashboard() {
                     </button>
                   </div>
                 )}
-                {/* WAREHOUSE RECEIVING DASHBOARD METRICS CARD */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 bg-[#0f172a] border border-white/10 rounded-xl shadow-md">
-                  <div className="py-1.5 px-3 bg-gradient-to-r from-sky-500/10 to-sky-500/5 border border-sky-500/30 rounded-lg flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-sky-400 font-mono flex items-center gap-1.5">
-                      🚚 Trucks En Route:
-                    </span>
-                    <strong className="text-base font-black text-white font-mono ml-2">
-                      {enRouteTrucksCount}
-                    </strong>
-                  </div>
-
-                  <div className="py-1.5 px-3 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-lg flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-emerald-400 font-mono flex items-center gap-1.5">
-                      📍 Trucks Received Today:
-                    </span>
-                    <strong className="text-base font-black text-white font-mono ml-2">
-                      {trucksReceivedTodayCount}
-                    </strong>
-                  </div>
-
-                  <div className="py-1.5 px-3 bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 rounded-lg flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-amber-400 font-mono flex items-center gap-1.5">
-                      ⏳ Waiting for Receiving:
-                    </span>
-                    <strong className="text-base font-black text-white font-mono ml-2">
-                      {enRouteTrucksCount}
-                    </strong>
-                  </div>
-                </div>
-
                 {/* Select En-Route Truck */}
                 <div className="p-3.5 sm:p-4 bg-gradient-to-r from-sky-950/40 via-[#131d35] to-sky-950/40 border border-sky-500/30 rounded-2xl shadow-lg space-y-2.5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -5651,7 +5774,7 @@ export default function OperationsDashboard() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
                 <div>
                   <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                    🏬 Warehouse Receiving History ({filteredIntakes.length})
+                    🏬 Warehouse Receiving History
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
                     View weighbridge intake records, inspect scale display photos, print reports, and export CSV.
@@ -5666,16 +5789,45 @@ export default function OperationsDashboard() {
                 </button>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative max-w-md text-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={whSearchQuery}
-                  onChange={(e) => setWhSearchQuery(e.target.value)}
-                  placeholder="Search Receiving ID, Transport ID, Driver, Plate, Farmer..."
-                  className="w-full bg-[#1e293b] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-sky-500"
-                />
+              {/* Search Bar & Compact Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 items-center">
+                <div className="relative text-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={whSearchQuery}
+                    onChange={(e) => setWhSearchQuery(e.target.value)}
+                    placeholder="Search Receiving ID, Transport ID, Driver, Plate, Farmer..."
+                    className="w-full bg-[#1e293b] border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-white focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="py-1.5 px-3 bg-[#0f172a] border border-emerald-500/30 rounded-lg flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-300 truncate">
+                    Trucks Received:
+                  </span>
+                  <span className="text-sm font-black text-emerald-400 font-mono ml-2 shrink-0">
+                    {totalReceivedTrucksCount}
+                  </span>
+                </div>
+
+                <div className="py-1.5 px-3 bg-[#0f172a] border border-amber-500/30 rounded-lg flex items-center justify-between" title="1 MT = 1,000 kg">
+                  <span className="text-[11px] font-bold text-slate-300 truncate">
+                    Field Quantity (MT):
+                  </span>
+                  <span className="text-sm font-black text-amber-400 font-mono ml-2 shrink-0">
+                    {totalReceivedFieldWeightMT.toFixed(2)} MT
+                  </span>
+                </div>
+
+                <div className="py-1.5 px-3 bg-[#0f172a] border border-sky-500/30 rounded-lg flex items-center justify-between" title="1 MT = 1,000 kg">
+                  <span className="text-[11px] font-bold text-slate-300 truncate">
+                    Warehouse Net Weight (MT):
+                  </span>
+                  <span className="text-sm font-black text-sky-400 font-mono ml-2 shrink-0">
+                    {totalWarehouseNetWeightMT.toFixed(2)} MT
+                  </span>
+                </div>
               </div>
 
               {/* Searchable Warehouse Receiving Table */}
@@ -5754,36 +5906,36 @@ export default function OperationsDashboard() {
                                 <span className="text-slate-500 text-[10px]">No Photos</span>
                               )}
                             </td>
-                            <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
+                            <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
                               <button
                                 onClick={() => setSelectedIntakeForDetails(intake)}
-                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 rounded-lg transition-colors"
+                                className="p-1.5 inline-flex items-center justify-center bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-lg transition-colors"
                                 title="View Details"
                               >
-                                <Eye className="w-3.5 h-3.5" />
+                                <Eye className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => setSelectedIntakeForPrint(intake)}
-                                className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg transition-colors"
+                                className="p-1.5 inline-flex items-center justify-center bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-lg transition-colors"
                                 title="Print Scale Receiving Report"
                               >
-                                <Printer className="w-3.5 h-3.5" />
+                                <Printer className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => exportSingleWarehouseTruckCSV(intake)}
-                                className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors"
+                                className="p-1.5 inline-flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition-colors"
                                 title="Export Truck Manifest CSV for Record-Keeping"
                               >
-                                <FileSpreadsheet className="w-3.5 h-3.5" />
+                                <FileSpreadsheet className="w-4 h-4" />
                               </button>
                               {transport.status !== 'VERIFIED' && transport.status !== 'DISBURSED' ? (
-                                <div className="inline-flex items-center gap-1">
+                                <div className="inline-flex items-center gap-1.5">
                                   <button
                                     onClick={() => handleEditWarehouseIntake(intake)}
-                                    className={`p-1.5 rounded-lg transition-all inline-flex items-center gap-1 font-bold text-[10px] ${
+                                    className={`p-1.5 rounded-lg transition-all inline-flex items-center justify-center gap-1 font-bold text-[10.5px] ${
                                       intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED'
                                         ? 'bg-amber-500 text-[#0b0f19] hover:bg-amber-400 shadow-md shadow-amber-500/20 px-2'
-                                        : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400'
+                                        : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20'
                                     }`}
                                     title={
                                       intake.inventoryStatus === 'REJECTED'
@@ -5791,7 +5943,7 @@ export default function OperationsDashboard() {
                                         : 'Edit Warehouse Receiving Record'
                                     }
                                   >
-                                    <Edit className="w-3.5 h-3.5" />
+                                    <Edit className="w-4 h-4" />
                                     {intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED' ? 'Edit & Resubmit' : ''}
                                   </button>
 
@@ -5806,16 +5958,16 @@ export default function OperationsDashboard() {
                                           defaultTargetModule: 'FIELD',
                                         })
                                       }
-                                      className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 font-bold rounded-lg transition-colors flex items-center gap-1 text-[10px]"
+                                      className="px-2 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 font-bold rounded-lg transition-colors flex items-center gap-1 text-[10.5px]"
                                       title="Error came from Field transport manifest. Reject to Field team for correction."
                                     >
-                                      <AlertOctagon className="w-3.5 h-3.5 text-red-400" /> Reject to Field
+                                      <AlertOctagon className="w-4 h-4 text-red-400" /> Reject to Field
                                     </button>
                                   )}
                                 </div>
                               ) : (
                                 <span
-                                  className="p-1.5 text-slate-500 inline-block text-[11px]"
+                                  className="p-1.5 text-slate-500 inline-flex items-center justify-center text-xs"
                                   title="Record Locked: Truck has already been verified or paid by Finance."
                                 >
                                   🔒
@@ -5824,10 +5976,10 @@ export default function OperationsDashboard() {
                               {currentUserRole === 'ADMIN' && (
                                 <button
                                   onClick={() => handleDeleteWarehouseIntake(intake.id, receivingIdFormatted)}
-                                  className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                                  className="p-1.5 inline-flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-colors"
                                   title="Delete Warehouse Intake Record (Admin)"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               )}
                             </td>
@@ -5876,7 +6028,7 @@ export default function OperationsDashboard() {
                 <div className="text-lg sm:text-xl font-black text-emerald-400 font-mono">
                   {(warehouseIntakes.reduce((sum, i) => sum + (i.warehouseNetWeight || 0), 0) / 1000).toFixed(2)} MT
                 </div>
-                <p className="text-[10px] text-slate-400 leading-tight">Total metric tons verified and stored in warehouse silos & stacks.</p>
+                <p className="text-[10px] text-slate-400 leading-tight">Total metric tons verified and stored in warehouse.</p>
               </div>
             </div>
 
@@ -5888,7 +6040,7 @@ export default function OperationsDashboard() {
                     📦 Warehouse Inventory Recording & Verification ({filteredInventoryIntakes.length})
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Verify received paddy from warehouse intake, assign storage silo/stack location, and confirm inventory records before Finance payment verification.
+                    Verify received paddy from warehouse intake and confirm inventory records before Finance payment verification.
                   </p>
                 </div>
               </div>
@@ -5997,7 +6149,7 @@ export default function OperationsDashboard() {
                                 </span>
                               ) : isRecorded ? (
                                 <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Inventory Recorded
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Recorded
                                 </span>
                               ) : (
                                 <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center animate-pulse">
@@ -6171,7 +6323,7 @@ export default function OperationsDashboard() {
                     <option value="ALL">All Truck Statuses</option>
                     <option value="EN_ROUTE">🚛 En Route</option>
                     <option value="WAITING_FOR_INVENTORY">⏳ Pending</option>
-                    <option value="INVENTORY_RECORDED">📦 Inventory Recorded</option>
+                    <option value="INVENTORY_RECORDED">📦 Recorded</option>
                     <option value="VERIFIED">🟢 Verified</option>
                     <option value="DISBURSED">✅ Payment Complete</option>
                   </select>
@@ -6261,7 +6413,7 @@ export default function OperationsDashboard() {
                                 title="Inventory has confirmed and recorded the paddy. Finance can now start reviewing documents and preparing payment."
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
-                                📦 Inventory Recorded
+                                📦 Recorded
                               </span>
                             );
                           } else {
@@ -6368,13 +6520,13 @@ export default function OperationsDashboard() {
 
                               {t.status === 'RECEIVED' && (
                                 intake.inventoryStatus === 'INVENTORY_RECORDED' ? (
-                                  <div className="inline-flex items-center gap-1">
+                                  <>
                                     <button
                                       onClick={() => handleVerifyTruckFinance(t.id)}
-                                      className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-[#0b0f19] rounded-lg font-black text-[10px] shadow-sm shadow-emerald-500/20 transition-all flex items-center gap-1"
-                                      title={`Inventory Confirmed by ${intake.inventoryStaffName || 'Inventory Staff'} (${intake.inventoryLocation || 'Main Warehouse'}). Ready for Finance Verification.`}
+                                      className="p-1.5 bg-emerald-500 hover:bg-emerald-400 text-[#0b0f19] rounded-lg shadow-sm shadow-emerald-500/20 transition-all inline-flex items-center justify-center"
+                                      title={`Verify Truck (Inventory Confirmed by ${intake.inventoryStaffName || 'Inventory Staff'})`}
                                     >
-                                      <CheckCircle2 className="w-3.5 h-3.5" /> Verify
+                                      <CheckCircle2 className="w-[18px] h-[18px]" />
                                     </button>
                                     <button
                                       onClick={() =>
@@ -6387,19 +6539,19 @@ export default function OperationsDashboard() {
                                           availableTargetModules: ['INVENTORY', 'WAREHOUSE', 'FIELD'],
                                         })
                                       }
-                                      className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                                      className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg transition-colors inline-flex items-center justify-center"
                                       title="Reject Record & Return to Inventory, Warehouse, or Field for Correction"
                                     >
-                                      <AlertOctagon className="w-3.5 h-3.5" /> Reject / Return
+                                      <AlertOctagon className="w-[18px] h-[18px]" />
                                     </button>
-                                  </div>
+                                  </>
                                 ) : (
                                   <button
                                     disabled
-                                    className="px-2.5 py-1 bg-slate-800 text-slate-500 border border-slate-700 rounded-lg font-bold text-[10px] cursor-not-allowed flex items-center gap-1 inline-flex"
-                                    title="Paddy must be confirmed & recorded into inventory system before Finance verification."
+                                    className="p-1.5 bg-slate-800 text-slate-500 border border-slate-700 rounded-lg cursor-not-allowed inline-flex items-center justify-center"
+                                    title="Pending: Paddy must be confirmed & recorded into inventory system before Finance verification."
                                   >
-                                    <Clock className="w-3 h-3 text-amber-500" /> Pending
+                                    <Clock className="w-[18px] h-[18px] text-amber-500" />
                                   </button>
                                 )
                               )}
@@ -6408,7 +6560,7 @@ export default function OperationsDashboard() {
                                 <div className="inline-flex items-center gap-1">
                                   <button
                                     onClick={() => setPaymentModalTruck(truckData)}
-                                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg font-extrabold text-[10px]"
+                                    className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg font-extrabold text-[10px]"
                                   >
                                     Process Payment
                                   </button>
@@ -6423,10 +6575,10 @@ export default function OperationsDashboard() {
                                         availableTargetModules: ['INVENTORY', 'WAREHOUSE', 'FIELD'],
                                       })
                                     }
-                                    className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                                    className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg transition-colors inline-flex items-center justify-center"
                                     title="Reject Verification & Return to Inventory, Warehouse, or Field for Correction"
                                   >
-                                    <AlertOctagon className="w-3.5 h-3.5" /> Reject / Return
+                                    <AlertOctagon className="w-[18px] h-[18px]" />
                                   </button>
                                 </div>
                               )}
@@ -6434,10 +6586,10 @@ export default function OperationsDashboard() {
                               {currentUserRole === 'ADMIN' && (
                                 <button
                                   onClick={() => handleDeleteTransportRecord(t.id, t.plateNumber)}
-                                  className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                                  className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors inline-flex items-center justify-center"
                                   title="Delete Transport Record (Admin)"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-[18px] h-[18px]" />
                                 </button>
                               )}
                             </td>
@@ -6460,7 +6612,7 @@ export default function OperationsDashboard() {
             {/* Admin Sub-Tabs */}
             <div className="bg-[#141c2f] border border-white/10 rounded-xl p-1 flex flex-wrap lg:flex-nowrap gap-1 overflow-x-auto">
               <button
-                onClick={() => setAdminTab('users')}
+                onClick={() => handleSelectAdminTab('users')}
                 className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'users' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -6468,7 +6620,7 @@ export default function OperationsDashboard() {
                 <UsersIcon className="w-3.5 h-3.5" /> User Accounts ({userAccounts.length})
               </button>
               <button
-                onClick={() => setAdminTab('villages')}
+                onClick={() => handleSelectAdminTab('villages')}
                 className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'villages' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -6476,7 +6628,7 @@ export default function OperationsDashboard() {
                 <MapPin className="w-3.5 h-3.5" /> Target Villages ({villages.length})
               </button>
               <button
-                onClick={() => setAdminTab('banks')}
+                onClick={() => handleSelectAdminTab('banks')}
                 className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'banks' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -6484,7 +6636,7 @@ export default function OperationsDashboard() {
                 <Landmark className="w-3.5 h-3.5" /> Commercial Banks ({banks.length})
               </button>
               <button
-                onClick={() => setAdminTab('prices')}
+                onClick={() => handleSelectAdminTab('prices')}
                 className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'prices' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -6492,7 +6644,7 @@ export default function OperationsDashboard() {
                 <Tag className="w-3.5 h-3.5" /> Paddy Varieties ({priceSpecs.length})
               </button>
               <button
-                onClick={() => setAdminTab('tolerance')}
+                onClick={() => handleSelectAdminTab('tolerance')}
                 className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'tolerance' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -6500,7 +6652,7 @@ export default function OperationsDashboard() {
                 <Scale className="w-3.5 h-3.5" /> Scale Tolerance (±{scaleToleranceAcceptable} kg)
               </button>
               <button
-                onClick={() => setAdminTab('audit')}
+                onClick={() => handleSelectAdminTab('audit')}
                 className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'audit' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -6508,7 +6660,7 @@ export default function OperationsDashboard() {
                 <ShieldAlert className="w-3.5 h-3.5" /> Audit Log ({auditLogs.length})
               </button>
               <button
-                onClick={() => setAdminTab('backup')}
+                onClick={() => handleSelectAdminTab('backup')}
                 className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors ${
                   adminTab === 'backup' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -7300,33 +7452,6 @@ export default function OperationsDashboard() {
               </div>
 
               <form onSubmit={handleConfirmInventoryRecord} className="space-y-4">
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase mb-1">
-                    Warehouse Storage Location (Silo / Stack / Bay) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={invLocationInput}
-                    onChange={(e) => setInvLocationInput(e.target.value)}
-                    placeholder="e.g. Silo 01 - Stack A / Bay 4"
-                    className="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white font-bold focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase mb-1">
-                    Inventory Inspection & Storage Notes (Optional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={invNotesInput}
-                    onChange={(e) => setInvNotesInput(e.target.value)}
-                    placeholder="e.g. Paddy inspected, moisture content verified, stored in Silo 02."
-                    className="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white font-sans focus:border-purple-500"
-                  />
-                </div>
-
                 <div className="pt-2 flex gap-3">
                   <button
                     type="button"

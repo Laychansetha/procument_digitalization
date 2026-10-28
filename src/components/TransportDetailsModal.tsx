@@ -106,11 +106,11 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141c2f] border border-white/10 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-[#141c2f] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-sky-500/10 border border-sky-500/30 rounded-xl flex items-center justify-center text-sky-400 font-extrabold text-xs">
+        <div className="px-4 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-sky-500/10 border border-sky-500/30 rounded-lg flex items-center justify-center text-sky-400 font-extrabold text-xs">
               🚛
             </div>
             <div>
@@ -120,7 +120,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                   {transportIdFormatted}
                 </span>
               </h3>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[10.5px] text-slate-400">
                 Dispatched on {new Date(transport.createdAt).toLocaleString()} by {transport.fieldStaffName || 'Field Inspector'}
               </p>
             </div>
@@ -139,169 +139,166 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 overflow-y-auto space-y-5 text-xs flex-1">
+        <div className="p-4 overflow-y-auto space-y-3 text-xs flex-1">
           {/* Rejection Audit History */}
           <RejectionHistorySection entityType="TransportRecord" entityId={transport.id} />
-          {/* Driver & Truck Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
-            <div>
-              <span className="text-slate-400 font-bold uppercase text-[10px] block">Driver Name</span>
-              <span className="text-white font-bold">{transport.driverName}</span>
+
+          {/* Driver & Truck Info (Single-line compact strip) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white/5 border border-white/10 rounded-xl p-2">
+            <div className="flex items-center justify-between px-2 py-1 bg-[#0f172a]/60 rounded-lg">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Driver:</span>
+              <span className="text-white font-bold text-[11px] truncate ml-1.5">{transport.driverName}</span>
             </div>
-            <div>
-              <span className="text-slate-400 font-bold uppercase text-[10px] block">Truck Plate Number</span>
-              <span className="text-sky-400 font-extrabold font-mono text-sm">{transport.plateNumber}</span>
+            <div className="flex items-center justify-between px-2 py-1 bg-[#0f172a]/60 rounded-lg">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Plate:</span>
+              <span className="text-sky-400 font-extrabold font-mono text-xs ml-1.5">{transport.plateNumber}</span>
             </div>
-            <div>
-              <span className="text-slate-400 font-bold uppercase text-[10px] block">Mobile Number</span>
-              <span className="text-slate-200 font-mono">{transport.mobileNumber || 'N/A'}</span>
+            <div className="flex items-center justify-between px-2 py-1 bg-[#0f172a]/60 rounded-lg">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Mobile:</span>
+              <span className="text-slate-200 font-mono text-[11px] ml-1.5">{transport.mobileNumber || 'N/A'}</span>
             </div>
-            <div>
-              <span className="text-slate-400 font-bold uppercase text-[10px] block">Truck Cleaning</span>
-              <span className={`font-bold ${transport.truckCleaned ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {transport.truckCleaned ? '✓ Cleaned' : 'Not Cleaned'}
+            <div className="flex items-center justify-between px-2 py-1 bg-[#0f172a]/60 rounded-lg">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Cleaned:</span>
+              <span className={`font-bold text-[11px] ml-1.5 ${transport.truckCleaned ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {transport.truckCleaned ? '✓ Yes' : 'No'}
               </span>
             </div>
           </div>
 
-          {/* Locations & Staff Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-[#0f172a] border border-sky-500/30 rounded-xl">
-            <div>
-              <span className="text-slate-400 block text-[10px] font-bold uppercase">Loading Location</span>
-              <span className="font-bold text-white flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-purple-400" /> {transport.loadingLocation || 'Preah Vihear'}
+          {/* Locations & Staff Grid (Single-line compact strip) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 bg-[#0f172a] border border-sky-500/30 rounded-xl">
+            <div className="flex items-center justify-between px-2 py-1 bg-white/5 rounded-lg">
+              <span className="text-slate-400 text-[10px] font-bold uppercase">From:</span>
+              <span className="font-bold text-white text-[11px] flex items-center gap-1 truncate ml-1.5">
+                <MapPin className="w-3 h-3 text-purple-400 shrink-0" /> {transport.loadingLocation || 'Preah Vihear'}
               </span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px] font-bold uppercase">Destination Warehouse</span>
-              <span className="font-bold text-sky-400 flex items-center gap-1 font-mono">
-                <MapPin className="w-3.5 h-3.5 text-sky-400" /> {getWarehouseId(transport.destinationWarehouse)}
-              </span>
-              <span className="text-[11px] text-slate-400 block ml-4">
-                {getWarehouseName(transport.destinationWarehouse)}
+            <div className="flex items-center justify-between px-2 py-1 bg-white/5 rounded-lg">
+              <span className="text-slate-400 text-[10px] font-bold uppercase">Destination:</span>
+              <span className="font-bold text-sky-400 text-[11px] flex items-center gap-1 font-mono truncate ml-1.5">
+                <MapPin className="w-3 h-3 text-sky-400 shrink-0" /> {getWarehouseId(transport.destinationWarehouse)} ({getWarehouseName(transport.destinationWarehouse)})
               </span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px] font-bold uppercase">Responsible Loading Staff</span>
-              <span className="font-bold text-emerald-400 flex items-center gap-1">
-                <UserCheck className="w-3.5 h-3.5 text-emerald-400" /> {transport.fieldStaffName || 'Field Staff'}
+            <div className="flex items-center justify-between px-2 py-1 bg-white/5 rounded-lg">
+              <span className="text-slate-400 text-[10px] font-bold uppercase">Loading Staff:</span>
+              <span className="font-bold text-emerald-400 text-[11px] flex items-center gap-1 truncate ml-1.5">
+                <UserCheck className="w-3 h-3 text-emerald-400 shrink-0" /> {transport.fieldStaffName || 'Field Staff'}
               </span>
             </div>
           </div>
 
           {/* Truck Loading Photo & Driver Signature Verification Cards */}
           {(transport.truckPhotoUrl || transport.driverSignature) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* Loaded Truck Photo */}
               {formatImageSrc(transport.truckPhotoUrl) ? (
-                <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-2 flex flex-col justify-between">
+                <div className="p-2.5 bg-white/5 border border-sky-500/30 rounded-xl space-y-1.5 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-extrabold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-[10.5px] font-extrabold text-sky-400 uppercase tracking-wider flex items-center gap-1">
                       📷 Loaded Truck Photo
                     </span>
                     <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                       Plate: {transport.plateNumber}
                     </span>
                   </div>
-                  <div className="relative group rounded-xl overflow-hidden border border-white/10 max-h-48 bg-black/40 flex items-center justify-center">
+                  <div className="relative group rounded-lg overflow-hidden border border-white/10 max-h-32 bg-black/40 flex items-center justify-center">
                     <img
                       src={formatImageSrc(transport.truckPhotoUrl)}
                       alt={`Loaded Truck ${transport.plateNumber}`}
-                      className="max-h-48 w-auto object-contain rounded-lg"
+                      className="max-h-32 w-auto object-contain rounded-lg"
                     />
                     <a
                       href={formatImageSrc(transport.truckPhotoUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="absolute bottom-2 right-2 bg-[#0b0f19]/80 backdrop-blur hover:bg-sky-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors border border-white/20"
+                      className="absolute bottom-1.5 right-1.5 bg-[#0b0f19]/80 backdrop-blur hover:bg-sky-500 text-white px-2 py-0.5 rounded text-[10px] font-bold transition-colors border border-white/20"
                     >
                       View Full Image ↗
                     </a>
                   </div>
                 </div>
               ) : (
-                <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-slate-500 text-xs italic">
+                <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-slate-500 text-xs italic">
                   No Loaded Truck Photo Attached
                 </div>
               )}
 
               {/* Driver Signature */}
               {formatImageSrc(transport.driverSignature) ? (
-                <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-2 flex flex-col justify-between">
+                <div className="p-2.5 bg-white/5 border border-sky-500/30 rounded-xl space-y-1.5 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-[10.5px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
                       ✍️ Driver Digital Signature
                     </span>
                     <span className="text-[10px] text-slate-400 font-bold">
                       {transport.driverName}
                     </span>
                   </div>
-                  <div className="rounded-xl border border-white/10 p-2 bg-black/40 flex items-center justify-center min-h-[140px]">
+                  <div className="rounded-lg border border-white/10 p-1.5 bg-black/40 flex items-center justify-center min-h-[100px]">
                     <img
                       src={formatImageSrc(transport.driverSignature)}
                       alt={`Signature of ${transport.driverName}`}
-                      className="max-h-32 object-contain filter invert brightness-200"
+                      className="max-h-24 object-contain filter invert brightness-200"
                     />
                   </div>
                 </div>
               ) : (
-                <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-slate-500 text-xs italic">
+                <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-slate-500 text-xs italic">
                   No Driver Signature Recorded
                 </div>
               )}
             </div>
           )}
 
-          {/* Summary Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-              <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Farmers</span>
-              <span className="font-extrabold text-white text-sm">{uniqueFarmersCount} Farmers</span>
+          {/* Summary Badges (Single-line compact strip) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="py-1.5 px-2.5 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between">
+              <span className="text-slate-400 text-[10px] uppercase font-bold">Farmers:</span>
+              <span className="font-extrabold text-white text-xs font-mono">{uniqueFarmersCount}</span>
             </div>
-            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-              <span className="text-slate-400 block text-[10px] uppercase font-bold">Assigned Invoices</span>
-              <span className="font-extrabold text-emerald-400 text-sm">{purchases.length} Purchase Records</span>
+            <div className="py-1.5 px-2.5 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between">
+              <span className="text-slate-400 text-[10px] uppercase font-bold">Invoices:</span>
+              <span className="font-extrabold text-emerald-400 text-xs font-mono">{purchases.length}</span>
             </div>
-            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-              <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Sacks Loaded</span>
-              <span className="font-extrabold text-amber-400 text-sm">{transport.totalSacks} Sacks</span>
+            <div className="py-1.5 px-2.5 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between">
+              <span className="text-slate-400 text-[10px] uppercase font-bold">Total Sacks:</span>
+              <span className="font-extrabold text-amber-400 text-xs font-mono">{transport.totalSacks}</span>
             </div>
-            <div className="p-3 bg-sky-500/10 border border-sky-500/30 rounded-xl">
-              <span className="text-sky-400 block text-[10px] uppercase font-bold">Total Truck Field Weight</span>
-              <span className="font-black text-sky-400 text-base">{transport.totalFieldWeight.toFixed(2)} kg</span>
+            <div className="py-1.5 px-2.5 bg-sky-500/10 border border-sky-500/30 rounded-lg flex items-center justify-between">
+              <span className="text-sky-400 text-[10px] uppercase font-bold">Field Weight:</span>
+              <span className="font-black text-sky-400 text-xs font-mono">{transport.totalFieldWeight.toFixed(2)} kg</span>
             </div>
           </div>
 
           {/* Payment Transfer Receipt Proof (Field View) */}
           {(transport.status === 'DISBURSED' || transport.paymentReceiptUrl) && (
-            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-1.5 shadow-md">
+            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-1 shadow-md">
               <div className="flex items-center justify-between">
-                <span className="font-extrabold text-xs text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Payment Disbursed & Bank Transfer Receipt Proof
+                <span className="font-extrabold text-[11px] text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Payment Disbursed & Bank Transfer Receipt Proof
                 </span>
                 <span className="bg-emerald-400 text-[#0b0f19] px-2 py-0.5 rounded-full text-[10px] font-black">
                   ✅ DISBURSED
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
-                <div>
-                  <span className="text-slate-400 text-[10px] block font-bold">Payment Method & Batch</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] pt-0.5">
+                <div className="truncate">
+                  <span className="text-slate-400 text-[10px] font-bold mr-1">Method/Batch:</span>
                   <span className="text-white font-bold">{transport.paymentMethod || 'Bank Transfer'} ({transport.paymentBatchNumber || 'BATCH-2026'})</span>
                 </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] block font-bold">Paid Date & Staff</span>
+                <div className="truncate">
+                  <span className="text-slate-400 text-[10px] font-bold mr-1">Paid Date:</span>
                   <span className="text-slate-200">{transport.paidAt ? new Date(transport.paidAt).toLocaleDateString() : 'Completed'} ({transport.paidByStaffName || 'Finance'})</span>
                 </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] block font-bold">Bank Receipt Proof</span>
+                <div className="truncate">
                   {formatImageSrc(transport.paymentReceiptUrl) ? (
                     <a
                       href={formatImageSrc(transport.paymentReceiptUrl)}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-emerald-400 font-extrabold underline text-xs flex items-center gap-1 hover:text-emerald-300"
+                      className="text-emerald-400 font-extrabold underline text-[11px] inline-flex items-center gap-1 hover:text-emerald-300"
                     >
-                      📄 Open & Forward Transfer Receipt to Farmers
+                      📄 Open Transfer Receipt
                     </a>
                   ) : (
                     <span className="text-slate-500 text-[10px] italic">No receipt attached</span>
@@ -312,32 +309,26 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
           )}
 
           {/* Assigned Purchase Records Table */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <h4 className="font-extrabold text-xs text-slate-200 uppercase tracking-wider">
+              <h4 className="font-extrabold text-[11px] text-slate-200 uppercase tracking-wider">
                 📦 Cargo Manifest (Assigned Farmer Purchase Records)
               </h4>
-              <button
-                onClick={exportSingleTruckCSV}
-                className="text-emerald-400 hover:text-emerald-300 font-bold text-xs flex items-center gap-1"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5" /> Download Manifest CSV
-              </button>
             </div>
 
             <div className="overflow-x-auto border border-white/10 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-white/5 text-slate-400 uppercase font-bold text-[10px] tracking-tight border-b border-white/10">
                   <tr>
-                    <th className="p-3">Purchase ID</th>
-                    <th className="p-3">Family Code</th>
-                    <th className="p-3">Farmer Name</th>
-                    <th className="p-3">Village</th>
-                    <th className="p-3">Variety / Grade</th>
-                    <th className="p-3 text-center">Sacks</th>
-                    <th className="p-3 text-right">Weight (kg)</th>
-                    <th className="p-3">Purchasing Staff</th>
-                    <th className="p-3 text-right">Net Payment</th>
+                    <th className="py-2 px-2.5 whitespace-nowrap">Purchase ID</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Family Code</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Farmer Name</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Village</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Variety / Grade</th>
+                    <th className="py-2 px-2 text-center whitespace-nowrap">Sacks</th>
+                    <th className="py-2 px-2 text-right whitespace-nowrap">Weight (kg)</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Purchasing Staff</th>
+                    <th className="py-2 px-2.5 text-right whitespace-nowrap">Net Payment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -347,23 +338,23 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
 
                     return (
                       <tr key={p.id} className="hover:bg-white/5">
-                        <td className="p-3 font-mono font-bold text-sky-400 whitespace-nowrap">{pIdFormatted}</td>
-                        <td className="p-3 font-extrabold text-amber-400">{p.familyCode}</td>
-                        <td className="p-3 font-bold text-white">{p.farmerName}</td>
-                        <td className="p-3 text-slate-300">{p.village}</td>
-                        <td className="p-3 font-bold text-slate-200">
-                          {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
+                        <td className="py-1.5 px-2.5 font-mono font-bold text-sky-400 whitespace-nowrap">{pIdFormatted}</td>
+                        <td className="py-1.5 px-2 font-extrabold text-amber-400 whitespace-nowrap">{p.familyCode}</td>
+                        <td className="py-1.5 px-2 font-bold text-white whitespace-nowrap">{p.farmerName}</td>
+                        <td className="py-1.5 px-2 text-slate-300 whitespace-nowrap">{p.village}</td>
+                        <td className="py-1.5 px-2 font-bold text-slate-200 whitespace-nowrap">
+                          {item.variety || 'Red Jasmine'} <span className="text-purple-400">({item.grade || 'A1'})</span>
                         </td>
-                        <td className="p-3 text-center font-bold text-white">{item.sacks || 0}</td>
-                        <td className="p-3 text-right font-mono font-bold text-sky-400">
+                        <td className="py-1.5 px-2 text-center font-bold text-white whitespace-nowrap">{item.sacks || 0}</td>
+                        <td className="py-1.5 px-2 text-right font-mono font-bold text-sky-400 whitespace-nowrap">
                           {p.totalWeight.toFixed(2)} kg
                         </td>
-                        <td className="p-3 font-medium text-slate-300">
-                          <span className="inline-flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded text-[11px] text-slate-200 font-semibold border border-white/5">
+                        <td className="py-1.5 px-2 font-medium text-slate-300 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded text-[10.5px] text-slate-200 font-semibold border border-white/5">
                             {p.purchasingStaffName || 'Field Staff'}
                           </span>
                         </td>
-                        <td className="p-3 text-right font-mono font-bold text-emerald-400">
+                        <td className="py-1.5 px-2.5 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
                           {p.netPayment.toLocaleString()} KHR
                         </td>
                       </tr>
@@ -376,16 +367,10 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-white/5 border-t border-white/10 flex items-center justify-between">
-          <button
-            onClick={exportSingleTruckCSV}
-            className="bg-[#10b981] hover:bg-[#059669] text-[#0b0f19] px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-emerald-500/20"
-          >
-            <FileSpreadsheet className="w-4 h-4" /> Export Truck CSV
-          </button>
+        <div className="px-4 py-2.5 bg-white/5 border-t border-white/10 flex items-center justify-end">
           <button
             onClick={onClose}
-            className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors"
+            className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-xl text-xs font-bold transition-colors"
           >
             Close
           </button>

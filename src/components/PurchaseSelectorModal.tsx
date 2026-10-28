@@ -176,18 +176,18 @@ export default function PurchaseSelectorModal({
             </div>
           ) : (
             <div className="overflow-x-auto border border-white/10 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-white/5 text-slate-400 uppercase font-bold text-[10px] tracking-tight border-b border-white/10">
                   <tr>
-                    <th className="p-3 w-10 text-center">Select</th>
-                    <th className="p-3">Purchase ID</th>
-                    <th className="p-3">Family Code</th>
-                    <th className="p-3">Farmer Name</th>
-                    <th className="p-3">Village</th>
-                    <th className="p-3">Variety / Grade</th>
-                    <th className="p-3 text-center">Sacks</th>
-                    <th className="p-3 text-right">Weight (kg)</th>
-                    <th className="p-3 text-right">Net Payment</th>
+                    <th className="py-2 px-2 w-10 text-center whitespace-nowrap">Select</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Purchase ID</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Family Code</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Farmer Name</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Village</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Variety / Grade</th>
+                    <th className="py-2 px-2 text-center whitespace-nowrap">Sacks</th>
+                    <th className="py-2 px-2 text-right whitespace-nowrap">Weight (kg)</th>
+                    <th className="py-2 px-2 text-right whitespace-nowrap">Net Payment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -204,27 +204,27 @@ export default function PurchaseSelectorModal({
                           isSelected ? 'bg-emerald-500/10' : 'hover:bg-white/5'
                         }`}
                       >
-                        <td className="p-3 text-center">
+                        <td className="py-1.5 px-2 text-center whitespace-nowrap">
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => {}} // Controlled by row click
-                            className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                            className="w-3.5 h-3.5 accent-emerald-500 rounded cursor-pointer"
                           />
                         </td>
-                        <td className="p-3 font-mono font-bold text-emerald-400 whitespace-nowrap">{pIdFormatted}</td>
-                        <td className="p-3 font-extrabold text-amber-400">{p.familyCode}</td>
-                        <td className="p-3 font-bold text-white">{p.farmerName}</td>
-                        <td className="p-3 text-slate-300">{p.village}</td>
-                        <td className="p-3">
+                        <td className="py-1.5 px-2 font-mono font-bold text-emerald-400 whitespace-nowrap">{pIdFormatted}</td>
+                        <td className="py-1.5 px-2 font-extrabold text-amber-400 whitespace-nowrap">{p.familyCode}</td>
+                        <td className="py-1.5 px-2 font-bold text-white whitespace-nowrap">{p.farmerName}</td>
+                        <td className="py-1.5 px-2 text-slate-300 whitespace-nowrap">{p.village}</td>
+                        <td className="py-1.5 px-2 whitespace-nowrap">
                           <span className="font-bold text-sky-400">{item.variety || 'Red Jasmine'}</span>
                           <span className="ml-1 font-extrabold text-purple-400">({item.grade || 'A1'})</span>
                         </td>
-                        <td className="p-3 text-center font-bold">{item.sacks || 0}</td>
-                        <td className="p-3 text-right font-mono font-bold text-emerald-400">
+                        <td className="py-1.5 px-2 text-center font-bold whitespace-nowrap">{item.sacks || 0}</td>
+                        <td className="py-1.5 px-2 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
                           {p.totalWeight.toFixed(2)} kg
                         </td>
-                        <td className="p-3 text-right font-mono font-bold text-slate-200">
+                        <td className="py-1.5 px-2 text-right font-mono font-bold text-slate-200 whitespace-nowrap">
                           {p.netPayment.toLocaleString()} KHR
                         </td>
                       </tr>
