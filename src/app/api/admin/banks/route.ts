@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -59,17 +60,14 @@ export async function POST(request: Request) {
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: (userRole as 'ADMIN' | 'FINANCE'),
-        action: 'CONFIG',
-        entityType: 'Bank',
-        entityId: bank.id,
-        details: JSON.stringify({ bankName: trimmedName, code: bank.code }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: userRole as 'ADMIN' | 'FINANCE',
+      action: 'CONFIG',
+      entityType: 'Bank',
+      entityId: bank.id,
+      details: { bankName: trimmedName, code: bank.code },
     });
 
     return NextResponse.json(bank, { status: 201 });
@@ -98,17 +96,14 @@ export async function DELETE(request: Request) {
 
     await db.bank.delete({ where: { id } });
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
-        action: 'CONFIG',
-        entityType: 'Bank',
-        entityId: id,
-        details: JSON.stringify({ action: 'DELETE_BANK', bankId: id }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'CONFIG',
+      entityType: 'Bank',
+      entityId: id,
+      details: { action: 'DELETE_BANK', bankId: id },
     });
 
     return NextResponse.json({ success: true });

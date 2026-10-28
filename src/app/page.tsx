@@ -1393,9 +1393,14 @@ export default function OperationsDashboard() {
 
   // Edit Purchase Record
   const handleEditPurchase = (purchase: any) => {
-    // Locking rule: Cannot edit if already assigned to transport or truck dispatched
-    if (purchase.status !== 'PENDING' || purchase.transportRecordId) {
-      alert(`Cannot edit Purchase Record ${formatPurchaseId(purchase)}. This record has already been assigned to transport or dispatched.`);
+    // Locking rule: Allow editing if PENDING, DRAFT, REJECTED, or assigned to a REJECTED transport
+    const isRejectedTransport = purchase.transportRecord?.status === 'REJECTED';
+    const isLocked = purchase.transportRecordId
+      ? !isRejectedTransport
+      : (purchase.status !== 'PENDING' && purchase.status !== 'REJECTED' && purchase.status !== 'DRAFT');
+
+    if (isLocked) {
+      alert(`Cannot edit Purchase Record ${formatPurchaseId(purchase)}. This record has already been assigned to an active transport or dispatched.`);
       return;
     }
 
@@ -6602,7 +6607,7 @@ export default function OperationsDashboard() {
                         <option value="Preah Vihear">Preah Vihear</option>
                         <option value="Stung Treng">Stung Treng</option>
                         <option value="Ratanakiri">Ratanakiri</option>
-                        <option value="Mondolkiri">Mondolkiri</option>
+                        <option value="Mondulkiri">Mondulkiri</option>
                         <option value="na">NA (Global / Online Access)</option>
                       </select>
                     </div>
@@ -6766,7 +6771,7 @@ export default function OperationsDashboard() {
                         <option value="Preah Vihear">Preah Vihear</option>
                         <option value="Stung Treng">Stung Treng</option>
                         <option value="Ratanakiri">Ratanakiri</option>
-                        <option value="Mondolkiri">Mondolkiri</option>
+                        <option value="Mondulkiri">Mondulkiri</option>
                       </select>
                     </div>
                     <button

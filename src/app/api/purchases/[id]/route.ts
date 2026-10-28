@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { isVillageAuthorized } from '@/lib/province-guard';
-
+import { processAndSaveImage } from '@/lib/image-upload-server';
 import { logAudit } from '@/lib/audit';
 
 export async function PUT(
@@ -84,6 +84,9 @@ export async function PUT(
     const seedDeductionVal = seedDeduction !== undefined && !isNaN(parseFloat(seedDeduction)) ? parseFloat(seedDeduction) : calculatedSeedDeduction;
     const netPaymentToFarmer = Math.max(0, totalPaddyValue - seedDeductionVal);
 
+    const savedFarmerSig = signatureFarmer ? await processAndSaveImage(signatureFarmer, 'sig_farmer') : null;
+    const savedStaffSig = signatureStaff ? await processAndSaveImage(signatureStaff, 'sig_staff') : null;
+
     // Update Purchase Record (if previously REJECTED, reset to PENDING so it can be dispatched again)
     const nextStatus = existing.status === 'REJECTED' ? 'PENDING' : existing.status;
 
@@ -100,8 +103,8 @@ export async function PUT(
         seedDeduction: seedDeductionVal,
         additionalPremium: addPrice,
         netPayment: netPaymentToFarmer,
-        signatureFarmer: signatureFarmer || existing.signatureFarmer,
-        signatureStaff: signatureStaff || existing.signatureStaff,
+        signatureFarmer: savedFarmerSig || signatureFarmer || existing.signatureFarmer,
+        signatureStaff: savedStaffSig || signatureStaff || existing.signatureStaff,
         purchasingStaffId: userId,
         purchasingStaffName: session.user?.name || existing.purchasingStaffName,
         specsRecordId: specsRecordId || existing.specsRecordId,
@@ -138,6 +141,36 @@ export async function PUT(
           quantity: totalWeightKg,
           totalValue: totalPaddyValue,
           sackWeights: JSON.stringify(item.sackWeights || []),
+        },
+      });
+    }
+
+    // If assigned to a transport record (e.g. a REJECTED truck), synchronize TransportLot and TransportRecord totals
+    if (existing.transportRecordId) {
+      await db.transportLot.updateMany({
+        where: { transportId: existing.transportRecordId, purchaseRecordId: id },
+        data: {
+          variety: item.variety || existing.items?.[0]?.variety || 'Red Jasmine',
+          familyCode: updatedRecord.familyCode,
+          farmerName: updatedRecord.farmerName,
+          village: updatedRecord.village,
+          sacks: sacksCount,
+          weight: totalWeightKg,
+        },
+      });
+
+      const siblingPurchases = await db.purchaseRecord.findMany({
+        where: { transportRecordId: existing.transportRecordId },
+        include: { items: true },
+      });
+      const newTotalSacks = siblingPurchases.reduce((sum, p) => sum + (p.items?.[0]?.sacks || 0), 0);
+      const newTotalFieldWeight = siblingPurchases.reduce((sum, p) => sum + p.totalWeight, 0);
+
+      await db.transportRecord.update({
+        where: { id: existing.transportRecordId },
+        data: {
+          totalSacks: newTotalSacks,
+          totalFieldWeight: newTotalFieldWeight,
         },
       });
     }
@@ -233,10 +266,34 @@ export async function DELETE(
       );
     }
 
+    const parentTransportId = existing.transportRecordId;
+
     // Delete purchase record (PurchaseItem will be cascade deleted)
     await db.purchaseRecord.delete({
       where: { id },
     });
+
+    // If this purchase belonged to a REJECTED transport, clean up its TransportLot and recalculate truck totals
+    if (parentTransportId) {
+      await db.transportLot.deleteMany({
+        where: { transportId: parentTransportId, purchaseRecordId: id },
+      });
+
+      const remainingPurchases = await db.purchaseRecord.findMany({
+        where: { transportRecordId: parentTransportId },
+        include: { items: true },
+      });
+      const newTotalSacks = remainingPurchases.reduce((sum, p) => sum + (p.items?.[0]?.sacks || 0), 0);
+      const newTotalFieldWeight = remainingPurchases.reduce((sum, p) => sum + p.totalWeight, 0);
+
+      await db.transportRecord.update({
+        where: { id: parentTransportId },
+        data: {
+          totalSacks: newTotalSacks,
+          totalFieldWeight: newTotalFieldWeight,
+        },
+      });
+    }
 
     // Audit Log
     await logAudit({

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 const DEFAULT_TOLERANCE = {
   acceptableKg: 300,
@@ -54,17 +55,14 @@ export async function POST(request: Request) {
       create: { key: 'scale_tolerance', value: valuePayload },
     });
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
-        action: 'CONFIG',
-        entityType: 'ScaleTolerance',
-        entityId: setting.id,
-        details: valuePayload,
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'CONFIG',
+      entityType: 'ScaleTolerance',
+      entityId: setting.id,
+      details: { acceptableKg, warningKg, criticalKg },
     });
 
     return NextResponse.json({

@@ -7,6 +7,7 @@ import { processAndSaveImage } from '@/lib/image-upload-server';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 
 import { generatePurchaseId } from '@/lib/purchase-id';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -154,27 +155,26 @@ export async function POST(request: Request) {
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName,
-        userRole,
-        action: 'CREATE',
-        entityType: 'PurchaseRecord',
-        entityId: purchase.id,
-        details: JSON.stringify({
-          familyCode: normCode,
-          village: normVillage,
-          farmerName,
-          totalWeight,
-          totalPayment: grossPayment,
-          netPayment,
-          purchasingStaff: userName,
-          sackCount: items[0]?.sacks || 0,
-          hasFarmerSignature: Boolean(signatureFarmer),
-          hasStaffSignature: Boolean(signatureStaff),
-          linkedSpecsId: linkedSpecsId || 'None',
-        }),
+    await logAudit({
+      userId,
+      userEmail: session?.user?.email,
+      userName,
+      userRole,
+      action: 'CREATE',
+      entityType: 'PurchaseRecord',
+      entityId: purchase.id,
+      details: {
+        familyCode: normCode,
+        village: normVillage,
+        farmerName,
+        totalWeight,
+        totalPayment: grossPayment,
+        netPayment,
+        purchasingStaff: userName,
+        sackCount: items[0]?.sacks || 0,
+        hasFarmerSignature: Boolean(signatureFarmer),
+        hasStaffSignature: Boolean(signatureStaff),
+        linkedSpecsId: linkedSpecsId || 'None',
       },
     });
 

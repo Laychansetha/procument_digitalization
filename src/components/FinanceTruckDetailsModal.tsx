@@ -288,8 +288,8 @@ export default function FinanceTruckDetailsModal({
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
               <div className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg space-y-0.5 flex flex-col justify-center">
                 <span className="text-[9.5px] font-bold text-sky-400 uppercase tracking-tight block truncate">Gross Scale Photo</span>
-                {intake.grossScalePhotoUrl ? (
-                  <a href={intake.grossScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
+                {formatImageSrc(intake.grossScalePhotoUrl) ? (
+                  <a href={formatImageSrc(intake.grossScalePhotoUrl)} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
                     <Camera className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">View Gross Photo</span>
                   </a>
@@ -300,8 +300,8 @@ export default function FinanceTruckDetailsModal({
 
               <div className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg space-y-0.5 flex flex-col justify-center">
                 <span className="text-[9.5px] font-bold text-sky-400 uppercase tracking-tight block truncate">Tare Scale Photo</span>
-                {intake.tareScalePhotoUrl ? (
-                  <a href={intake.tareScalePhotoUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
+                {formatImageSrc(intake.tareScalePhotoUrl) ? (
+                  <a href={formatImageSrc(intake.tareScalePhotoUrl)} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
                     <Camera className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">View Tare Photo</span>
                   </a>
@@ -312,8 +312,8 @@ export default function FinanceTruckDetailsModal({
 
               <div className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg space-y-0.5 flex flex-col justify-center">
                 <span className="text-[9.5px] font-bold text-sky-400 uppercase tracking-tight block truncate">Transport Invoice</span>
-                {intake.transportInvoiceUrl ? (
-                  <a href={intake.transportInvoiceUrl} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
+                {formatImageSrc(intake.transportInvoiceUrl) ? (
+                  <a href={formatImageSrc(intake.transportInvoiceUrl)} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold underline text-[11px] flex items-center gap-1 hover:text-emerald-300 truncate">
                     <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">View Invoice</span>
                   </a>
@@ -378,9 +378,9 @@ export default function FinanceTruckDetailsModal({
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">Bank Transfer Receipt Proof</span>
-                  {transport.paymentReceiptUrl ? (
+                  {formatImageSrc(transport.paymentReceiptUrl) ? (
                     <a
-                      href={transport.paymentReceiptUrl}
+                      href={formatImageSrc(transport.paymentReceiptUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-emerald-400 font-extrabold underline text-xs flex items-center gap-1 mt-0.5 hover:text-emerald-300"

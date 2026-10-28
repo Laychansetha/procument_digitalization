@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
+import { normalizeProvinceName } from '@/lib/province-guard';
 
 // GET /api/admin/backup — Export full database backup as JSON file
 export async function GET() {
@@ -13,8 +15,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 });
     }
 
+    const rawUsers = await db.user.findMany();
+    const safeUsers = rawUsers.map(({ password: _password, ...rest }) => rest);
+
     const masterData = {
-      users: await db.user.findMany(),
+      users: safeUsers,
       villages: await db.village.findMany(),
       banks: await db.bank.findMany(),
       locations: await db.locationRegistry.findMany(),
@@ -95,10 +100,11 @@ export async function POST(request: Request) {
     if (masterData) {
       if (Array.isArray(masterData.villages)) {
         for (const v of masterData.villages) {
+          const normProv = v.province ? normalizeProvinceName(v.province) : 'Preah Vihear';
           await db.village.upsert({
             where: { name: v.name },
-            update: { province: v.province, district: v.district, code: v.code, status: v.status || 'ACTIVE' },
-            create: { name: v.name, province: v.province, district: v.district, code: v.code, status: v.status || 'ACTIVE' },
+            update: { province: normProv, district: v.district, code: v.code, status: v.status || 'ACTIVE' },
+            create: { name: v.name, province: normProv, district: v.district, code: v.code, status: v.status || 'ACTIVE' },
           });
         }
       }
@@ -131,8 +137,10 @@ export async function POST(request: Request) {
               basePrice: s.basePrice,
               maxMoisture: s.maxMoisture,
               maxForeignMatter: s.maxForeignMatter,
-              minWholeGrain: s.minWholeGrain,
-              maxBrokenRice: s.maxBrokenRice,
+              minWholeGrain: s.minWholeGrain ?? null,
+              maxBrokenRice: s.maxBrokenRice ?? null,
+              impurity: s.impurity ?? null,
+              moistureRange: s.moistureRange ?? null,
               status: s.status || 'ACTIVE',
             },
             create: {
@@ -141,8 +149,10 @@ export async function POST(request: Request) {
               basePrice: s.basePrice,
               maxMoisture: s.maxMoisture,
               maxForeignMatter: s.maxForeignMatter,
-              minWholeGrain: s.minWholeGrain,
-              maxBrokenRice: s.maxBrokenRice,
+              minWholeGrain: s.minWholeGrain ?? null,
+              maxBrokenRice: s.maxBrokenRice ?? null,
+              impurity: s.impurity ?? null,
+              moistureRange: s.moistureRange ?? null,
               status: s.status || 'ACTIVE',
             },
           });
@@ -161,19 +171,17 @@ export async function POST(request: Request) {
     }
 
     // Record Audit Log for restore
-    await db.auditLog.create({
-      data: {
-        userId: adminId,
-        userName: session.user?.name || session.user?.email || 'Admin',
-        userRole: 'ADMIN',
-        action: 'CONFIG',
-        entityType: 'SystemSetting',
-        entityId: 'DATABASE_RESTORE',
-        details: JSON.stringify({
-          action: 'RESTORE_DATABASE',
-          backupExportedAt: payload.exportedAt,
-          counts: payload.counts,
-        }),
+    await logAudit({
+      userId: adminId,
+      userName: session.user?.name || session.user?.email || 'Admin',
+      userRole: 'ADMIN',
+      action: 'CONFIG',
+      entityType: 'SystemSetting',
+      entityId: 'DATABASE_RESTORE',
+      details: {
+        action: 'RESTORE_DATABASE',
+        backupExportedAt: payload.exportedAt,
+        counts: payload.counts,
       },
     });
 

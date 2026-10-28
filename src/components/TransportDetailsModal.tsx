@@ -6,6 +6,7 @@ import RejectionHistorySection from '@/components/RejectionHistorySection';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
 import { getWarehouseId, getWarehouseName } from '@/lib/warehouse-config';
+import { formatImageSrc } from '@/lib/image-utils';
 
 interface TransportDetailsModalProps {
   isOpen: boolean;
@@ -192,7 +193,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
           {(transport.truckPhotoUrl || transport.driverSignature) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Loaded Truck Photo */}
-              {transport.truckPhotoUrl ? (
+              {formatImageSrc(transport.truckPhotoUrl) ? (
                 <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-2 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-extrabold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -204,12 +205,12 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                   </div>
                   <div className="relative group rounded-xl overflow-hidden border border-white/10 max-h-48 bg-black/40 flex items-center justify-center">
                     <img
-                      src={transport.truckPhotoUrl}
+                      src={formatImageSrc(transport.truckPhotoUrl)}
                       alt={`Loaded Truck ${transport.plateNumber}`}
                       className="max-h-48 w-auto object-contain rounded-lg"
                     />
                     <a
-                      href={transport.truckPhotoUrl}
+                      href={formatImageSrc(transport.truckPhotoUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="absolute bottom-2 right-2 bg-[#0b0f19]/80 backdrop-blur hover:bg-sky-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors border border-white/20"
@@ -225,7 +226,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
               )}
 
               {/* Driver Signature */}
-              {transport.driverSignature ? (
+              {formatImageSrc(transport.driverSignature) ? (
                 <div className="p-3 bg-white/5 border border-sky-500/30 rounded-xl space-y-2 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -237,7 +238,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                   </div>
                   <div className="rounded-xl border border-white/10 p-2 bg-black/40 flex items-center justify-center min-h-[140px]">
                     <img
-                      src={transport.driverSignature}
+                      src={formatImageSrc(transport.driverSignature)}
                       alt={`Signature of ${transport.driverName}`}
                       className="max-h-32 object-contain filter invert brightness-200"
                     />
@@ -293,9 +294,9 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                 </div>
                 <div>
                   <span className="text-slate-400 text-[10px] block font-bold">Bank Receipt Proof</span>
-                  {transport.paymentReceiptUrl ? (
+                  {formatImageSrc(transport.paymentReceiptUrl) ? (
                     <a
-                      href={transport.paymentReceiptUrl}
+                      href={formatImageSrc(transport.paymentReceiptUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-emerald-400 font-extrabold underline text-xs flex items-center gap-1 hover:text-emerald-300"

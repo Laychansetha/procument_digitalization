@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -132,17 +133,14 @@ export async function POST(request: Request) {
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName,
-        userRole,
-        action: existing ? 'UPDATE' : 'CREATE',
-        entityType: 'SpecsRecord',
-        entityId: spec.id,
-        details: JSON.stringify({ familyCode: normCode, village: normVillage, farmerName, paddyType, selectedGrade, finalPrice: fPrice }),
-      },
+    await logAudit({
+      userId,
+      userName,
+      userRole,
+      action: existing ? 'UPDATE' : 'CREATE',
+      entityType: 'SpecsRecord',
+      entityId: spec.id,
+      details: { familyCode: normCode, village: normVillage, farmerName, paddyType, selectedGrade, finalPrice: fPrice },
     });
 
     return NextResponse.json(spec, { status: existing ? 200 : 201 });

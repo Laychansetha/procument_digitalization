@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
+import { normalizeProvinceName } from '@/lib/province-guard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const prisma = new PrismaClient();
 
 const DEFAULT_SETTINGS = {
   seedInterestRate: 1.10,
@@ -25,16 +27,22 @@ export async function GET(request: Request) {
     let assignedProvincesList: string[] = [];
 
     if (provincesQuery && provincesQuery.trim()) {
-      assignedProvincesList = provincesQuery.split(',').map((p) => p.trim().toLowerCase());
+      assignedProvincesList = provincesQuery
+        .split(',')
+        .map((p) => normalizeProvinceName(p).toLowerCase())
+        .filter((p) => p && p !== 'na' && p !== 'all');
     } else if (userIdQuery) {
-      const user = await prisma.user.findUnique({ where: { id: userIdQuery } });
+      const user = await db.user.findUnique({ where: { id: userIdQuery } });
       if (user?.assignedProvinces) {
-        assignedProvincesList = user.assignedProvinces.split(',').map((p) => p.trim().toLowerCase());
+        assignedProvincesList = user.assignedProvinces
+          .split(',')
+          .map((p) => normalizeProvinceName(p).toLowerCase())
+          .filter((p) => p && p !== 'na' && p !== 'all');
       }
     }
 
     // 1. Fetch SystemSettings
-    const dbSettings = await prisma.systemSetting.findMany();
+    const dbSettings = await db.systemSetting.findMany();
     const settingsMap: Record<string, any> = { ...DEFAULT_SETTINGS };
 
     for (const item of dbSettings) {
@@ -46,41 +54,41 @@ export async function GET(request: Request) {
     }
 
     // 2. Fetch Paddy Price Specs
-    const paddySpecs = await prisma.paddyPriceSpec.findMany({
+    const paddySpecs = await db.paddyPriceSpec.findMany({
       where: { status: 'ACTIVE' },
       orderBy: [{ variety: 'asc' }, { grade: 'asc' }],
     });
 
     // 3. Fetch Villages
-    const rawVillages = await prisma.village.findMany({
+    const rawVillages = await db.village.findMany({
       where: { status: 'ACTIVE' },
       orderBy: [{ province: 'asc' }, { name: 'asc' }],
     });
 
     // Filter villages if user has assigned provinces
     let filteredVillages = rawVillages;
-    if (assignedProvincesList.length > 0) {
+    if (assignedProvincesList.length > 0 && assignedProvincesList.length < 4) {
       filteredVillages = rawVillages.filter((v) =>
-        assignedProvincesList.includes((v.province || 'Preah Vihear').toLowerCase())
+        assignedProvincesList.includes(normalizeProvinceName(v.province || 'Preah Vihear').toLowerCase())
       );
       // Fallback: if filtering yields empty, return all villages
       if (filteredVillages.length === 0) filteredVillages = rawVillages;
     }
 
     // 4. Fetch Commercial Banks
-    const rawBanks = await prisma.bank.findMany({
+    const rawBanks = await db.bank.findMany({
       where: { status: 'ACTIVE' },
       orderBy: { name: 'asc' },
     });
 
     // 5. Fetch Location Registries (Buying Stations & Warehouses)
-    const locations = await prisma.locationRegistry.findMany({
+    const locations = await db.locationRegistry.findMany({
       where: { status: 'ACTIVE' },
       orderBy: [{ type: 'asc' }, { name: 'asc' }],
     });
 
     // 6. Fetch Fleet Vehicles
-    const fleet = await prisma.fleetVehicle.findMany({
+    const fleet = await db.fleetVehicle.findMany({
       where: { status: 'ACTIVE' },
     });
 
@@ -136,6 +144,14 @@ export async function GET(request: Request) {
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    const userRole = (session?.user as { role?: string })?.role;
+    const userId = (session?.user as { id?: string })?.id;
+
+    if (!session || !userId || userRole !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 403 });
+    }
+
     const body = await req.json();
     const { key, value } = body;
 
@@ -145,10 +161,20 @@ export async function POST(req: Request) {
 
     const stringVal = typeof value === 'object' ? JSON.stringify(value) : String(value);
 
-    const setting = await prisma.systemSetting.upsert({
+    const setting = await db.systemSetting.upsert({
       where: { key },
       update: { value: stringVal },
       create: { key, value: stringVal },
+    });
+
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'CONFIG',
+      entityType: 'SystemSetting',
+      entityId: setting.id,
+      details: { key, value },
     });
 
     return NextResponse.json({ success: true, setting });

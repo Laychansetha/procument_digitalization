@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { getResolvedUser } from '@/lib/sync-auth';
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -116,17 +117,14 @@ export async function POST(request: Request) {
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName,
-        userRole,
-        action: existing ? 'UPDATE' : 'CREATE',
-        entityType: 'FarmerProfile',
-        entityId: profile.id,
-        details: JSON.stringify({ familyCode: normCode, village: normVillage, farmerName, bankName, accountNumber, hasBankPhoto: Boolean(bankDocumentUrl) }),
-      },
+    await logAudit({
+      userId,
+      userName,
+      userRole,
+      action: existing ? 'UPDATE' : 'CREATE',
+      entityType: 'FarmerProfile',
+      entityId: profile.id,
+      details: { familyCode: normCode, village: normVillage, farmerName, bankName, accountNumber, hasBankPhoto: Boolean(bankDocumentUrl) },
     });
 
     return NextResponse.json(profile, { status: existing ? 200 : 201 });

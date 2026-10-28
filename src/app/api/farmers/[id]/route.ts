@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { isVillageAuthorized } from '@/lib/province-guard';
+import { processAndSaveImage } from '@/lib/image-upload-server';
+import { logAudit } from '@/lib/audit';
 
 export async function PUT(
   request: Request,
@@ -36,15 +38,22 @@ export async function PUT(
       return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
     }
 
+    const savedDocUrl =
+      body.bankDocumentUrl !== undefined
+        ? (await processAndSaveImage(body.bankDocumentUrl, 'doc')) || body.bankDocumentUrl
+        : existing.bankDocumentUrl;
+
     const updated = await db.farmerProfile.update({
       where: { id },
       data: {
+        familyCode: body.familyCode !== undefined ? String(body.familyCode).toUpperCase().trim() : existing.familyCode,
+        farmerName: body.farmerName !== undefined ? String(body.farmerName).trim() : existing.farmerName,
         accountHolder: body.accountHolder !== undefined ? body.accountHolder : existing.accountHolder,
         relationship: body.relationship !== undefined ? body.relationship : existing.relationship,
         paymentMethod: body.paymentMethod !== undefined ? body.paymentMethod : existing.paymentMethod,
         bankName: body.bankName !== undefined ? body.bankName : existing.bankName,
         accountNumber: body.accountNumber !== undefined ? body.accountNumber : existing.accountNumber,
-        bankDocumentUrl: body.bankDocumentUrl !== undefined ? body.bankDocumentUrl : existing.bankDocumentUrl,
+        bankDocumentUrl: savedDocUrl,
         village: body.village !== undefined ? body.village : existing.village,
         phone: body.phone !== undefined ? body.phone : existing.phone,
         notes: body.notes !== undefined ? body.notes : existing.notes,
@@ -58,22 +67,21 @@ export async function PUT(
     });
 
     // Create Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'User',
-        userRole: (userRole as any) || 'FIELD',
-        action: 'UPDATE',
-        entityType: 'FarmerProfile',
-        entityId: id,
-        details: JSON.stringify({
-          familyCode: updated.familyCode,
-          farmerName: updated.farmerName,
-          bankName: updated.bankName,
-          accountNumber: updated.accountNumber,
-          accountHolder: updated.accountHolder,
-          relationship: updated.relationship,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'User',
+      userRole: (userRole as any) || 'FIELD',
+      action: 'UPDATE',
+      entityType: 'FarmerProfile',
+      entityId: id,
+      details: {
+        familyCode: updated.familyCode,
+        farmerName: updated.farmerName,
+        bankName: updated.bankName,
+        accountNumber: updated.accountNumber,
+        accountHolder: updated.accountHolder,
+        relationship: updated.relationship,
       },
     });
 
@@ -119,20 +127,19 @@ export async function DELETE(
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Field Staff',
-        userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
-        action: 'DELETE',
-        entityType: 'FarmerProfile',
-        entityId: id,
-        details: JSON.stringify({
-          familyCode: existing.familyCode,
-          farmerName: existing.farmerName,
-          bankName: existing.bankName,
-          accountNumber: existing.accountNumber,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Field Staff',
+      userRole: ((session.user as { role?: string })?.role as any) || 'FIELD',
+      action: 'DELETE',
+      entityType: 'FarmerProfile',
+      entityId: id,
+      details: {
+        familyCode: existing.familyCode,
+        farmerName: existing.farmerName,
+        bankName: existing.bankName,
+        accountNumber: existing.accountNumber,
       },
     });
 

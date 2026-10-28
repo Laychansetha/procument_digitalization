@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -69,17 +70,14 @@ export async function POST(request: Request) {
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: (userRole as 'ADMIN' | 'WAREHOUSE'),
-        action: 'CONFIG',
-        entityType: 'LocationRegistry',
-        entityId: location.id,
-        details: JSON.stringify({ name: trimmedName, type: locType }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: userRole as 'ADMIN' | 'WAREHOUSE',
+      action: 'CONFIG',
+      entityType: 'LocationRegistry',
+      entityId: location.id,
+      details: { name: trimmedName, type: locType },
     });
 
     return NextResponse.json(location, { status: 201 });
@@ -108,17 +106,14 @@ export async function DELETE(request: Request) {
 
     await db.locationRegistry.delete({ where: { id } });
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
-        action: 'CONFIG',
-        entityType: 'LocationRegistry',
-        entityId: id,
-        details: JSON.stringify({ action: 'DELETE_LOCATION', locationId: id }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'CONFIG',
+      entityType: 'LocationRegistry',
+      entityId: id,
+      details: { action: 'DELETE_LOCATION', locationId: id },
     });
 
     return NextResponse.json({ success: true });

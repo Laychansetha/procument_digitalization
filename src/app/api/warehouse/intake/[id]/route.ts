@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getWarehouseId } from '@/lib/warehouse-config';
+import { processAndSaveImage } from '@/lib/image-upload-server';
+import { logAudit } from '@/lib/audit';
 
 export async function PUT(
   request: Request,
@@ -11,8 +13,9 @@ export async function PUT(
   try {
     const session = await getServerSession(authOptions);
     const userId = (session?.user as { id?: string })?.id;
+    const userRole = (session?.user as { role?: string })?.role;
 
-    if (!session || !userId) {
+    if (!session || !userId || (userRole !== 'WAREHOUSE' && userRole !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
@@ -38,9 +41,13 @@ export async function PUT(
 
     const grossWeight = parseFloat(body.warehouseGrossWeight) || 0;
     const tareWeight = parseFloat(body.warehouseTareWeight) || 0;
-    const grossScalePhotoUrl = body.grossScalePhotoUrl ?? existing.grossScalePhotoUrl;
-    const tareScalePhotoUrl = body.tareScalePhotoUrl ?? existing.tareScalePhotoUrl;
-    const transportInvoiceUrl = body.transportInvoiceUrl ?? existing.transportInvoiceUrl;
+    const savedGrossPhoto = body.grossScalePhotoUrl ? await processAndSaveImage(body.grossScalePhotoUrl, 'scale_gross') : null;
+    const savedTarePhoto = body.tareScalePhotoUrl ? await processAndSaveImage(body.tareScalePhotoUrl, 'scale_tare') : null;
+    const savedInvoicePhoto = body.transportInvoiceUrl ? await processAndSaveImage(body.transportInvoiceUrl, 'transport_invoice') : null;
+
+    const grossScalePhotoUrl = savedGrossPhoto ?? body.grossScalePhotoUrl ?? existing.grossScalePhotoUrl;
+    const tareScalePhotoUrl = savedTarePhoto ?? body.tareScalePhotoUrl ?? existing.tareScalePhotoUrl;
+    const transportInvoiceUrl = savedInvoicePhoto ?? body.transportInvoiceUrl ?? existing.transportInvoiceUrl;
     const receivingStaffName = body.receivingStaffName ? String(body.receivingStaffName).trim() : undefined;
     const arrivedWarehouse = body.arrivedWarehouse ? getWarehouseId(body.arrivedWarehouse) : undefined;
 
@@ -62,45 +69,49 @@ export async function PUT(
         transportInvoiceUrl,
         ...(receivingStaffName ? { receivingStaffName } : {}),
         ...(arrivedWarehouse ? { arrivedWarehouse } : {}),
+        ...(body.notes !== undefined ? { notes: body.notes } : {}),
         status: 'RECEIVED',
         inventoryStatus: 'WAITING_FOR_INVENTORY',
       },
       include: { transport: true },
     });
 
-    // Mark active rejection log as RESOLVED when Warehouse resubmits corrected intake
-    const activeRejection = await db.rejectionLog.findFirst({
-      where: { entityType: 'WarehouseIntake', entityId: id, status: 'REJECTED' },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (activeRejection) {
-      await db.rejectionLog.update({
-        where: { id: activeRejection.id },
-        data: {
-          status: 'RESOLVED',
-          resolvedAt: new Date(),
-          resolvedByName: session.user?.name || session.user?.email || 'Warehouse Staff',
-        },
+    if (existing.transportId) {
+      await db.transportRecord.update({
+        where: { id: existing.transportId },
+        data: { status: 'RECEIVED' },
+      });
+      await db.purchaseRecord.updateMany({
+        where: { transportRecordId: existing.transportId },
+        data: { status: 'RECEIVED' },
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
+    // Mark active rejection logs as RESOLVED when Warehouse resubmits corrected intake
+    await db.rejectionLog.updateMany({
+      where: { entityType: 'WarehouseIntake', entityId: id, status: 'REJECTED' },
       data: {
-        userId,
-        userName: session.user?.name || 'Warehouse Staff',
-        userRole: ((session.user as { role?: string })?.role as any) || 'WAREHOUSE',
-        action: 'UPDATE',
-        entityType: 'WarehouseIntake',
-        entityId: id,
-        details: JSON.stringify({
-          transportId: existing.transportId,
-          grossWeight,
-          tareWeight,
-          netWeight,
-          weightDiffKg,
-        }),
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        resolvedByName: session.user?.name || session.user?.email || 'Warehouse Staff',
+      },
+    });
+
+    // Audit Log
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Warehouse Staff',
+      userRole: (userRole as any) || 'WAREHOUSE',
+      action: 'UPDATE',
+      entityType: 'WarehouseIntake',
+      entityId: id,
+      details: {
+        transportId: existing.transportId,
+        grossWeight,
+        tareWeight,
+        netWeight,
+        weightDiffKg,
       },
     });
 
@@ -157,18 +168,17 @@ export async function DELETE(
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
-        action: 'DELETE',
-        entityType: 'WarehouseIntake',
-        entityId: id,
-        details: JSON.stringify({
-          transportId: existing.transportId,
-          netWeight: existing.warehouseNetWeight,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session.user?.email,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'DELETE',
+      entityType: 'WarehouseIntake',
+      entityId: id,
+      details: {
+        transportId: existing.transportId,
+        netWeight: existing.warehouseNetWeight,
       },
     });
 

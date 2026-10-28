@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
+import { CANONICAL_PROVINCES, normalizeProvinceName } from '@/lib/province-guard';
 
 export async function GET(request: Request) {
   try {
@@ -14,20 +16,28 @@ export async function GET(request: Request) {
     let whereClause = {};
     const targetProvincesStr = provincesQuery || (user?.role === 'FIELD' ? user?.assignedProvinces : undefined);
 
-    if (targetProvincesStr) {
-      const provinces = targetProvincesStr
-        .split(',')
-        .map((p) => p.trim())
-        .filter(Boolean);
+    if (targetProvincesStr && targetProvincesStr.toLowerCase() !== 'na') {
+      const normalizedProvinces = Array.from(
+        new Set(
+          targetProvincesStr
+            .split(',')
+            .map((p) => normalizeProvinceName(p))
+            .filter(Boolean)
+        )
+      );
 
-      const allProvinces = ['Preah Vihear', 'Stung Treng', 'Ratanakiri', 'Mondolkiri'];
-      if (provinces.length > 0 && provinces.length < 4 && !provinces.some((p) => p.toLowerCase() === 'all')) {
-        // Map to exact casing in DB
-        const matchedDbProvinces = allProvinces.filter((ap) =>
-          provinces.some((p) => p.toLowerCase() === ap.toLowerCase())
-        );
+      if (
+        normalizedProvinces.length > 0 &&
+        normalizedProvinces.length < 4 &&
+        !normalizedProvinces.some((p) => p.toLowerCase() === 'all') &&
+        !CANONICAL_PROVINCES.every((ap) => normalizedProvinces.some((p) => p.toLowerCase() === ap.toLowerCase()))
+      ) {
+        const queryProvinces = new Set<string>(normalizedProvinces);
+        if (queryProvinces.has('Mondulkiri')) {
+          queryProvinces.add('Mondolkiri');
+        }
         whereClause = {
-          province: { in: matchedDbProvinces.length > 0 ? matchedDbProvinces : provinces },
+          province: { in: Array.from(queryProvinces) },
         };
       }
     }
@@ -61,6 +71,7 @@ export async function POST(request: Request) {
     }
 
     const trimmedName = name.trim();
+    const normalizedProvince = province ? normalizeProvinceName(province) : 'Preah Vihear';
     let village;
 
     if (id) {
@@ -70,7 +81,7 @@ export async function POST(request: Request) {
           name: trimmedName,
           code: code || null,
           district: district || 'Chhaeb',
-          province: province || 'Preah Vihear',
+          province: normalizedProvince,
           status: status || 'ACTIVE',
         },
       });
@@ -80,30 +91,27 @@ export async function POST(request: Request) {
         update: {
           code: code || null,
           district: district || 'Chhaeb',
-          province: province || 'Preah Vihear',
+          province: normalizedProvince,
           status: status || 'ACTIVE',
         },
         create: {
           name: trimmedName,
           code: code || null,
           district: district || 'Chhaeb',
-          province: province || 'Preah Vihear',
+          province: normalizedProvince,
           status: status || 'ACTIVE',
         },
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: (userRole as 'ADMIN' | 'FIELD'),
-        action: 'CONFIG',
-        entityType: 'Village',
-        entityId: village.id,
-        details: JSON.stringify({ villageName: trimmedName, status: village.status }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: userRole as 'ADMIN' | 'FIELD',
+      action: 'CONFIG',
+      entityType: 'Village',
+      entityId: village.id,
+      details: { villageName: trimmedName, province: normalizedProvince, status: village.status },
     });
 
     return NextResponse.json(village, { status: 201 });
@@ -132,17 +140,14 @@ export async function DELETE(request: Request) {
 
     await db.village.delete({ where: { id } });
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
-        action: 'CONFIG',
-        entityType: 'Village',
-        entityId: id,
-        details: JSON.stringify({ action: 'DELETE_VILLAGE', villageId: id }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'CONFIG',
+      entityType: 'Village',
+      entityId: id,
+      details: { action: 'DELETE_VILLAGE', villageId: id },
     });
 
     return NextResponse.json({ success: true });

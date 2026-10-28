@@ -86,9 +86,9 @@ class ConfigDao {
     'I-Tub': 'Ratanakiri', 'Korng Nork': 'Ratanakiri', 'Kalan': 'Ratanakiri', 'Srae Pokthom': 'Ratanakiri',
     'Thmey': 'Ratanakiri', 'Srae Chhuk': 'Ratanakiri', 'Srae Poktoch': 'Ratanakiri', 'Srae Chrey': 'Ratanakiri',
     'Roveak': 'Ratanakiri', 'Bak Kae': 'Ratanakiri',
-    'Pu Char': 'Mondolkiri', 'Pu Kung': 'Mondolkiri', 'Ou Chra': 'Mondolkiri', 'Andoung Kraloeng': 'Mondolkiri',
-    'Srae Lvi': 'Mondolkiri', 'Gati': 'Mondolkiri', 'Pu Trom': 'Mondolkiri', 'Chokchar': 'Mondolkiri',
-    'Sre Andaol': 'Mondolkiri', 'Kmoum': 'Mondolkiri', 'Ktung': 'Mondolkiri',
+    'Pu Char': 'Mondulkiri', 'Pu Kung': 'Mondulkiri', 'Ou Chra': 'Mondulkiri', 'Andoung Kraloeng': 'Mondulkiri',
+    'Srae Lvi': 'Mondulkiri', 'Gati': 'Mondulkiri', 'Pu Trom': 'Mondulkiri', 'Chokchar': 'Mondulkiri',
+    'Sre Andaol': 'Mondulkiri', 'Kmoum': 'Mondulkiri', 'Ktung': 'Mondulkiri',
   };
 
   double get seedInterestRate => _seedInterestRate;
@@ -99,16 +99,20 @@ class ConfigDao {
 
   List<String> getVillagesForProvinces(List<String> assignedProvinces) {
     final cleanProvinces = assignedProvinces
-        .map((p) => p.toLowerCase().trim())
+        .map((p) {
+          final lower = p.toLowerCase().trim();
+          return lower == 'mondolkiri' ? 'mondulkiri' : lower;
+        })
         .where((p) => p.isNotEmpty)
         .toList();
 
-    if (cleanProvinces.isEmpty || cleanProvinces.length >= 4 || cleanProvinces.contains('all')) {
+    if (cleanProvinces.isEmpty || cleanProvinces.length >= 4 || cleanProvinces.contains('all') || cleanProvinces.contains('na')) {
       return List.unmodifiable(_villages);
     }
 
     final filtered = _villages.where((v) {
-      final prov = _villageProvinceMapping[v]?.toLowerCase().trim();
+      final rawProv = _villageProvinceMapping[v]?.toLowerCase().trim();
+      final prov = rawProv == 'mondolkiri' ? 'mondulkiri' : rawProv;
       return prov != null && cleanProvinces.contains(prov);
     }).toList();
 
@@ -288,7 +292,7 @@ class ConfigDao {
         final name = loc['name']?.toString();
         final type = loc['type']?.toString();
         if (name != null) {
-          if (type == 'BUYING_STATION') {
+          if (type == 'BUYING_STATION' || type == 'STATION') {
             stations.add(name);
           } else if (type == 'WAREHOUSE') {
             warehouses.add(name);

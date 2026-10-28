@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -98,17 +99,14 @@ export async function POST(request: Request) {
       });
     }
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: (userRole as 'ADMIN' | 'FINANCE'),
-        action: 'CONFIG',
-        entityType: 'PaddyPriceSpec',
-        entityId: priceSpec.id,
-        details: JSON.stringify({ variety: trimmedVariety, grade: trimmedGrade, basePrice }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: userRole as 'ADMIN' | 'FINANCE',
+      action: 'CONFIG',
+      entityType: 'PaddyPriceSpec',
+      entityId: priceSpec.id,
+      details: { variety: trimmedVariety, grade: trimmedGrade, basePrice },
     });
 
     return NextResponse.json(priceSpec, { status: 201 });
@@ -137,17 +135,14 @@ export async function DELETE(request: Request) {
 
     await db.paddyPriceSpec.delete({ where: { id } });
 
-    // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Admin',
-        userRole: 'ADMIN',
-        action: 'CONFIG',
-        entityType: 'PaddyPriceSpec',
-        entityId: id,
-        details: JSON.stringify({ action: 'DELETE_PRICE_SPEC', priceSpecId: id }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Admin',
+      userRole: 'ADMIN',
+      action: 'CONFIG',
+      entityType: 'PaddyPriceSpec',
+      entityId: id,
+      details: { action: 'DELETE_PRICE_SPEC', priceSpecId: id },
     });
 
     return NextResponse.json({ success: true });

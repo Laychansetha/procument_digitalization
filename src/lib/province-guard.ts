@@ -7,6 +7,17 @@ export interface SessionUserInfo {
   [key: string]: any;
 }
 
+export const CANONICAL_PROVINCES = ['Preah Vihear', 'Stung Treng', 'Ratanakiri', 'Mondulkiri'] as const;
+
+export function normalizeProvinceName(name: string): string {
+  const clean = name.trim().toLowerCase();
+  if (clean === 'preah vihear') return 'Preah Vihear';
+  if (clean === 'stung treng') return 'Stung Treng';
+  if (clean === 'ratanakiri') return 'Ratanakiri';
+  if (clean === 'mondulkiri' || clean === 'mondolkiri') return 'Mondulkiri';
+  return name.trim();
+}
+
 /**
  * Returns allowed village names array for FIELD team user session.
  * If user is ADMIN or non-FIELD role, or assignedProvinces contains all provinces, returns null (unrestricted).
@@ -27,25 +38,33 @@ export async function getAllowedVillagesForSession(
     return null;
   }
 
-  const provinces = rawAssigned
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const normalizedProvinces = Array.from(
+    new Set(
+      rawAssigned
+        .split(',')
+        .map((p) => normalizeProvinceName(p))
+        .filter(Boolean)
+    )
+  );
 
   // If user is assigned to all 4 provinces, return null (unrestricted)
-  const allProvinces = ['Preah Vihear', 'Stung Treng', 'Ratanakiri', 'Mondolkiri'];
-  if (provinces.length >= 4 || allProvinces.every((ap) => provinces.some((p) => p.toLowerCase() === ap.toLowerCase()))) {
+  if (
+    normalizedProvinces.length >= 4 ||
+    CANONICAL_PROVINCES.every((ap) => normalizedProvinces.some((p) => p.toLowerCase() === ap.toLowerCase()))
+  ) {
     return null;
   }
 
-  const matchedDbProvinces = allProvinces.filter((ap) =>
-    provinces.some((p) => p.toLowerCase() === ap.toLowerCase())
-  );
+  // Expand Mondulkiri/Mondolkiri for DB query safety
+  const queryProvinces = new Set<string>(normalizedProvinces);
+  if (queryProvinces.has('Mondulkiri')) {
+    queryProvinces.add('Mondolkiri');
+  }
 
   // Fetch villages belonging to user's assigned provinces
   const villages = await db.village.findMany({
     where: {
-      province: { in: matchedDbProvinces.length > 0 ? matchedDbProvinces : provinces },
+      province: { in: Array.from(queryProvinces) },
     },
     select: { name: true },
   });

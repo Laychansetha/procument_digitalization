@@ -5,6 +5,17 @@ import path from 'path';
 const prisma = new PrismaClient();
 
 async function cleanDatabase() {
+  const dbUrl = process.env.DATABASE_URL || '';
+  const isLocalHost = dbUrl.includes('@localhost:') || dbUrl.includes('@127.0.0.1:');
+  const isDevDb = dbUrl.includes('/ibis_db');
+
+  if (!isLocalHost || !isDevDb) {
+    console.error('❌ SAFETY ABORT: DATABASE_URL does not point to local testing database (localhost / ibis_db).');
+    console.error(`   Current DATABASE_URL: ${dbUrl.replace(/:[^:@]+@/, ':****@')}`);
+    process.exit(1);
+  }
+
+  console.log('🔒 Verified local development database (localhost:5432 / ibis_db).');
   console.log('🧹 Cleaning test transaction data while preserving master configuration...');
 
   // Delete transaction records in order of foreign key dependencies
@@ -34,6 +45,16 @@ async function cleanDatabase() {
 
   const deletedAuditLogs = await prisma.auditLog.deleteMany({});
   console.log(`  ✓ Cleared ${deletedAuditLogs.count} Audit Logs.`);
+
+  // Ensure any province spelling discrepancies in master data are normalized
+  await prisma.village.updateMany({
+    where: { province: 'Mondolkiri' },
+    data: { province: 'Mondulkiri' },
+  });
+  await prisma.user.updateMany({
+    where: { assignedProvinces: 'Mondolkiri' },
+    data: { assignedProvinces: 'Mondulkiri' },
+  });
 
   // Clean uploaded test files in public/uploads directory
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads');

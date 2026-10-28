@@ -130,6 +130,8 @@ model FarmerProfile {
 
   @@index([familyCode])
   @@index([farmerName])
+  @@index([village])
+  @@index([createdBy])
 }
 
 model SpecsRecord {
@@ -157,6 +159,9 @@ model SpecsRecord {
 
   @@index([familyCode])
   @@index([farmerName])
+  @@index([village])
+  @@index([createdBy])
+  @@index([createdAt])
 }
 
 model PurchaseRecord {
@@ -178,7 +183,7 @@ model PurchaseRecord {
   purchasingStaffName String?          // Name of purchasing staff member
   specsRecordId       String?          // Linked Specs Record ID to prevent duplicate entry
   transportRecordId   String?          // Linked Transport Record ID once loaded on a truck
-  transportRecord     TransportRecord? @relation(fields: [transportRecordId], references: [id])
+  transportRecord     TransportRecord? @relation(fields: [transportRecordId], references: [id], onDelete: SetNull)
   status              String           @default("PENDING") // PENDING, IN_TRANSIT, RECEIVED, VERIFIED, DISBURSED
   createdBy           String
   user                User             @relation(fields: [createdBy], references: [id])
@@ -188,6 +193,12 @@ model PurchaseRecord {
 
   @@index([familyCode])
   @@index([farmerName])
+  @@index([village])
+  @@index([createdBy])
+  @@index([specsRecordId])
+  @@index([transportRecordId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model PurchaseItem {
@@ -203,6 +214,8 @@ model PurchaseItem {
   quantity        Float
   totalValue      Float
   sackWeights     String?        // JSON array string of individual sack weights e.g. "[100.0, 100.0, 100.0]"
+
+  @@index([purchaseId])
 }
 
 model TransportRecord {
@@ -237,6 +250,10 @@ model TransportRecord {
   lots                 TransportLot[]
   purchases            PurchaseRecord[]
   intake               WarehouseIntake?
+
+  @@index([createdBy])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model TransportLot {
@@ -250,6 +267,9 @@ model TransportLot {
   sacks            Int
   weight           Float
   purchaseRecordId String?
+
+  @@index([transportId])
+  @@index([purchaseRecordId])
 }
 
 model WarehouseIntake {
@@ -277,12 +297,16 @@ model WarehouseIntake {
   inventoryNotes       String?
   status               String    @default("RECEIVED")
   createdAt            DateTime        @default(now())
+
+  @@index([status])
+  @@index([inventoryStatus])
+  @@index([createdAt])
 }
 
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userName   String
   userRole   Role
   action     String   // CREATE, UPDATE, DELETE, DISBURSE, INTAKE, CONFIG
@@ -291,6 +315,10 @@ model AuditLog {
   details    String?  // JSON string
   ipAddress  String?
   timestamp  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([timestamp])
 }
 
 model SystemSetting {

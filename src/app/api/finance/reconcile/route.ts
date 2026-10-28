@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Reconcile purchases with farmer profiles & transport warehouse intakes
     const purchases = await db.purchaseRecord.findMany({
       include: {
@@ -77,16 +83,14 @@ export async function POST(request: Request) {
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName: session.user?.name || 'Finance Officer',
-        userRole: userRole as 'FINANCE' | 'ADMIN',
-        action: 'DISBURSE',
-        entityType: 'PurchaseRecord',
-        entityId: purchaseId,
-        details: JSON.stringify({ newStatus: status, familyCode: updated.familyCode, netPayment: updated.netPayment }),
-      },
+    await logAudit({
+      userId,
+      userName: session.user?.name || 'Finance Officer',
+      userRole: userRole as 'FINANCE' | 'ADMIN',
+      action: 'DISBURSE',
+      entityType: 'PurchaseRecord',
+      entityId: purchaseId,
+      details: { newStatus: status, familyCode: updated.familyCode, netPayment: updated.netPayment },
     });
 
     return NextResponse.json(updated);

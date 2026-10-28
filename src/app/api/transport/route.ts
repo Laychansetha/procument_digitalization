@@ -7,6 +7,7 @@ import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/provinc
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { generateTransportId } from '@/lib/transport-id';
 import { getWarehouseId } from '@/lib/warehouse-config';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
   try {
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
     const totalFieldWeight = purchasesToAssign.reduce((sum, p) => sum + p.totalWeight, 0);
 
     const savedTruckPhoto = await processAndSaveImage(truckPhotoUrl, 'truck_loading');
+    const savedDriverSig = await processAndSaveImage(driverSignature, 'sig_driver');
 
     // Generate Transport ID combining truck plate number and dispatch date in DDMMYY format
     // Example: Truck plate: 3A-8899, Dispatch date: 26 October 2026 -> 3A-8899_261026
@@ -112,7 +114,7 @@ export async function POST(request: Request) {
         mobileNumber: mobileNumber || null,
         truckCleaned: truckCleaned ?? true,
         truckPhotoUrl: savedTruckPhoto || truckPhotoUrl || null,
-        driverSignature: driverSignature || null,
+        driverSignature: savedDriverSig || driverSignature || null,
         loadingLocation: loadingLocation || 'Chhaeb Buying Station',
         destinationWarehouse: getWarehouseId(destinationWarehouse),
         notes: notes || null,
@@ -150,21 +152,20 @@ export async function POST(request: Request) {
     });
 
     // Audit Log
-    await db.auditLog.create({
-      data: {
-        userId,
-        userName,
-        userRole,
-        action: 'CREATE',
-        entityType: 'TransportRecord',
-        entityId: transport.id,
-        details: JSON.stringify({
-          driverName,
-          plateNumber,
-          totalSacks,
-          totalFieldWeight,
-          purchaseCount: purchasesToAssign.length,
-        }),
+    await logAudit({
+      userId,
+      userEmail: session?.user?.email,
+      userName,
+      userRole,
+      action: 'CREATE',
+      entityType: 'TransportRecord',
+      entityId: transport.id,
+      details: {
+        driverName,
+        plateNumber,
+        totalSacks,
+        totalFieldWeight,
+        purchaseCount: purchasesToAssign.length,
       },
     });
 
