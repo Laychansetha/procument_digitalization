@@ -82,10 +82,11 @@ if [ "$BACKUP_COUNT" -gt "$KEEP_BACKUPS" ]; then
   success "Old backups cleaned (kept last $KEEP_BACKUPS)."
 fi
 
-# ─── Step 6: Apply Database Migrations ──────────────────────────────────────
-log "Step 6/8 — Applying Prisma database migrations..."
-npx prisma migrate deploy
-success "Database migrations applied."
+# ─── Step 6: Sync Prisma Database Schema ─────────────────────────────────────
+log "Step 6/8 — Syncing Prisma database schema to PostgreSQL..."
+npx prisma db push
+mkdir -p "$APP_DIR/public/uploads"
+success "Database schema synced and uploads directory verified."
 
 # ─── Step 7: Build Next.js Application ───────────────────────────────────────
 log "Step 7/8 — Building Next.js application..."

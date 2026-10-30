@@ -210,9 +210,10 @@ async function main() {
 
   // 6. Seed Official Warehouses & Buying Stations from Excel configuration
   const defaultLocations = [
-    { name: 'CACC (KPT)', code: 'WH-CACC', type: 'WAREHOUSE', address: 'KPT Central Warehouse' },
-    { name: 'Amru Nature (KPG)', code: 'WH-AMRU', type: 'WAREHOUSE', address: 'KPG Processing Facility' },
-    { name: 'Other', code: 'WH-OTH', type: 'WAREHOUSE', address: 'General / Regional Hub' },
+    { name: 'CACC (KPT)', code: 'W002', type: 'WAREHOUSE', address: 'KPT Central Warehouse' },
+    { name: 'Amru Nature (KPG)', code: 'W003', type: 'WAREHOUSE', address: 'KPG Processing Facility' },
+    { name: 'Koh Nhek', code: 'W004', type: 'WAREHOUSE', address: 'Koh Nhek Regional Warehouse' },
+    { name: 'Other', code: 'W005', type: 'WAREHOUSE', address: 'General / Regional Hub' },
     { name: 'Preah Vihear', code: 'ST-PVH', type: 'STATION', address: 'Preah Vihear Regional Station' },
     { name: 'Stung Treng', code: 'ST-STR', type: 'STATION', address: 'Stung Treng Regional Station' },
     { name: 'Ratanakiri', code: 'ST-RAT', type: 'STATION', address: 'Ratanakiri Regional Station' },

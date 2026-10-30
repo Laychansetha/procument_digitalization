@@ -177,6 +177,13 @@ export async function POST(request: Request) {
 
     // 5. PAYMENT PROCESSING (COMPLETE PAYMENT)
     if (action === 'COMPLETE_PAYMENT') {
+      if (!transport.intake || transport.intake.inventoryStatus !== 'INVENTORY_RECORDED') {
+        return NextResponse.json(
+          { error: 'Cannot complete payment before warehouse receiving and inventory recording.' },
+          { status: 400 }
+        );
+      }
+
       const { paymentReceiptUrl } = body;
       const userName = session.user?.name || session.user?.email || 'Finance Officer';
 

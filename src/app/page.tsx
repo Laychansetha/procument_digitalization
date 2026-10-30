@@ -2900,11 +2900,13 @@ export default function OperationsDashboard() {
     const trId = formatTransportId(t).toLowerCase();
     const legacyTrId = `tr-2026-${t.id.slice(-6)}`.toLowerCase();
     const wrId = intake.id ? `wr-2026-${intake.id.slice(-6)}`.toLowerCase() : '';
+    const fullReceivingId = intake.id ? formatReceivingIdWithDate({ ...intake, transport: t }).toLowerCase() : '';
 
     const matchesSearch =
       trId.includes(q) ||
       legacyTrId.includes(q) ||
       wrId.includes(q) ||
+      fullReceivingId.includes(q) ||
       t.driverName.toLowerCase().includes(q) ||
       t.plateNumber.toLowerCase().includes(q) ||
       purchases.some((p: any) => p.farmerName.toLowerCase().includes(q) || p.familyCode.toLowerCase().includes(q));

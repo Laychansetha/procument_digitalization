@@ -35,6 +35,7 @@ export async function GET() {
 }
 
 import { logAudit } from '@/lib/audit';
+import { formatReceivingIdWithDate } from '@/lib/warehouse-config';
 
 export async function POST(request: Request) {
   try {
@@ -108,6 +109,8 @@ export async function POST(request: Request) {
       },
     });
 
+    const formattedReceivingId = formatReceivingIdWithDate(updatedIntake);
+
     // Safely write Audit Log entry
     await logAudit({
       userId,
@@ -118,7 +121,7 @@ export async function POST(request: Request) {
       entityType: 'WarehouseIntake',
       entityId: intakeId,
       details: {
-        warehouseId: `WR-2026-${intakeId.slice(-6).toUpperCase()}`,
+        warehouseId: formattedReceivingId,
         inventoryLocation: inventoryLocation || 'Main Warehouse Storage',
         netWeight: existingIntake.warehouseNetWeight,
       },
@@ -126,7 +129,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Inventory recorded successfully for Warehouse Record WR-2026-${intakeId.slice(-6).toUpperCase()}`,
+      message: `Inventory recorded successfully for Warehouse Record ${formattedReceivingId}`,
       intake: updatedIntake,
     });
   } catch (error: any) {
