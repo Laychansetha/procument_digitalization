@@ -13,6 +13,7 @@ interface WarehouseDetailsModalProps {
   onClose: () => void;
   intake: any;
   maxTolerancePercent?: number; // Configurable tolerance from Admin Settings
+  exportUsername?: string;
 }
 
 export default function WarehouseDetailsModal({
@@ -20,6 +21,7 @@ export default function WarehouseDetailsModal({
   onClose,
   intake,
   maxTolerancePercent = 1.0,
+  exportUsername,
 }: WarehouseDetailsModalProps) {
   if (!isOpen || !intake) return null;
 
@@ -138,10 +140,11 @@ export default function WarehouseDetailsModal({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().split('T')[0];
-    const safeWrId = receivingIdWithDate.replace(/[^a-zA-Z0-9-]/g, '_');
+    const safeTrId = transportIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
+    const exportUser = (exportUsername || intake.receivingStaffName || 'phearun').replace(/[^a-zA-Z0-9-]/g, '_');
 
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Warehouse_Receiving_${safeWrId}_${dateStr}.csv`);
+    link.setAttribute('download', `${safeTrId}_${arrivedWh}_${exportUser}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

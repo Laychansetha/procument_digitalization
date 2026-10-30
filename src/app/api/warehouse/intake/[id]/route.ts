@@ -89,7 +89,13 @@ export async function PUT(
 
     // Mark active rejection logs as RESOLVED when Warehouse resubmits corrected intake
     await db.rejectionLog.updateMany({
-      where: { entityType: 'WarehouseIntake', entityId: id, status: 'REJECTED' },
+      where: {
+        OR: [
+          { entityType: 'WarehouseIntake', entityId: id },
+          ...(existing.transportId ? [{ entityType: 'TransportRecord', entityId: existing.transportId }] : []),
+        ],
+        status: 'REJECTED',
+      },
       data: {
         status: 'RESOLVED',
         resolvedAt: new Date(),

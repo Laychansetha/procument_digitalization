@@ -7,7 +7,7 @@ import { formatImageSrc } from '@/lib/image-utils';
 import RejectionHistorySection from '@/components/RejectionHistorySection';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
-import { formatReceivingIdWithDate } from '@/lib/warehouse-config';
+import { formatReceivingIdWithDate, getWarehouseId } from '@/lib/warehouse-config';
 
 interface FinanceTruckDetailsModalProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ interface FinanceTruckDetailsModalProps {
     warningKg: number;
     criticalKg: number;
   };
+  exportUsername?: string;
 }
 
 export default function FinanceTruckDetailsModal({
@@ -25,6 +26,7 @@ export default function FinanceTruckDetailsModal({
   onClose,
   truckData,
   scaleToleranceConfig = { acceptableKg: 300, warningKg: 500, criticalKg: 500 },
+  exportUsername,
 }: FinanceTruckDetailsModalProps) {
   const [exchangeRate, setExchangeRate] = useState<number | ''>('');
 
@@ -107,8 +109,11 @@ export default function FinanceTruckDetailsModal({
     rows.push(['--- FARMER BANK DISBURSEMENT DETAILS ---']);
     rows.push([
       'Purchase ID',
-      'Family Code',
-      'Farmer Name',
+      'Order Date',
+      'Delivery Date',
+      'Warehouse Code',
+      'Supplier Code',
+      'Supplier Name',
       'Village',
       'Paddy Variety',
       'Grade',
@@ -117,20 +122,38 @@ export default function FinanceTruckDetailsModal({
       'Net Payment (KHR)',
       ...(isUSD ? ['Net Payment (USD)'] : []),
       'Bank Name',
-      'Account Number',
+      'Bank Account',
       'Account Holder',
+      'Phone Number',
       'Relationship',
       'Bank Document Proof Attached',
       'Farmer Signed',
     ]);
 
+    const formatDateDDMMYYYY = (dateVal: any) => {
+      if (!dateVal) return 'N/A';
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return 'N/A';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    const deliveryDateFormatted = formatDateDDMMYYYY(intake.createdAt || transport.createdAt);
+    const warehouseCode = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
       const f = p.farmerProfile || {};
       const pIdFormatted = formatPurchaseId(p);
+      const orderDateFormatted = formatDateDDMMYYYY(p.createdAt || p.date);
 
       rows.push([
         pIdFormatted,
+        orderDateFormatted,
+        deliveryDateFormatted,
+        warehouseCode,
         p.familyCode || '',
         p.farmerName || '',
         p.village || '',
@@ -143,6 +166,7 @@ export default function FinanceTruckDetailsModal({
         f.bankName || 'N/A',
         f.accountNumber || 'N/A',
         f.accountHolder || p.farmerName,
+        f.phone || 'N/A',
         f.relationship || 'Self',
         f.bankDocumentUrl ? 'YES' : 'NO',
         p.signatureFarmer ? 'YES' : 'NO',
@@ -157,9 +181,10 @@ export default function FinanceTruckDetailsModal({
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().split('T')[0];
     const safeTrId = transportIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
+    const exportUser = (exportUsername || transport.paidByStaffName || 'chanvoleak').replace(/[^a-zA-Z0-9-]/g, '_');
 
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Finance_Payment_Report_${safeTrId}_${dateStr}.csv`);
+    link.setAttribute('download', `${safeTrId}_${warehouseCode}_${exportUser}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

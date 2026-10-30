@@ -1930,7 +1930,7 @@ export default function OperationsDashboard() {
     const transport = intake.transport || {};
     // Locking rule: Cannot edit if Finance team has already verified or paid
     if (transport.status === 'VERIFIED' || transport.status === 'DISBURSED') {
-      alert(`This record (WR-2026-${intake.id.slice(-6).toUpperCase()}) has already been verified by Finance and can no longer be edited.`);
+      alert(`This record (${formatReceivingIdWithDate(intake)}) has already been verified by Finance and can no longer be edited.`);
       return;
     }
 
@@ -2272,8 +2272,11 @@ export default function OperationsDashboard() {
     rows.push(['--- FARMER BANK DISBURSEMENT DETAILS ---']);
     rows.push([
       'Purchase ID',
-      'Family Code',
-      'Farmer Name',
+      'Order Date',
+      'Delivery Date',
+      'Warehouse Code',
+      'Supplier Code',
+      'Supplier Name',
       'Village',
       'Paddy Variety',
       'Grade',
@@ -2281,20 +2284,38 @@ export default function OperationsDashboard() {
       'Field Net Weight (Kg)',
       'Net Payment (KHR)',
       'Bank Name',
-      'Account Number',
+      'Bank Account',
       'Account Holder',
+      'Phone Number',
       'Relationship',
       'Bank Document Proof Attached',
       'Farmer Signed',
     ]);
 
+    const formatDateDDMMYYYY = (dateVal: any) => {
+      if (!dateVal) return 'N/A';
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return 'N/A';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    const deliveryDateFormatted = formatDateDDMMYYYY(intake.createdAt || transport.createdAt);
+    const warehouseCode = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+
     purchases.forEach((p: any) => {
       const item = p.items?.[0] || {};
       const f = p.farmerProfile || {};
       const pIdFormatted = formatPurchaseId(p);
+      const orderDateFormatted = formatDateDDMMYYYY(p.createdAt || p.date);
 
       rows.push([
         pIdFormatted,
+        orderDateFormatted,
+        deliveryDateFormatted,
+        warehouseCode,
         p.familyCode || '',
         p.farmerName || '',
         p.village || '',
@@ -2306,6 +2327,7 @@ export default function OperationsDashboard() {
         f.bankName || 'N/A',
         f.accountNumber || 'N/A',
         f.accountHolder || p.farmerName,
+        f.phone || 'N/A',
         f.relationship || 'Self',
         f.bankDocumentUrl ? 'YES' : 'NO',
         p.signatureFarmer ? 'YES' : 'NO',
@@ -2320,9 +2342,14 @@ export default function OperationsDashboard() {
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().split('T')[0];
     const safeTrId = transportIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
+    const financeUser = (
+      currentUserRole === 'FINANCE'
+        ? currentUserName
+        : transport.paidByStaffName || 'chanvoleak'
+    ).replace(/[^a-zA-Z0-9-]/g, '_');
 
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Finance_Payment_Report_${safeTrId}_${dateStr}.csv`);
+    link.setAttribute('download', `${safeTrId}_${warehouseCode}_${financeUser}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2431,10 +2458,16 @@ export default function OperationsDashboard() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().split('T')[0];
-    const safeWrId = receivingIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
+    const safeTrId = transportIdFormatted.replace(/[^a-zA-Z0-9-]/g, '_');
+    const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
+    const warehouseUser = (
+      currentUserRole === 'WAREHOUSE'
+        ? currentUserName
+        : intake.receivingStaffName || 'phearun'
+    ).replace(/[^a-zA-Z0-9-]/g, '_');
 
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Warehouse_Receiving_${safeWrId}_${dateStr}.csv`);
+    link.setAttribute('download', `${safeTrId}_${arrivedWh}_${warehouseUser}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -3043,6 +3076,15 @@ export default function OperationsDashboard() {
           onClose={() => setSelectedIntakeForDetails(null)}
           intake={selectedIntakeForDetails}
           maxTolerancePercent={maxWeightTolerancePercent}
+          exportUsername={
+            activeModule === 'inventory'
+              ? currentUserRole === 'INVENTORY'
+                ? currentUserName
+                : selectedIntakeForDetails?.inventoryStaffName || 'bousong'
+              : currentUserRole === 'WAREHOUSE'
+                ? currentUserName
+                : selectedIntakeForDetails?.receivingStaffName || 'phearun'
+          }
         />
 
         <PrintWarehouseReportModal
@@ -3060,6 +3102,11 @@ export default function OperationsDashboard() {
             warningKg: scaleToleranceWarning,
             criticalKg: scaleToleranceCritical,
           }}
+          exportUsername={
+            currentUserRole === 'FINANCE'
+              ? currentUserName
+              : selectedFinanceTruckForDetails?.transport?.paidByStaffName || 'chanvoleak'
+          }
         />
 
         <PrintFinanceReportModal
@@ -5300,7 +5347,7 @@ export default function OperationsDashboard() {
                 {editingIntakeId && (
                   <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-300 shadow-md">
                     <div className="flex items-center gap-2 font-bold">
-                      <span>✏️ EDIT MODE: Updating Warehouse Receiving Record WR-2026-{editingIntakeId.slice(-6).toUpperCase()}</span>
+                      <span>✏️ EDIT MODE: Updating Warehouse Receiving Record {formatReceivingIdWithDate(warehouseIntakes.find((i) => i.id === editingIntakeId) || { id: editingIntakeId })}</span>
                     </div>
                     <button
                       type="button"
@@ -5763,7 +5810,7 @@ export default function OperationsDashboard() {
                 >
                   <Scale className="w-4 h-4" />
                   {editingIntakeId
-                    ? `Update Warehouse Receiving Record (WR-2026-${editingIntakeId.slice(-6).toUpperCase()})`
+                    ? `Update Warehouse Receiving Record (${formatReceivingIdWithDate(warehouseIntakes.find((i) => i.id === editingIntakeId) || { id: editingIntakeId })})`
                     : 'Confirm & Save Warehouse Intake Scale Record & Photos'}
                 </button>
               </form>

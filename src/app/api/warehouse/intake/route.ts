@@ -129,11 +129,13 @@ export async function POST(request: Request) {
         },
       });
 
-      // Resolve any active rejection logs for this intake
+      // Resolve any active rejection logs for this intake or linked transport
       await db.rejectionLog.updateMany({
         where: {
-          entityType: 'WarehouseIntake',
-          entityId: existingIntake.id,
+          OR: [
+            { entityType: 'WarehouseIntake', entityId: existingIntake.id },
+            { entityType: 'TransportRecord', entityId: transportId },
+          ],
           status: 'REJECTED',
         },
         data: {

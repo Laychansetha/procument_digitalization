@@ -173,7 +173,7 @@ export async function PUT(
       where: {
         OR: [
           { entityType: 'TransportRecord', entityId: id },
-          { entityType: 'WarehouseIntake', entityId: existing.intake?.id },
+          ...(existing.intake ? [{ entityType: 'WarehouseIntake', entityId: existing.intake.id }] : []),
         ],
         status: 'REJECTED',
       },
