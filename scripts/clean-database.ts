@@ -7,15 +7,17 @@ const prisma = new PrismaClient();
 async function cleanDatabase() {
   const dbUrl = process.env.DATABASE_URL || '';
   const isLocalHost = dbUrl.includes('@localhost:') || dbUrl.includes('@127.0.0.1:');
-  const isDevDb = dbUrl.includes('/ibis_db');
+  const isIbisDb = dbUrl.includes('/ibis_db');
+  const isForced = process.argv.includes('--force');
 
-  if (!isLocalHost || !isDevDb) {
-    console.error('❌ SAFETY ABORT: DATABASE_URL does not point to local testing database (localhost / ibis_db).');
+  if ((!isLocalHost && !isForced) || !isIbisDb) {
+    console.error('❌ SAFETY ABORT: DATABASE_URL is a remote database. Pass --force to clean remote ibis_db.');
+    console.error(`   Usage: npx tsx scripts/clean-database.ts --force`);
     console.error(`   Current DATABASE_URL: ${dbUrl.replace(/:[^:@]+@/, ':****@')}`);
     process.exit(1);
   }
 
-  console.log('🔒 Verified local development database (localhost:5432 / ibis_db).');
+  console.log(`🔒 Verified target database (${isLocalHost ? 'local' : 'remote --force'} / ibis_db).`);
   console.log('🧹 Cleaning test transaction data while preserving master configuration...');
 
   // Delete transaction records in order of foreign key dependencies
