@@ -32,10 +32,11 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   final FocusNode _familyCodeFocusNode = FocusNode();
 
   String? _editingId;
+  String? _editingServerRecordId;
   String? _village;
-  String? _paymentMethod;
+  String? _paymentMethod = 'Bank Transfer';
   String? _bankName;
-  String? _relationship;
+  String? _relationship = 'Self';
   String? _passbookPhotoPath;
   String _searchQuery = '';
 
@@ -45,10 +46,27 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   void initState() {
     super.initState();
     _loadHistory();
+    AppDatabase.instance.dbChangeNotifier.addListener(_onDbChanged);
+    ConfigDao.instance.configChangeNotifier.addListener(_onConfigChanged);
+  }
+
+  void _onDbChanged() {
+    if (mounted) _loadHistory();
+  }
+
+  void _onConfigChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    AppDatabase.instance.dbChangeNotifier.removeListener(_onDbChanged);
+    ConfigDao.instance.configChangeNotifier.removeListener(_onConfigChanged);
+    _familyCodeController.dispose();
+    _farmerNameController.dispose();
+    _phoneController.dispose();
+    _accountNumberController.dispose();
+    _accountHolderController.dispose();
     _familyCodeFocusNode.dispose();
     _customRelationshipController.dispose();
     _searchController.dispose();
@@ -64,9 +82,11 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
         ? list
         : list.where((f) => allowedVillages.contains(f.village)).toList();
 
-    setState(() {
-      _localHistory = filtered;
-    });
+    if (mounted) {
+      setState(() {
+        _localHistory = filtered;
+      });
+    }
   }
 
   void _resetForm() {
@@ -78,13 +98,50 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
     _customRelationshipController.clear();
     setState(() {
       _editingId = null;
+      _editingServerRecordId = null;
       _village = null;
-      _paymentMethod = null;
+      _paymentMethod = 'Bank Transfer';
       _bankName = null;
-      _relationship = null;
+      _relationship = 'Self';
       _passbookPhotoPath = null;
     });
     _familyCodeFocusNode.requestFocus();
+  }
+
+  Future<void> _autoFillFromFamilyCode(String codeVal) async {
+    final norm = codeVal.trim().toLowerCase();
+    if (norm.isEmpty) return;
+
+    final specs = await AppDatabase.instance.getAllSpecs();
+    final sMatches = specs.where((s) => s.familyCode.trim().toLowerCase() == norm).toList();
+    if (sMatches.length == 1) {
+      final match = sMatches.first;
+      setState(() {
+        if (_farmerNameController.text.trim().isEmpty) {
+          _farmerNameController.text = match.farmerName;
+        }
+        _village ??= match.village;
+        if (_relationship == 'Self' && _accountHolderController.text.trim().isEmpty) {
+          _accountHolderController.text = match.farmerName;
+        }
+      });
+      return;
+    }
+
+    final purchases = await AppDatabase.instance.getAllPurchases();
+    final pMatches = purchases.where((p) => p.familyCode.trim().toLowerCase() == norm).toList();
+    if (pMatches.length == 1) {
+      final match = pMatches.first;
+      setState(() {
+        if (_farmerNameController.text.trim().isEmpty) {
+          _farmerNameController.text = match.farmerName;
+        }
+        _village ??= match.village;
+        if (_relationship == 'Self' && _accountHolderController.text.trim().isEmpty) {
+          _accountHolderController.text = match.farmerName;
+        }
+      });
+    }
   }
 
   Future<void> _searchAndLoadFarmerInfo() async {
@@ -115,8 +172,11 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           _familyCodeController.text = s.familyCode;
           _farmerNameController.text = s.farmerName;
           _village = s.village;
+          if (_relationship == 'Self' && _accountHolderController.text.trim().isEmpty) {
+            _accountHolderController.text = s.farmerName;
+          }
         });
-        AppNotification.showSuccess(context, 'Farmer Loaded');
+        if (mounted) AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingSpecs.map((s) => {'code': s.familyCode, 'name': s.farmerName, 'village': s.village}).toList());
       }
@@ -139,8 +199,11 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           _familyCodeController.text = p.familyCode;
           _farmerNameController.text = p.farmerName;
           _village = p.village;
+          if (_relationship == 'Self' && _accountHolderController.text.trim().isEmpty) {
+            _accountHolderController.text = p.farmerName;
+          }
         });
-        AppNotification.showSuccess(context, 'Farmer Loaded');
+        if (mounted) AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingPurchases.map((p) => {'code': p.familyCode, 'name': p.farmerName, 'village': p.village}).toList());
       }
@@ -180,6 +243,9 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                           _familyCodeController.text = item['code']!;
                           _farmerNameController.text = item['name']!;
                           _village = item['village'];
+                          if (_relationship == 'Self' && _accountHolderController.text.trim().isEmpty) {
+                            _accountHolderController.text = item['name']!;
+                          }
                         });
                       },
                     );
@@ -250,20 +316,39 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
         ? (_customRelationshipController.text.trim().isEmpty ? 'Other' : _customRelationshipController.text.trim())
         : (_relationship ?? 'Self');
 
+    final normCode = _familyCodeController.text.trim().toUpperCase();
+    final normVillage = _village!.trim();
+    final farmerName = _farmerNameController.text.trim();
+
+    // Upsert locally by composite key (Family Code + Village) matching Web App POST /api/farmers
+    String targetId = _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}';
+    String? targetServerId = _editingServerRecordId;
+    if (_editingId == null) {
+      for (final existing in _localHistory) {
+        if (existing.familyCode.toUpperCase() == normCode && existing.village == normVillage) {
+          targetId = existing.id;
+          targetServerId = existing.serverRecordId;
+          break;
+        }
+      }
+    }
+
     final record = FarmerProfile(
-      id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
-      familyCode: _familyCodeController.text.trim(),
-      farmerName: _farmerNameController.text.trim(),
-      village: _village!,
+      id: targetId,
+      serverRecordId: targetServerId,
+      familyCode: normCode,
+      farmerName: farmerName,
+      village: normVillage,
       phone: _phoneController.text.trim(),
       paymentMethod: _paymentMethod!,
-      bankName: _paymentMethod == 'Bank Transfer' ? (_bankName ?? 'ABA Bank') : 'Cash',
-      accountNumber: _accountNumberController.text.trim(),
-      accountHolder: _accountHolderController.text.trim().isEmpty ? _farmerNameController.text.trim() : _accountHolderController.text.trim(),
+      bankName: _paymentMethod == 'Bank Transfer' ? (_bankName ?? (ConfigDao.instance.banks.isNotEmpty ? ConfigDao.instance.banks.first : 'ABA Bank')) : 'Cash',
+      accountNumber: _paymentMethod == 'Bank Transfer' ? _accountNumberController.text.trim() : '—',
+      accountHolder: _accountHolderController.text.trim().isEmpty ? farmerName : _accountHolderController.text.trim(),
       relationship: finalRelationship,
       bankDocumentUrl: _passbookPhotoPath,
       createdAt: DateTime.now(),
       isSynced: false,
+      syncError: null,
     );
 
     await AppDatabase.instance.insertFarmer(record);
@@ -279,18 +364,22 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   void _editRecord(FarmerProfile item) {
     final rel = item.relationship;
     const stdValues = ['Self', 'Husband', 'Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother'];
+    final banks = ConfigDao.instance.banks;
 
     setState(() {
       _editingId = item.id;
+      _editingServerRecordId = item.serverRecordId;
       _familyCodeController.text = item.familyCode;
       _farmerNameController.text = item.farmerName;
       _phoneController.text = item.phone ?? '';
       _village = item.village;
-      _paymentMethod = item.paymentMethod;
-      _bankName = item.bankName;
-      _accountNumberController.text = item.accountNumber ?? '';
-      _accountHolderController.text = item.accountHolder ?? '';
-      
+      _paymentMethod = ['Bank Transfer', 'Cash'].contains(item.paymentMethod) ? item.paymentMethod : 'Bank Transfer';
+      _bankName = (item.bankName != null && banks.contains(item.bankName))
+          ? item.bankName
+          : (banks.isNotEmpty ? banks.first : null);
+      _accountNumberController.text = (item.accountNumber == '—') ? '' : (item.accountNumber ?? '');
+      _accountHolderController.text = item.accountHolder ?? item.farmerName;
+
       if (stdValues.contains(rel)) {
         _relationship = rel;
         _customRelationshipController.clear();
@@ -309,7 +398,6 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   }
 
   Future<void> _deleteRecord(FarmerProfile item) async {
-
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -345,7 +433,9 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(color: AppTheme.skyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+            Expanded(
+              child: Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(color: AppTheme.skyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -365,12 +455,15 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-              Text('Phone: ${item.phone ?? 'N/A'}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-              Text('Bank: ${item.bankName} (${item.paymentMethod})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-              Text('Account #: ${item.accountNumber ?? 'N/A'} (${item.accountHolder})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-              Text('Relationship: ${item.relationship}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-              
+              Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+              Text('Phone: ${item.phone != null && item.phone!.isNotEmpty ? item.phone : 'N/A'}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+              Text('Bank: ${item.bankName ?? 'N/A'} (${item.paymentMethod})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+              Text('Account #: ${item.accountNumber ?? 'N/A'} (${item.accountHolder ?? item.farmerName})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+              Text('Relationship: ${item.relationship}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+              if (item.syncError != null && item.syncError!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('⚠️ Sync Warning: ${item.syncError}', style: const TextStyle(color: AppTheme.errorRed, fontSize: 11, fontWeight: FontWeight.bold)),
+              ],
               if (item.bankDocumentUrl != null && item.bankDocumentUrl!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text('Bank Passbook Attachment:', style: TextStyle(fontSize: 11, color: AppTheme.textMuted, fontWeight: FontWeight.bold)),
@@ -378,7 +471,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    height: 150,
+                    height: 160,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: AppTheme.inputBackground,
@@ -387,7 +480,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                     ),
                     child: BankDocumentPreview(
                       imagePath: item.bankDocumentUrl!,
-                      size: 150,
+                      size: 160,
                       enableZoomOnClick: true,
                     ),
                   ),
@@ -397,15 +490,14 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           ),
         ),
         actions: [
-          if (!item.isSynced)
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _editRecord(item);
-              },
-              icon: const Icon(Icons.edit, size: 16, color: AppTheme.skyBlue),
-              label: const Text('Edit', style: TextStyle(color: AppTheme.skyBlue)),
-            ),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _editRecord(item);
+            },
+            icon: const Icon(Icons.edit, size: 16, color: AppTheme.skyBlue),
+            label: const Text('Edit', style: TextStyle(color: AppTheme.skyBlue)),
+          ),
           if (!item.isSynced)
             TextButton.icon(
               onPressed: () {
@@ -421,36 +513,377 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
     );
   }
 
-  void _showAlertDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBackground,
-        title: Text(title, style: const TextStyle(color: AppTheme.amberGold, fontWeight: FontWeight.bold)),
-        content: Text(message, style: const TextStyle(color: AppTheme.textWhite)),
-        actions: [ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+  Widget _buildFormCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.account_balance_wallet, color: AppTheme.skyBlue, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    _editingId != null ? 'Edit Farmer Payment Profile' : 'Farmer Payment Info Entry',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _searchAndLoadFarmerInfo,
+                    icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
+                    label: const Text('Load Farmer Info', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.skyBlue,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                  ),
+                  if (_editingId != null) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: _resetForm,
+                      icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                      label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Row 1: Family Code, Farmer Name, Phone
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isWide = constraints.maxWidth > 520;
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildFamilyCodeInput()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildFarmerNameInput()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildPhoneInput()),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildFamilyCodeInput(),
+                        const SizedBox(height: 12),
+                        _buildFarmerNameInput(),
+                        const SizedBox(height: 12),
+                        _buildPhoneInput(),
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Row 2: Village, Payment Method, Commercial Bank
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isWide = constraints.maxWidth > 520;
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildVillageDropdown()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildPaymentMethodDropdown()),
+                        if (_paymentMethod != 'Cash') ...[
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildBankDropdown()),
+                        ],
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildVillageDropdown(),
+                        const SizedBox(height: 12),
+                        _buildPaymentMethodDropdown(),
+                        if (_paymentMethod != 'Cash') ...[
+                          const SizedBox(height: 12),
+                          _buildBankDropdown(),
+                        ],
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Row 3: Account Number, Account Holder, Relationship
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isWide = constraints.maxWidth > 520;
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_paymentMethod != 'Cash') ...[
+                          Expanded(child: _buildAccountNumberInput()),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(child: _buildAccountHolderInput()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildRelationshipDropdown()),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        if (_paymentMethod != 'Cash') ...[
+                          _buildAccountNumberInput(),
+                          const SizedBox(height: 12),
+                        ],
+                        _buildAccountHolderInput(),
+                        const SizedBox(height: 12),
+                        _buildRelationshipDropdown(),
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 20),
+
+          InkWell(
+            onTap: _takePhoto,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.skyBlue.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: BankDocumentPreview(
+                            imagePath: _passbookPhotoPath!,
+                            size: 48,
+                            enableZoomOnClick: true,
+                          ),
+                        )
+                      : const Icon(Icons.camera_alt, color: AppTheme.skyBlue, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
+                              ? '✓ Bank Passbook Photo Attached'
+                              : 'Select / Snap Photo of Bank Passbook',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
+                                ? AppTheme.emeraldLight
+                                : AppTheme.textWhite,
+                          ),
+                        ),
+                        const Text(
+                          'Tap to choose from Camera or Gallery. Tap thumbnail to expand.',
+                          style: TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear, color: AppTheme.amberGold, size: 18),
+                      onPressed: () => setState(() => _passbookPhotoPath = null),
+                      tooltip: 'Remove attached photo',
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saveFarmer,
+              icon: Icon(_editingId != null ? Icons.check_circle : Icons.save, size: 18, color: const Color(0xFF0B0F19)),
+              label: Text(
+                _editingId != null ? 'Update Farmer Payment Profile' : 'Save Farmer Payment Profile',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19)),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _editingId != null ? AppTheme.emeraldPrimary : AppTheme.skyBlue,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPassbookThumbnail(String path, double size) {
-    if (kIsWeb) {
-      return Image.network(
-        path,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (ctx, err, stack) => Icon(Icons.camera_alt, color: AppTheme.skyBlue, size: size * 0.6),
-      );
-    } else {
-      return Image.file(
-        File(path),
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (ctx, err, stack) => Icon(Icons.camera_alt, color: AppTheme.skyBlue, size: size * 0.6),
-      );
-    }
+  Widget _buildHistorySection(List<FarmerProfile> filteredHistory) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.account_balance, color: AppTheme.skyBlue, size: 18),
+                  SizedBox(width: 8),
+                  Text('Registered Payment Accounts', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.skyBlue.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('${filteredHistory.length} Profiles', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Search Box
+          TextFormField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search by Family Code, Farmer Name, Village, or Bank...',
+              prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: (val) => setState(() => _searchQuery = val.trim()),
+          ),
+          const SizedBox(height: 12),
+
+          filteredHistory.isEmpty
+              ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(color: AppTheme.inputBackground, borderRadius: BorderRadius.circular(12)),
+                  child: const Center(
+                    child: Text('No matching farmer payment profiles found.', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filteredHistory.length,
+                  itemBuilder: (context, index) {
+                    final item = filteredHistory[index];
+                    final hasError = item.syncError != null && item.syncError!.isNotEmpty;
+                    return Card(
+                      color: AppTheme.inputBackground,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: hasError ? AppTheme.errorRed : AppTheme.borderLight),
+                      ),
+                      child: ListTile(
+                        onTap: () => _showRecordOptionsDialog(item),
+                        leading: item.bankDocumentUrl != null && item.bankDocumentUrl!.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: BankDocumentPreview(
+                                  imagePath: item.bankDocumentUrl!,
+                                  size: 40,
+                                  enableZoomOnClick: true,
+                                ),
+                              )
+                            : const Icon(Icons.account_balance, color: AppTheme.skyBlue),
+                        title: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${item.familyCode} · ${item.farmerName}',
+                                style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.skyBlue, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: hasError
+                                    ? AppTheme.errorRed.withOpacity(0.15)
+                                    : (item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15)),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: hasError ? AppTheme.errorRed : (item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
+                                ),
+                              ),
+                              child: Text(
+                                hasError ? '⚠️ Error' : (item.isSynced ? '✓ Synced' : '⏳ Offline'),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: hasError ? AppTheme.errorRed : (item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Text(
+                          '${item.village} · ${item.bankName ?? item.paymentMethod}\nAcc: ${item.accountNumber ?? 'N/A'} (${item.accountHolder ?? item.farmerName} · ${item.relationship})',
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                        ),
+                        trailing: const Icon(
+                          Icons.chevron_right,
+                          color: AppTheme.skyBlue,
+                          size: 18,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -460,379 +893,38 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       final q = _searchQuery.toLowerCase();
       return item.familyCode.toLowerCase().contains(q) ||
           item.farmerName.toLowerCase().contains(q) ||
-          item.village.toLowerCase().contains(q);
+          item.village.toLowerCase().contains(q) ||
+          (item.bankName?.toLowerCase().contains(q) ?? false);
     }).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBackground,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.borderLight),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  OrientationBuilder(
-                    builder: (context, orientation) {
-                      bool isLandscape = orientation == Orientation.landscape;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isTabletLandscape = constraints.maxWidth >= 900;
 
-                      if (isLandscape) {
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.account_balance_wallet, color: AppTheme.skyBlue, size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _editingId != null ? 'Edit Farmer Payment Profile' : 'Farmer Payment Info Entry',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                                ),
-                              ],
-                            ),
-                            Row(
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: _searchAndLoadFarmerInfo,
-                                  icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
-                                  label: const Text('Load Farmer Info', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.skyBlue,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  ),
-                                ),
-                                if (_editingId != null) ...[
-                                  const SizedBox(width: 8),
-                                  TextButton.icon(
-                                    onPressed: _resetForm,
-                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
-                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        );
-                      } else {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.account_balance_wallet, color: AppTheme.skyBlue, size: 20),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _editingId != null ? 'Edit Farmer Payment Profile' : 'Farmer Payment Info Entry',
-                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                                    ),
-                                  ],
-                                ),
-                                if (_editingId != null)
-                                  TextButton.icon(
-                                    onPressed: _resetForm,
-                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
-                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: _searchAndLoadFarmerInfo,
-                              icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
-                              label: const Text('Load Farmer Info', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.skyBlue,
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              ),
-                            ),
-                          ],
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Row 1: Family Code, Farmer Name, Phone
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      bool isDesktop = constraints.maxWidth > 600;
-                      return isDesktop
-                          ? Row(
-                              children: [
-                                Expanded(child: _buildFamilyCodeInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildFarmerNameInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildPhoneInput()),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _buildFamilyCodeInput(),
-                                const SizedBox(height: 12),
-                                _buildFarmerNameInput(),
-                                const SizedBox(height: 12),
-                                _buildPhoneInput(),
-                              ],
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Row 2: Village, Payment Method, Commercial Bank
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      bool isDesktop = constraints.maxWidth > 600;
-                      return isDesktop
-                          ? Row(
-                              children: [
-                                Expanded(child: _buildVillageDropdown()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildPaymentMethodDropdown()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildBankDropdown()),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _buildVillageDropdown(),
-                                const SizedBox(height: 12),
-                                _buildPaymentMethodDropdown(),
-                                const SizedBox(height: 12),
-                                _buildBankDropdown(),
-                              ],
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Row 3: Account Number, Account Holder, Relationship
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      bool isDesktop = constraints.maxWidth > 600;
-                      return isDesktop
-                          ? Row(
-                              children: [
-                                Expanded(child: _buildAccountNumberInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildAccountHolderInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildRelationshipDropdown()),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _buildAccountNumberInput(),
-                                const SizedBox(height: 12),
-                                _buildAccountHolderInput(),
-                                const SizedBox(height: 12),
-                                _buildRelationshipDropdown(),
-                              ],
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  InkWell(
-                    onTap: _takePhoto,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.skyBlue.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: BankDocumentPreview(
-                                    imagePath: _passbookPhotoPath!,
-                                    size: 48,
-                                    enableZoomOnClick: true,
-                                  ),
-                                )
-                              : const Icon(Icons.camera_alt, color: AppTheme.skyBlue, size: 28),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
-                                      ? '✓ Bank Passbook Photo Attached'
-                                      : 'Select / Snap Photo of Bank Passbook',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: _passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty
-                                        ? AppTheme.emeraldLight
-                                        : AppTheme.textWhite,
-                                  ),
-                                ),
-                                const Text(
-                                  'Tap to choose from Camera or Gallery. Tap thumbnail to expand.',
-                                  style: TextStyle(fontSize: 10, color: AppTheme.textMuted),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (_passbookPhotoPath != null && _passbookPhotoPath!.isNotEmpty)
-                            IconButton(
-                              icon: const Icon(Icons.clear, color: AppTheme.amberGold, size: 18),
-                              onPressed: () => setState(() => _passbookPhotoPath = null),
-                              tooltip: 'Remove attached photo',
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _saveFarmer,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _editingId != null ? AppTheme.emeraldPrimary : AppTheme.skyBlue,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(
-                        _editingId != null ? 'Update Farmer Payment Profile' : 'Save Farmer Payment Profile',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // History Header & Search Box
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Registered Payment Accounts', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
-                Text('${filteredHistory.length} Profiles', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Search Box
-            TextFormField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by Family Code, Farmer Name, or Village...',
-                prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-              ),
-              onChanged: (val) => setState(() => _searchQuery = val.trim()),
-            ),
-            const SizedBox(height: 12),
-
-            filteredHistory.isEmpty
-                ? Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: AppTheme.cardBackground, borderRadius: BorderRadius.circular(12)),
-                    child: const Center(
-                      child: Text('No matching farmer payment profiles found.', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-                    ),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: isTabletLandscape
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 6, child: _buildFormCard()),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 5, child: _buildHistorySection(filteredHistory)),
+                    ],
                   )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filteredHistory.length,
-                    itemBuilder: (context, index) {
-                      final item = filteredHistory[index];
-                      return Card(
-                        color: AppTheme.cardBackground,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: AppTheme.borderLight),
-                        ),
-                        child: ListTile(
-                          onTap: () => _showRecordOptionsDialog(item),
-                          leading: item.bankDocumentUrl != null && item.bankDocumentUrl!.isNotEmpty
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: BankDocumentPreview(
-                                    imagePath: item.bankDocumentUrl!,
-                                    size: 40,
-                                    enableZoomOnClick: true,
-                                  ),
-                                )
-                              : const Icon(Icons.account_balance, color: AppTheme.skyBlue),
-                          title: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '${item.familyCode} · ${item.farmerName}',
-                                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.skyBlue, fontSize: 13),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
-                                ),
-                                child: Text(
-                                  item.isSynced ? '✓ Synced' : '⏳ Offline',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          subtitle: Text('${item.village} · ${item.bankName}\nAcc: ${item.accountNumber ?? 'N/A'} (${item.relationship})', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                          trailing: const Icon(
-                            Icons.chevron_right,
-                            color: AppTheme.skyBlue,
-                            size: 18,
-                          ),
-                        ),
-                      );
-                    },
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildFormCard(),
+                      const SizedBox(height: 20),
+                      _buildHistorySection(filteredHistory),
+                    ],
                   ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -840,6 +932,8 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
     return TextFormField(
       controller: _familyCodeController,
       focusNode: _familyCodeFocusNode,
+      textCapitalization: TextCapitalization.characters,
+      onChanged: _autoFillFromFamilyCode,
       decoration: InputDecoration(
         labelText: 'FAMILY CODE *',
         hintText: 'e.g. TB034',
@@ -849,13 +943,18 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           onPressed: _searchAndLoadFarmerInfo,
         ),
       ),
-      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
     );
   }
 
   Widget _buildFarmerNameInput() {
     return TextFormField(
       controller: _farmerNameController,
+      onChanged: (val) {
+        if (_relationship == 'Self') {
+          _accountHolderController.text = val;
+        }
+      },
       decoration: InputDecoration(
         labelText: 'FARMER NAME *',
         hintText: 'e.g. Sok San',
@@ -865,13 +964,14 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           onPressed: _searchAndLoadFarmerInfo,
         ),
       ),
-      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
     );
   }
 
   Widget _buildPhoneInput() {
     return TextFormField(
       controller: _phoneController,
+      keyboardType: TextInputType.phone,
       decoration: const InputDecoration(labelText: 'PHONE NUMBER', hintText: '012 345 678'),
     );
   }
@@ -885,16 +985,19 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   }
 
   Widget _buildPaymentMethodDropdown() {
+    const methods = ['Bank Transfer', 'Cash'];
+    final currentMethod = methods.contains(_paymentMethod) ? _paymentMethod : 'Bank Transfer';
+
     return DropdownButtonFormField<String>(
-      value: _paymentMethod,
+      value: currentMethod,
       decoration: const InputDecoration(
         labelText: 'PAYMENT METHOD *',
         hintText: 'Select Method',
         floatingLabelBehavior: FloatingLabelBehavior.always,
       ),
       hint: const Text('Select Method', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-      items: ['Bank Transfer', 'Cash']
-          .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12))))
+      items: methods
+          .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 13))))
           .toList(),
       validator: (v) => v == null ? 'Select Method' : null,
       onChanged: (val) => setState(() => _paymentMethod = val),
@@ -902,17 +1005,21 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   }
 
   Widget _buildBankDropdown() {
+    final banks = ConfigDao.instance.banks;
+    final currentBank = banks.contains(_bankName) ? _bankName : null;
+
     return DropdownButtonFormField<String>(
-      value: _bankName,
+      value: currentBank,
       decoration: const InputDecoration(
-        labelText: 'COMMERCIAL BANK',
+        labelText: 'COMMERCIAL BANK *',
         hintText: 'Select Bank',
         floatingLabelBehavior: FloatingLabelBehavior.always,
       ),
       hint: const Text('Select Bank', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-      items: ConfigDao.instance.banks
-          .map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 12))))
+      items: banks
+          .map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 13))))
           .toList(),
+      validator: (v) => _paymentMethod == 'Bank Transfer' && (v == null || v.isEmpty) ? 'Select Bank' : null,
       onChanged: (val) => setState(() => _bankName = val),
     );
   }
@@ -920,14 +1027,16 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   Widget _buildAccountNumberInput() {
     return TextFormField(
       controller: _accountNumberController,
-      decoration: const InputDecoration(labelText: 'BANK ACCOUNT NUMBER', hintText: '000 123 456'),
+      keyboardType: TextInputType.text,
+      decoration: const InputDecoration(labelText: 'BANK ACCOUNT NUMBER *', hintText: '000 123 456'),
+      validator: (v) => _paymentMethod == 'Bank Transfer' && (v == null || v.trim().isEmpty) ? 'Enter Account #' : null,
     );
   }
 
   Widget _buildAccountHolderInput() {
     return TextFormField(
       controller: _accountHolderController,
-      decoration: const InputDecoration(labelText: 'ACCOUNT HOLDER NAME', hintText: 'Sok San'),
+      decoration: const InputDecoration(labelText: 'ACCOUNT HOLDER NAME', hintText: 'Defaults to Farmer Name'),
     );
   }
 
@@ -947,11 +1056,14 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   ];
 
   Widget _buildRelationshipDropdown() {
+    final validValues = _relationshipOptions.map((r) => r['value']!).toSet();
+    final currentRel = validValues.contains(_relationship) ? _relationship : 'Self';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String>(
-          value: _relationship,
+          value: currentRel,
           decoration: const InputDecoration(
             labelText: 'RELATIONSHIP TO FARMER',
             hintText: 'Select Relationship',
@@ -961,10 +1073,17 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
           items: _relationshipOptions
               .map((r) => DropdownMenuItem(
                     value: r['value'],
-                    child: Text(r['label']!, style: const TextStyle(fontSize: 12)),
+                    child: Text(r['label']!, style: const TextStyle(fontSize: 13)),
                   ))
               .toList(),
-          onChanged: (val) => setState(() => _relationship = val),
+          onChanged: (val) {
+            setState(() {
+              _relationship = val;
+              if (val == 'Self' && _farmerNameController.text.trim().isNotEmpty) {
+                _accountHolderController.text = _farmerNameController.text.trim();
+              }
+            });
+          },
         ),
         if (_relationship == 'Other') ...[
           const SizedBox(height: 12),

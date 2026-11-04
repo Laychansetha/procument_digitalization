@@ -11,6 +11,8 @@ class ConfigDao {
   static const String _kCachedConfigKey = 'cached_master_config_v1';
   static const String _kLastSyncedAtKey = 'cached_config_last_synced_at';
 
+  final ValueNotifier<int> configChangeNotifier = ValueNotifier<int>(0);
+
   double _seedInterestRate = 1.10;
   double _scaleTolerancePercent = 1.5;
   String? _lastSyncedAt;
@@ -34,34 +36,82 @@ class ConfigDao {
   List<String> _grades = ['A1', 'A2', 'B1', 'B2', 'A', 'B'];
 
   List<Map<String, dynamic>> _paddySpecs = [
-    {'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1650.0},
-    {'variety': 'Phka Rumduol', 'grade': 'A2', 'basePrice': 1550.0},
-    {'variety': 'Phka Rumduol', 'grade': 'B1', 'basePrice': 1500.0},
-    {'variety': 'Phka Rumduol', 'grade': 'B2', 'basePrice': 1450.0},
-    {'variety': 'Red Jasmine', 'grade': 'A1', 'basePrice': 1850.0},
-    {'variety': 'Red Jasmine', 'grade': 'A2', 'basePrice': 1750.0},
-    {'variety': 'Red Jasmine', 'grade': 'B1', 'basePrice': 1700.0},
-    {'variety': 'Red Jasmine', 'grade': 'B2', 'basePrice': 1650.0},
-    {'variety': 'Foundation Seed - Phka Rumduol', 'grade': 'A', 'basePrice': 2050.0},
-    {'variety': 'Foundation Seed - Red Jasmine', 'grade': 'A', 'basePrice': 2150.0},
-    {'variety': 'Certified Seed', 'grade': 'A', 'basePrice': 1900.0},
-    {'variety': 'White Rice', 'grade': 'A', 'basePrice': 1320.0},
-    {'variety': 'White Rice', 'grade': 'B', 'basePrice': 1220.0},
+    {'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1650.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5},
+    {'variety': 'Phka Rumduol', 'grade': 'A2', 'basePrice': 1550.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
+    {'variety': 'Phka Rumduol', 'grade': 'B1', 'basePrice': 1500.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
+    {'variety': 'Phka Rumduol', 'grade': 'B2', 'basePrice': 1450.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
+    {'variety': 'Red Jasmine', 'grade': 'A1', 'basePrice': 1850.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5},
+    {'variety': 'Red Jasmine', 'grade': 'A2', 'basePrice': 1750.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
+    {'variety': 'Red Jasmine', 'grade': 'B1', 'basePrice': 1700.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
+    {'variety': 'Red Jasmine', 'grade': 'B2', 'basePrice': 1650.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
+    {'variety': 'Foundation Seed - Phka Rumduol', 'grade': 'A', 'basePrice': 2050.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0},
+    {'variety': 'Foundation Seed - Red Jasmine', 'grade': 'A', 'basePrice': 2150.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0},
+    {'variety': 'Certified Seed', 'grade': 'A', 'basePrice': 1900.0, 'minWholeGrain': 96.0, 'maxBrokenRice': null, 'impurity': 2.0, 'maxForeignMatter': 2.0, 'maxMoisture': 12.0},
+    {'variety': 'White Rice', 'grade': 'A', 'basePrice': 1320.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 4.0, 'maxMoisture': 13.5},
+    {'variety': 'White Rice', 'grade': 'B', 'basePrice': 1220.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 8.0, 'maxMoisture': 13.5},
   ];
 
   List<String> _buyingStations = [
+    'Chhaeb Buying Station',
+    'Rovieng Buying Station',
+    'Kulen Buying Station',
     'Preah Vihear',
     'Stung Treng',
     'Ratanakiri',
     'Mondulkiri'
   ];
 
-  List<String> _destinationWarehouses = [
+  static const List<String> canonicalDestinationWarehouses = [
     'W002 - CACC (KPT)',
     'W003 - Amru Nature (KPG)',
     'W004 - Koh Nhek',
-    'W005 - Other'
+    'W005 - Other',
   ];
+
+  List<String> _destinationWarehouses = List.from(canonicalDestinationWarehouses);
+
+  /// Returns canonical Warehouse ID (e.g. 'W002') matching `src/lib/warehouse-config.ts`
+  static String getWarehouseId(String? val) {
+    if (val == null || val.trim().isEmpty) return 'W002';
+    final clean = val.trim();
+    if (RegExp(r'^W00[2-5]', caseSensitive: false).hasMatch(clean)) {
+      return clean.substring(0, 4).toUpperCase();
+    }
+    final lower = clean.toLowerCase();
+    if (lower.contains('cacc') || lower.contains('kpt') || lower.contains('central mill')) {
+      return 'W002';
+    }
+    if (lower.contains('amru') || lower.contains('kpg')) {
+      return 'W003';
+    }
+    if (lower.contains('koh nhek') || lower.contains('nhek')) {
+      return 'W004';
+    }
+    if (lower.contains('other')) {
+      return 'W005';
+    }
+    if (clean.contains(' - ')) {
+      return clean.split(' - ').first.trim();
+    }
+    return clean;
+  }
+
+  /// Returns canonical Warehouse display label (e.g. 'W002 - CACC (KPT)') matching `src/lib/warehouse-config.ts`
+  static String getWarehouseDisplay(String? val) {
+    final id = getWarehouseId(val);
+    switch (id) {
+      case 'W002':
+        return 'W002 - CACC (KPT)';
+      case 'W003':
+        return 'W003 - Amru Nature (KPG)';
+      case 'W004':
+        return 'W004 - Koh Nhek';
+      case 'W005':
+        return 'W005 - Other';
+      default:
+        return val != null && val.trim().isNotEmpty ? val.trim() : 'W002 - CACC (KPT)';
+    }
+  }
 
   final Map<String, double> _basePrices = {
     'Phka Rumduol': 1650.0,
@@ -121,20 +171,21 @@ class ConfigDao {
     }
     return List.unmodifiable(filtered);
   }
+
   List<String> get banks => List.unmodifiable(_banks);
   List<String> get paddyCategories => List.unmodifiable(_paddyCategories);
   List<String> get grades => List.unmodifiable(_grades);
 
   List<String> getGradesForCategory(String? category) {
     if (category == null || category.isEmpty) return List.unmodifiable(_grades);
-    
+
     // Dynamic lookup from synced paddySpecs master data
     final matchingSpecs = _paddySpecs.where((s) => s['variety'] == category).toList();
     if (matchingSpecs.isNotEmpty) {
       final specGrades = matchingSpecs.map((s) => s['grade'].toString()).toSet().toList();
       return List.unmodifiable(specGrades);
     }
-    
+
     // Fallback business rules
     if (category == 'Phka Rumduol' || category == 'Red Jasmine') {
       return const ['A1', 'A2', 'B1', 'B2'];
@@ -179,9 +230,17 @@ class ConfigDao {
   /// Automatically check server for master configuration updates on startup
   Future<void> fetchRemoteConfig() async {
     try {
-      final cacheBusterUrl = '${AppConfig.baseUrl}/api/config?t=${DateTime.now().millisecondsSinceEpoch}';
-      debugPrint('🔄 Fetching remote master config from: $cacheBusterUrl');
-      final response = await http.get(Uri.parse(cacheBusterUrl)).timeout(const Duration(seconds: 10));
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('app_user_id') ?? '';
+      final provinces = prefs.getString('app_assigned_provinces') ?? '';
+      final queryParams = <String, String>{
+        't': DateTime.now().millisecondsSinceEpoch.toString(),
+        if (userId.isNotEmpty) 'userId': userId,
+        if (provinces.isNotEmpty) 'provinces': provinces,
+      };
+      final uri = Uri.parse('${AppConfig.baseUrl}/api/config').replace(queryParameters: queryParams);
+      debugPrint('🔄 Fetching remote master config from: $uri');
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -191,9 +250,9 @@ class ConfigDao {
         _lastSyncedAt = nowIso;
 
         // Save downloaded master configuration to local cache for offline availability
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_kCachedConfigKey, response.body);
         await prefs.setString(_kLastSyncedAtKey, nowIso);
+        configChangeNotifier.value++;
 
         debugPrint('✅ Master Configuration updated from server at $nowIso. Banks: $_banks');
       }
@@ -213,22 +272,27 @@ class ConfigDao {
       }
     }
 
-    if (data['villages'] != null && data['villages'] is List && (data['villages'] as List).isNotEmpty) {
-      _villages = (data['villages'] as List).map((e) => e.toString()).toList();
-    }
-
-    // Dynamic village-to-province mapping update from server rawVillages / allVillages
-    final rawVList = data['rawVillages'] ?? data['allVillages'];
-    if (rawVList != null && rawVList is List) {
-      for (var item in rawVList) {
+    // Dynamic village-to-province mapping & master village list update from server allVillages / rawVillages
+    final allVList = data['allVillages'] ?? data['rawVillages'];
+    if (allVList != null && allVList is List && allVList.isNotEmpty) {
+      final allNames = <String>[];
+      for (var item in allVList) {
         if (item is Map) {
-          final vName = item['name']?.toString();
-          final vProv = item['province']?.toString();
-          if (vName != null && vProv != null && vName.isNotEmpty && vProv.isNotEmpty) {
-            _villageProvinceMapping[vName] = vProv;
+          final vName = item['name']?.toString().trim();
+          final vProv = item['province']?.toString().trim();
+          if (vName != null && vName.isNotEmpty) {
+            allNames.add(vName);
+            if (vProv != null && vProv.isNotEmpty) {
+              _villageProvinceMapping[vName] = vProv;
+            }
           }
         }
       }
+      if (allNames.isNotEmpty) {
+        _villages = allNames.toSet().toList();
+      }
+    } else if (data['villages'] != null && data['villages'] is List && (data['villages'] as List).isNotEmpty) {
+      _villages = (data['villages'] as List).map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toSet().toList();
     }
 
     // Dynamic commercial bank list update from server rawBanks or banks
@@ -286,26 +350,24 @@ class ConfigDao {
 
     if (data['locations'] != null && data['locations'] is List) {
       final stations = <String>[];
-      final warehouses = <String>[];
+      final warehouses = <String>{...canonicalDestinationWarehouses};
 
       for (var loc in data['locations']) {
         final name = loc['name']?.toString();
         final type = loc['type']?.toString();
-        if (name != null) {
+        if (name != null && name.trim().isNotEmpty) {
           if (type == 'BUYING_STATION' || type == 'STATION') {
-            stations.add(name);
+            stations.add(name.trim());
           } else if (type == 'WAREHOUSE') {
-            warehouses.add(name);
+            warehouses.add(getWarehouseDisplay(name));
           }
         }
       }
 
       if (stations.isNotEmpty) _buyingStations = stations;
-      if (warehouses.isNotEmpty) _destinationWarehouses = warehouses;
-    }
-
-    if (data['warehouses'] != null && data['warehouses'] is List && (data['warehouses'] as List).isNotEmpty) {
-      _destinationWarehouses = (data['warehouses'] as List).map((e) => e.toString()).toList();
+      _destinationWarehouses = warehouses.toList();
+    } else {
+      _destinationWarehouses = List.from(canonicalDestinationWarehouses);
     }
   }
 }

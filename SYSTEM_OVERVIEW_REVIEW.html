@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IBIS Rice Platform — Comprehensive System Architecture & Specification Review</title>
+  <style>
+    :root {
+      --bg-main: #0b1120;
+      --bg-card: #141c2f;
+      --bg-card-alt: #1a243b;
+      --bg-surface: #1e293b;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --border-highlight: rgba(56, 189, 248, 0.3);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --primary: #0284c7;
+      --primary-light: #38bdf8;
+      --emerald: #10b981;
+      --emerald-light: #34d399;
+      --amber: #f59e0b;
+      --amber-light: #fbbf24;
+      --purple: #8b5cf6;
+      --purple-light: #a78bfa;
+      --rose: #f43f5e;
+      --rose-light: #fb7185;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      font-size: 14.5px;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar Navigation */
+    #sidebar {
+      width: 280px;
+      background-color: var(--bg-card);
+      border-right: 1px solid var(--border-color);
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .brand-header {
+      padding: 24px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #059669 0%, #0284c7 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 18px;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+      color: #fff;
+      line-height: 1.2;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--emerald-light);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 20px 20px 8px 20px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 0 10px;
+    }
+
+    .nav-item {
+      margin-bottom: 3px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover, .nav-link.active {
+      color: #fff;
+      background-color: var(--bg-surface);
+    }
+
+    .nav-link.active {
+      background: linear-gradient(90deg, rgba(2, 132, 199, 0.2) 0%, rgba(2, 132, 199, 0.05) 100%);
+      border-left: 3px solid var(--primary-light);
+      color: var(--primary-light);
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    /* Main Content Area */
+    #main-content {
+      margin-left: 280px;
+      flex: 1;
+      padding: 40px 48px;
+      max-width: 1300px;
+    }
+
+    /* Executive Header */
+    .doc-hero {
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(20, 28, 47, 0.4) 100%);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 36px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .doc-hero::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #10b981 0%, #0284c7 50%, #8b5cf6 100%);
+    }
+
+    .hero-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--emerald-light);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .doc-title {
+      font-size: 28px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+    }
+
+    .doc-description {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      max-width: 900px;
+      margin-bottom: 24px;
+    }
+
+    .hero-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .hero-stat-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+
+    .hero-stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .hero-stat-val {
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      font-family: var(--font-mono);
+    }
+
+    /* Section Containers */
+    .doc-section {
+      margin-bottom: 56px;
+      scroll-margin-top: 30px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .section-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 21px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .section-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--bg-surface);
+      color: var(--primary-light);
+      font-weight: 700;
+    }
+
+    /* Content Cards */
+    .content-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-lead {
+      color: var(--text-muted);
+      font-size: 13.5px;
+      margin-bottom: 20px;
+    }
+
+    /* Callout Alert Boxes */
+    .alert-box {
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin: 18px 0;
+      display: flex;
+      gap: 14px;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+
+    .alert-blue {
+      background: rgba(2, 132, 199, 0.1);
+      border-left: 4px solid var(--primary-light);
+      color: #bae6fd;
+    }
+
+    .alert-emerald {
+      background: rgba(16, 185, 129, 0.1);
+      border-left: 4px solid var(--emerald-light);
+      color: #a7f3d0;
+    }
+
+    .alert-amber {
+      background: rgba(245, 158, 11, 0.1);
+      border-left: 4px solid var(--amber-light);
+      color: #fde68a;
+    }
+
+    .alert-rose {
+      background: rgba(244, 63, 94, 0.1);
+      border-left: 4px solid var(--rose-light);
+      color: #fecdd3;
+    }
+
+    .alert-icon {
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    /* Visual Workflow Diagrams (SVG / CSS) */
+    .flowchart-container {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+
+    .pipeline-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 860px;
+    }
+
+    .pipeline-step {
+      flex: 1;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px 16px;
+      position: relative;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .pipeline-step:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary-light);
+    }
+
+    .step-tag {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      display: inline-block;
+    }
+
+    .step-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .step-arrow {
+      color: var(--primary-light);
+      font-size: 20px;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+
+    /* Rejection Chain */
+    .rejection-pipeline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 860px;
+      margin-top: 16px;
+      padding: 14px 16px;
+      background: rgba(244, 63, 94, 0.05);
+      border: 1px dashed rgba(244, 63, 94, 0.3);
+      border-radius: 10px;
+    }
+
+    .rejection-node {
+      flex: 1;
+      background: rgba(20, 28, 47, 0.8);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+
+    .rejection-node-title {
+      font-weight: 800;
+      color: var(--rose-light);
+      margin-bottom: 2px;
+    }
+
+    .rejection-arrow {
+      color: var(--rose-light);
+      font-size: 16px;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+
+    /* Modern Responsive Data Tables */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      margin: 16px 0;
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    table.data-table thead th {
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    table.data-table tbody tr {
+      border-bottom: 1px solid var(--border-color);
+      transition: background-color 0.15s ease;
+    }
+
+    table.data-table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    table.data-table tbody tr:hover {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    table.data-table tbody td {
+      padding: 12px 16px;
+      color: var(--text-main);
+      vertical-align: top;
+    }
+
+    .font-mono {
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    .badge-blue { background: rgba(2, 132, 199, 0.2); color: var(--primary-light); border: 1px solid rgba(2, 132, 199, 0.4); }
+    .badge-green { background: rgba(16, 185, 129, 0.2); color: var(--emerald-light); border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-amber { background: rgba(245, 158, 11, 0.2); color: var(--amber-light); border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-purple { background: rgba(139, 92, 246, 0.2); color: var(--purple-light); border: 1px solid rgba(139, 92, 246, 0.4); }
+    .badge-rose { background: rgba(244, 63, 94, 0.2); color: var(--rose-light); border: 1px solid rgba(244, 63, 94, 0.4); }
+
+    /* Interactive Tabs */
+    .tab-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: var(--bg-surface);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: var(--primary);
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    /* Quick Filter Input */
+    .filter-box {
+      margin-bottom: 14px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .filter-input {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      flex: 1;
+      max-width: 320px;
+      outline: none;
+    }
+
+    .filter-input:focus {
+      border-color: var(--primary-light);
+    }
+
+    /* Code & Formulas */
+    .formula-card {
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      border-left: 3px solid var(--purple-light);
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: #e2e8f0;
+      margin: 10px 0;
+    }
+
+    /* Collapsible Accordion */
+    details.accordion {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    details.accordion summary {
+      padding: 14px 18px;
+      font-weight: 700;
+      color: #fff;
+      cursor: pointer;
+      user-select: none;
+      background: var(--bg-surface);
+      border-bottom: 1px solid transparent;
+      transition: background 0.2s ease;
+    }
+
+    details.accordion[open] summary {
+      border-bottom-color: var(--border-color);
+    }
+
+    details.accordion summary:hover {
+      background: #253349;
+    }
+
+    .accordion-body {
+      padding: 18px;
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        background: #fff !important;
+        color: #000 !important;
+      }
+      #sidebar { display: none !important; }
+      #main-content { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
+      .content-card, .doc-hero, .flowchart-container {
+        border: 1px solid #ccc !important;
+        background: #fff !important;
+        color: #000 !important;
+        box-shadow: none !important;
+      }
+      .section-title, .doc-title, .card-title { color: #000 !important; }
+      .text-muted, .step-desc { color: #444 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR NAVIGATION -->
+  <aside id="sidebar">
+    <div class="brand-header">
+      <div class="brand-logo">IBIS</div>
+      <div>
+        <div class="brand-title">IBIS RICE CORE</div>
+        <div class="brand-subtitle">System Specification</div>
+      </div>
+    </div>
+
+    <div class="nav-group-title">Navigation Index</div>
+    <ul class="nav-list">
+      <li class="nav-item">
+        <a href="#section-hero" class="nav-link active">
+          <span>📋</span> Overview & Metadata
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#section-arch" class="nav-link">
+          <span>🏛️</span> 1. System Architecture
+          <span class="nav-badge">Topology</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#section-modules" class="nav-link">
+          <span>⚙️</span> 2. Modules & Logic
+          <span class="nav-badge">8 Modules</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#section-roles" class="nav-link">
+          <span>👥</span> 3. Roles & RBAC Matrix
+          <span class="nav-badge">5 Roles</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#section-fieldapp" class="nav-link">
+          <span>📱</span> 4. Field App & Sync
+          <span class="nav-badge">Offline</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#section-database" class="nav-link">
+          <span>🗄️</span> 5. Database & Schema
+          <span class="nav-badge">Postgres</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#section-rejections" class="nav-link">
+          <span>🔄</span> 6. Rejection Chains
+          <span class="nav-badge">Audit</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="#section-review-notes" class="nav-link">
+          <span>📝</span> 7. Review Checklist
+          <span class="nav-badge">QA</span>
+        </a>
+      </li>
+    </ul>
+
+    <div style="margin-top: auto; padding: 20px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-dim);">
+      <div>Environment: <strong>AWS Lightsail VPS</strong></div>
+      <div>DB: <strong>PostgreSQL 15 (AWS RDS)</strong></div>
+      <div>Web Domain: <code style="color:var(--primary-light)">procurement.icsserver.com</code></div>
+      <div>Version: <strong>Release 2.4 (Nov 2026)</strong></div>
+    </div>
+  </aside>
+
+  <!-- MAIN DOCUMENT CONTENT -->
+  <main id="main-content">
+
+    <!-- HERO META -->
+    <div id="section-hero" class="doc-hero">
+      <div class="hero-meta-row">
+        <span class="status-pill">● System Architecture Specification</span>
+        <span style="font-size: 12px; color: var(--text-muted);">Confidential Technical Review Document</span>
+        <span style="font-size: 12px; color: var(--text-muted); margin-left: auto;">Last Verified: November 2, 2026</span>
+      </div>
+
+      <h1 class="doc-title">IBIS Rice Digitalization & Payment System</h1>
+      <p class="doc-description">
+        Comprehensive architectural reference, end-to-end data pipelines, business logic rules, user permission matrix, offline field mobile app synchronization, and relational database specifications for <strong>IBIS RICE CONSERVATION CO., LTD</strong> operations across Cambodia (Preah Vihear, Stung Treng, Ratanakiri, and Mondulkiri).
+      </p>
+
+      <div class="hero-stats-grid">
+        <div class="hero-stat-card">
+          <div class="hero-stat-label">Target Provinces</div>
+          <div class="hero-stat-val" style="color: var(--emerald-light)">4 Provinces</div>
+        </div>
+        <div class="hero-stat-card">
+          <div class="hero-stat-label">Registered Target Villages</div>
+          <div class="hero-stat-val" style="color: var(--primary-light)">61 Villages</div>
+        </div>
+        <div class="hero-stat-card">
+          <div class="hero-stat-label">Active Team Accounts</div>
+          <div class="hero-stat-val" style="color: var(--amber-light)">30 Staff</div>
+        </div>
+        <div class="hero-stat-card">
+          <div class="hero-stat-label">Paddy Varieties & Grades</div>
+          <div class="hero-stat-val" style="color: var(--purple-light)">13 Specs</div>
+        </div>
+        <div class="hero-stat-card">
+          <div class="hero-stat-label">Central Receiving Warehouses</div>
+          <div class="hero-stat-val" style="color: #38bdf8">4 Hubs</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 1: SYSTEM ARCHITECTURE -->
+    <section id="section-arch" class="doc-section">
+      <div class="section-header">
+        <div class="section-icon">🏛️</div>
+        <div>
+          <h2 class="section-title">1. System Architecture & Technical Topology</h2>
+        </div>
+        <span class="section-badge">Infrastructure</span>
+      </div>
+
+      <div class="content-card">
+        <h3 class="card-title">1.1 High-Level Architecture Overview</h3>
+        <p class="card-lead">
+          The IBIS Rice Procurement Platform operates as a hybrid offline-first distributed system. Field inspectors capture data in remote jungle villages completely disconnected from telecommunication infrastructure, while the central web portal facilitates multi-stage verification, warehouse intake scale confirmation, and finance bank disbursements.
+        </p>
+
+        <!-- Visual Architecture Diagram -->
+        <div class="flowchart-container">
+          <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px;">
+            End-to-End Enterprise Data Flow Topology
+          </div>
+
+          <div style="display: flex; gap: 20px; align-items: stretch; min-width: 860px;">
+            <!-- Node 1: Mobile App -->
+            <div style="flex: 1; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px;">
+              <div style="color: var(--emerald-light); font-weight: 800; font-size: 13px; margin-bottom: 6px;">📱 Field Layer (Offline-First)</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Android Tablets running Flutter Native App with Embedded SQLite Database (<code>app_database.db</code>).</div>
+              <ul style="font-size: 11.5px; color: var(--text-main); margin-left: 16px; line-height: 1.6;">
+                <li>Quality Specs Lab Records</li>
+                <li>Farmer Payment Registration & Passbook Photos</li>
+                <li>Paddy Purchase Invoices & Touch Signatures</li>
+                <li>Truck Loading & Transport Dispatch Manifests</li>
+                <li>Bluetooth Thermal Printing (ESC/POS)</li>
+              </ul>
+            </div>
+
+            <!-- Connector 1 -->
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 60px;">
+              <div style="font-size: 10px; font-weight: 800; color: var(--primary-light); text-align: center;">HTTP/S REST</div>
+              <div style="font-size: 24px; color: var(--primary-light);">➔</div>
+              <div style="font-size: 9px; color: var(--text-dim); text-align: center;">(When Online)</div>
+            </div>
+
+            <!-- Node 2: Central Web App & API -->
+            <div style="flex: 1.2; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px;">
+              <div style="color: var(--primary-light); font-weight: 800; font-size: 13px; margin-bottom: 6px;">🌐 Central Web & API Gateway</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Next.js 16 (App Router + Turbopack) on Node.js 20 LTS managed by PM2 Daemon behind Nginx Reverse Proxy.</div>
+              <ul style="font-size: 11.5px; color: var(--text-main); margin-left: 16px; line-height: 1.6;">
+                <li>REST API Endpoints (<code>/api/specs</code>, <code>/api/farmers</code>, etc.)</li>
+                <li>NextAuth.js Session Authentication & Role Validation</li>
+                <li>Warehouse Weighbridge Double-Scale Verification</li>
+                <li>Inventory Recording & Bin Location Assignment</li>
+                <li>ABA Bulk Bank Disbursement & Audit Logging</li>
+              </ul>
+            </div>
+
+            <!-- Connector 2 -->
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 60px;">
+              <div style="font-size: 10px; font-weight: 800; color: var(--purple-light); text-align: center;">Prisma v6</div>
+              <div style="font-size: 24px; color: var(--purple-light);">➔</div>
+              <div style="font-size: 9px; color: var(--text-dim); text-align: center;">Port 5432</div>
+            </div>
+
+            <!-- Node 3: Database & Storage -->
+            <div style="flex: 1; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px;">
+              <div style="color: var(--purple-light); font-weight: 800; font-size: 13px; margin-bottom: 6px;">🗄️ Persistence & Storage</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">PostgreSQL Database (<code>ibis_db</code>) on AWS RDS / Local Host + Local Asset Uploads.</div>
+              <ul style="font-size: 11.5px; color: var(--text-main); margin-left: 16px; line-height: 1.6;">
+                <li>Master Configuration (Villages, Prices, Banks)</li>
+                <li>Transactional Tables (Specs, Purchases, Trucks)</li>
+                <li>Immutable Security Audit Logs (<code>AuditLog</code>)</li>
+                <li>Asset Server (<code>/public/uploads/*</code> static mapping)</li>
+                <li>Automated Daily Backups (<code>/backups/*.sql</code>)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="card-title" style="margin-top: 24px;">1.2 Deployment Target Topologies</h3>
+        <div class="grid-2">
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 10px; padding: 18px;">
+            <div style="color: var(--primary-light); font-weight: 800; font-size: 13px; margin-bottom: 6px;">☁️ Production Cloud Environment (Amazon Lightsail VPS)</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+              Hosted on Amazon Linux 2023 at <code>https://procurement.icsserver.com</code>. Nginx handles reverse proxying on Port 80/443 alongside existing Survey Solutions ICS container on internal port 9000.
+            </p>
+            <div class="formula-card">
+              Domain: procurement.icsserver.com<br>
+              Reverse Proxy: Nginx -> 127.0.0.1:3000<br>
+              Process Daemon: PM2 (ecosystem.config.js)<br>
+              Database: AWS RDS PostgreSQL (port 5432, ibis_db)<br>
+              Deploy Automation: scripts/deploy.sh
+            </div>
+          </div>
+
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 10px; padding: 18px;">
+            <div style="color: var(--emerald-light); font-weight: 800; font-size: 13px; margin-bottom: 6px;">🏢 Local Station / Offline LAN Deployment (On-Premise Desktop)</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+              Designed for remote buying stations operating with zero external internet. The web server runs locally on Windows 10/11 or Ubuntu server at <code>http://0.0.0.0:3000</code>.
+            </p>
+            <div class="formula-card">
+              LAN Access: http://192.168.1.xxx:3000<br>
+              Database: Local PostgreSQL 14+ on localhost:5432<br>
+              1-Click Setup: .\switch-to-postgresql.bat<br>
+              Production Start: .\start-production-local.bat<br>
+              Firewall: Port 3000 Inbound TCP Allowed
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: SYSTEM FUNCTIONALITY -->
+    <section id="section-modules" class="doc-section">
+      <div class="section-header">
+        <div class="section-icon">⚙️</div>
+        <div>
+          <h2 class="section-title">2. System Functionality & Business Logic</h2>
+        </div>
+        <span class="section-badge">8 Core Modules</span>
+      </div>
+
+      <!-- Linear Approval Chain Visualization -->
+      <div class="flowchart-container">
+        <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px;">
+          Standard Linear Operational Sequence (Field to Finance)
+        </div>
+
+        <div class="pipeline-row">
+          <div class="pipeline-step">
+            <span class="step-tag" style="color: var(--emerald-light);">Stage 1</span>
+            <div class="step-title">🔬 Specs & Profile</div>
+            <div class="step-desc">Field inspector checks lab specs & registers farmer bank info.</div>
+          </div>
+          <div class="step-arrow">➔</div>
+
+          <div class="pipeline-step">
+            <span class="step-tag" style="color: var(--emerald-light);">Stage 2</span>
+            <div class="step-title">🧾 Purchase Invoice</div>
+            <div class="step-desc">Individual sack weighing, seed deduction calculation & signature.</div>
+          </div>
+          <div class="step-arrow">➔</div>
+
+          <div class="pipeline-step">
+            <span class="step-tag" style="color: var(--primary-light);">Stage 3</span>
+            <div class="step-title">🚛 Truck Dispatch</div>
+            <div class="step-desc">Assign invoices to truck manifest; dispatch status EN_ROUTE.</div>
+          </div>
+          <div class="step-arrow">➔</div>
+
+          <div class="pipeline-step">
+            <span class="step-tag" style="color: var(--amber-light);">Stage 4</span>
+            <div class="step-title">🏬 Scale Intake</div>
+            <div class="step-desc">Weighbridge scale (Gross - Tare), weight tolerance verification.</div>
+          </div>
+          <div class="step-arrow">➔</div>
+
+          <div class="pipeline-step">
+            <span class="step-tag" style="color: var(--purple-light);">Stage 5</span>
+            <div class="step-title">📦 Inventory Confirm</div>
+            <div class="step-desc">Physical intake verify, storage location assignment.</div>
+          </div>
+          <div class="step-arrow">➔</div>
+
+          <div class="pipeline-step">
+            <span class="step-tag" style="color: #38bdf8;">Stage 6</span>
+            <div class="step-title">💰 Finance Payment</div>
+            <div class="step-desc">Disbursement review, ABA bulk export & bank payment.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Module Tabs Container -->
+      <div class="content-card">
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="switchTab('tab-specs', this)">Module 1: Specs Record</button>
+          <button class="tab-btn" onclick="switchTab('tab-farmers', this)">Module 2: Farmer Profile</button>
+          <button class="tab-btn" onclick="switchTab('tab-purchases', this)">Module 3: Purchase Receipt</button>
+          <button class="tab-btn" onclick="switchTab('tab-transport', this)">Module 4: Transport Truck</button>
+          <button class="tab-btn" onclick="switchTab('tab-intake', this)">Module 5: Warehouse Intake</button>
+          <button class="tab-btn" onclick="switchTab('tab-inventory', this)">Module 6: Inventory Confirm</button>
+          <button class="tab-btn" onclick="switchTab('tab-finance', this)">Module 7: Finance Disbursement</button>
+          <button class="tab-btn" onclick="switchTab('tab-admin', this)">Module 8: Admin & Master Data</button>
+        </div>
+
+        <!-- TAB 1: SPECS RECORD -->
+        <div id="tab-specs" class="tab-pane active">
+          <h3 class="card-title">Module 1: Quality Inspection Specs Record</h3>
+          <p class="card-lead">
+            Physical lab measurement evaluation conducted prior to purchasing to determine paddy grade and calculate the official final purchase price per kilogram.
+          </p>
+
+          <div class="grid-2">
+            <div>
+              <h4 style="color: var(--primary-light); font-size: 13px; margin-bottom: 8px;">Key Inspection Parameters:</h4>
+              <ul style="font-size: 12.5px; color: var(--text-muted); margin-left: 18px; line-height: 1.8;">
+                <li><strong>Moisture Content (%):</strong> Max 13.5% (A1/White), Max 14.0% (A2/B1/B2), Max 12.0% (Seed).</li>
+                <li><strong>Foreign Matter (%):</strong> Dirt, straw, stones (Max 6% standard, Max 1% Seed).</li>
+                <li><strong>Whole Grain % & Broken Rice %:</strong> A1 (&ge;75% whole), A2 (&ge;70%), B1 (&ge;60%), B2 (&ge;50%).</li>
+                <li><strong>Impurity / Red Rice %:</strong> Evaluated for Foundation and Certified seed varieties.</li>
+                <li><strong>Organic Status Toggle:</strong> Certified Organic eligibility flag.</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 style="color: var(--emerald-light); font-size: 13px; margin-bottom: 8px;">Pricing Calculation Formula:</h4>
+              <div class="formula-card">
+                Final Price (KHR/kg) = Base Price + Organic Bonus<br><br>
+                Example: Phka Rumduol Grade A1<br>
+                Base Price = 1,650 KHR<br>
+                Organic Bonus = 0 KHR (or configurable premium)<br>
+                Final Price = 1,650 KHR/kg
+              </div>
+              <div class="alert-box alert-blue" style="margin-top: 10px; padding: 10px 14px;">
+                <span>ℹ️</span>
+                <span><strong>Reusability Rule:</strong> When a Specs Record is used for a purchase, it becomes locked from accidental editing, but remains selectable again for future purchases from the same harvest batch.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: FARMER PROFILE -->
+        <div id="tab-farmers" class="tab-pane">
+          <h3 class="card-title">Module 2: Farmer Payment Profile Registration</h3>
+          <p class="card-lead">
+            Registers official banking credentials, mobile numbers, and passbook photographic proof to guarantee zero errors during electronic bank transfers.
+          </p>
+
+          <div class="grid-2">
+            <div>
+              <h4 style="color: var(--primary-light); font-size: 13px; margin-bottom: 8px;">Core Fields & Attributes:</h4>
+              <ul style="font-size: 12.5px; color: var(--text-muted); margin-left: 18px; line-height: 1.8;">
+                <li><strong>Composite Identity:</strong> Primary key pair <code>Family Code + Village</code>.</li>
+                <li><strong>Bank Selection:</strong> ABA Bank, ACLEDA, Wing, Canadia, Sathapana, etc.</li>
+                <li><strong>Account Number:</strong> Validated numeric bank account string.</li>
+                <li><strong>Account Holder Name:</strong> Exact name registered with the bank.</li>
+                <li><strong>Relationship to Farmer:</strong> Self, Spouse, Son, Daughter, Representative.</li>
+                <li><strong>Passbook Document Photo:</strong> Compressed camera scan stored in <code>/public/uploads/</code>.</li>
+              </ul>
+            </div>
+
+            <div>
+              <div class="alert-box alert-emerald">
+                <span class="alert-icon">💡</span>
+                <div>
+                  <strong>Uncoupled Lifecycle Invariant:</strong> Farmer Payment Profiles and Quality Specs Records are completely independent. A farmer can register their bank book months before harvest, or register at the scale. When the same <code>Family Code + Village</code> is entered, name and location autofill instantly.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: PURCHASE RECEIPT -->
+        <div id="tab-purchases" class="tab-pane">
+          <h3 class="card-title">Module 3: Paddy Purchase Receipt & Net Payment</h3>
+          <p class="card-lead">
+            The official legal transaction record between IBIS Rice and the farmer. Handles sack weighing, seed deduction calculation, and touch signatures.
+          </p>
+
+          <div class="formula-card">
+            1. Total Gross Paddy Value = &Sigma;(Sack Weights) &times; (Final Price/kg + Distance Premium)<br>
+            2. Returned Seed Weight = Seed Borrowed &times; 1.10 (10% standard seasonal interest)<br>
+            3. Seed Deduction Amount = Returned Seed Weight &times; Final Purchase Price/kg<br>
+            4. Net Farmer Payment (KHR) = Total Gross Paddy Value - Seed Deduction Amount
+          </div>
+
+          <div class="grid-2" style="margin-top: 16px;">
+            <div>
+              <h4 style="color: var(--primary-light); font-size: 13px; margin-bottom: 8px;">Sack Weight Recording:</h4>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+                Individual bag weights are recorded directly from the field scale (e.g., <code>[102.5, 105.0, 98.0, 101.5]</code>) and serialized into the <code>PurchaseItem.sackWeights</code> JSON column for full auditability.
+              </p>
+            </div>
+            <div>
+              <h4 style="color: var(--purple-light); font-size: 13px; margin-bottom: 8px;">Standard Purchase ID Format:</h4>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+                Standardized via <code>src/lib/purchase-id.ts</code>: <code class="font-mono badge badge-purple">FamilyCode_DDMMYY_24H</code> (e.g. <code>TB010_261026_10</code>). If multiple purchases occur in the same hour, auto-suffixed with <code>_2</code>, <code>_3</code>.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: TRANSPORT TRUCK -->
+        <div id="tab-transport" class="tab-pane">
+          <h3 class="card-title">Module 4: Transport Truck Dispatch & Manifest</h3>
+          <p class="card-lead">
+            Consolidates individual farmer purchases into a secure truckload manifest for shipment from village buying stations to the central milling facility.
+          </p>
+
+          <div class="grid-2">
+            <div>
+              <h4 style="color: var(--primary-light); font-size: 13px; margin-bottom: 8px;">Transport Attributes:</h4>
+              <ul style="font-size: 12.5px; color: var(--text-muted); margin-left: 18px; line-height: 1.8;">
+                <li><strong>Transport ID Standard:</strong> <code class="font-mono badge badge-blue">TruckPlate_DDMMYY</code> (e.g. <code>3A-8899_261026</code>).</li>
+                <li><strong>Destination Warehouse:</strong> Field-assigned destination (W002, W003, W004, W005).</li>
+                <li><strong>Truck Cleanliness Protocol:</strong> Mandatory checkbox verifying tarpaulin and truck bed are clean of chemical contaminants.</li>
+                <li><strong>Loaded Invoices:</strong> Many-to-one association locking purchases into <code>IN_TRANSIT</code>.</li>
+              </ul>
+            </div>
+
+            <div>
+              <div class="alert-box alert-amber">
+                <span class="alert-icon">⚠️</span>
+                <div>
+                  <strong>Locking & Editing Constraint:</strong> Once a purchase is assigned to a truck dispatch, it is locked from edits. However, if the Warehouse rejects the truck back to the Field, all linked purchase records unlock automatically for field correction.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: WAREHOUSE INTAKE -->
+        <div id="tab-intake" class="tab-pane">
+          <h3 class="card-title">Module 5: Warehouse Scale Intake & Tolerance Verification</h3>
+          <p class="card-lead">
+            Executed at the central mill weighbridge scale by warehouse receiving inspectors upon truck arrival. Compares field dispatch cargo weight against certified mill scale readings.
+          </p>
+
+          <div class="formula-card">
+            Warehouse Net Weight = Scale Gross Weight (Truck + Paddy) - Scale Tare Weight (Empty Truck)<br>
+            Weight Difference (Kg) = Warehouse Net Weight - Field Total Weight<br>
+            Weight Variance (%) = (Weight Difference / Field Total Weight) &times; 100
+          </div>
+
+          <div class="grid-2" style="margin-top: 16px;">
+            <div>
+              <h4 style="color: var(--amber-light); font-size: 13px; margin-bottom: 8px;">Arrived Warehouse Tracking:</h4>
+              <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
+                Trucks may be diverted mid-journey due to mill silo capacity. The system strictly stores the actual arrival facility in <code>WarehouseIntake.arrivedWarehouse</code>, while preserving the original field dispatch plan in <code>TransportRecord.destinationWarehouse</code>.
+              </p>
+            </div>
+            <div>
+              <h4 style="color: var(--emerald-light); font-size: 13px; margin-bottom: 8px;">Tolerance Thresholds:</h4>
+              <ul style="font-size: 12px; color: var(--text-muted); margin-left: 18px; line-height: 1.8;">
+                <li>🟢 <strong>Normal (Green):</strong> Variance &le; 1.0% (or &le; 300 kg). Within normal drying/transit moisture loss.</li>
+                <li>🟡 <strong>Warning (Yellow):</strong> Variance &gt; 1.0% (&gt; 300 kg). Slight variance, flags inspection.</li>
+                <li>🔴 <strong>Critical (Red):</strong> Variance &gt; 2.0% (&gt; 500 kg). Severe discrepancy; blocks payment until investigation.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 6: INVENTORY CONFIRM -->
+        <div id="tab-inventory" class="tab-pane">
+          <h3 class="card-title">Module 6: Inventory Inspection & Recording</h3>
+          <p class="card-lead">
+            Independent physical verification by the Inventory Team before paddy is legally entered into warehouse storage stock and unlocked for Finance payment.
+          </p>
+
+          <div class="grid-2">
+            <div>
+              <h4 style="color: var(--purple-light); font-size: 13px; margin-bottom: 8px;">Verification Protocol:</h4>
+              <ul style="font-size: 12.5px; color: var(--text-muted); margin-left: 18px; line-height: 1.8;">
+                <li>Inspect scale indicator photos (Gross Scale, Tare Scale, Invoice).</li>
+                <li>Confirm grain sacks condition and bag counts.</li>
+                <li>Record physical warehouse storage bin / bay location (e.g. <code>Silo 02</code>, <code>Stack B</code>, <code>Bay 4</code>).</li>
+                <li>Set status to <code class="font-mono badge badge-purple">INVENTORY_RECORDED</code>.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="alert-box alert-rose">
+                <span class="alert-icon">🔒</span>
+                <div>
+                  <strong>Finance Verification Barrier:</strong> The Finance module enforces a strict programmatic block. If a truck has not achieved <code>INVENTORY_RECORDED</code> status, the Finance verification and payment buttons remain disabled.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 7: FINANCE DISBURSEMENT -->
+        <div id="tab-finance" class="tab-pane">
+          <h3 class="card-title">Module 7: Finance Reconciliation, Verification & Disbursement</h3>
+          <p class="card-lead">
+            Final audit gate where Finance officers reconcile purchase contracts, scale manifests, passbook photographs, export ABA bulk transfer files, and record disbursement proofs.
+          </p>
+
+          <div class="grid-2">
+            <div>
+              <h4 style="color: var(--primary-light); font-size: 13px; margin-bottom: 8px;">Standardized CSV Manifest Export Pattern:</h4>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+                Strictly formatted for bank upload and audit across Warehouse, Inventory, and Finance:
+              </p>
+              <div class="formula-card">
+                {truck_plate}_{ddmmyy}_{warehouse_id}_{username}_{date}.csv<br><br>
+                Examples:<br>
+                Warehouse: 3A-4455_281026_W002_phearun_2026-10-29.csv<br>
+                Inventory: 3A-4455_301026_W002_bousong_2026-10-30.csv<br>
+                Finance: 3A-4455_311026_W002_chanvoleak_2026-10-31.csv
+              </div>
+            </div>
+
+            <div>
+              <h4 style="color: var(--emerald-light); font-size: 13px; margin-bottom: 8px;">Disbursement Workflow:</h4>
+              <ul style="font-size: 12.5px; color: var(--text-muted); margin-left: 18px; line-height: 1.8;">
+                <li>Verify truck data -> status transitions to <code>VERIFIED</code>.</li>
+                <li>Optional currency converter (KHR &harr; USD) with real-time exchange rate input.</li>
+                <li>Export ABA Bulk Transfer / ACLEDA Bulk Transfer CSV.</li>
+                <li>Upload bank payment transfer receipt image/PDF.</li>
+                <li>Click <strong>Confirm & Process Payment</strong> -> transitions to <code>DISBURSED</code>.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 8: ADMIN & MASTER DATA -->
+        <div id="tab-admin" class="tab-pane">
+          <h3 class="card-title">Module 8: System Administration & Master Data Portal</h3>
+          <p class="card-lead">
+            Centralized control center accessible by System Administrators (<code>/admin/config</code>) to maintain system configuration without code redeployment.
+          </p>
+
+          <div class="grid-3">
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <div style="font-weight: 800; font-size: 12px; color: var(--primary-light); margin-bottom: 4px;">Paddy Varieties & Prices</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Manage 13 varieties and grades (Phka Rumduol, Red Jasmine, Foundation Seed), base prices, moisture limits.</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <div style="font-weight: 800; font-size: 12px; color: var(--emerald-light); margin-bottom: 4px;">Target Villages & Provinces</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Manage 61 active villages across Preah Vihear, Stung Treng, Ratanakiri, and Mondulkiri.</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <div style="font-weight: 800; font-size: 12px; color: var(--amber-light); margin-bottom: 4px;">Commercial Banks</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Configure 9 supported commercial banks and microfinance institutions.</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <div style="font-weight: 800; font-size: 12px; color: var(--purple-light); margin-bottom: 4px;">Warehouses & Fleet</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Configure receiving facilities (W002 CACC, W003 Amru, W004 Koh Nhek, W005 Other) and registered trucks.</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <div style="font-weight: 800; font-size: 12px; color: #38bdf8; margin-bottom: 4px;">Scale Tolerance Limits</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Adjust acceptable (300kg), warning (500kg), and critical discrepancy limits.</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <div style="font-weight: 800; font-size: 12px; color: var(--rose-light); margin-bottom: 4px;">Backup, Restore & Audit</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">1-Click JSON full database export & restore, immutable security audit logs with IP and user tracking.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: USER ROLES & PERMISSIONS -->
+    <section id="section-roles" class="doc-section">
+      <div class="section-header">
+        <div class="section-icon">👥</div>
+        <div>
+          <h2 class="section-title">3. User Roles, Access Levels & Permission Matrix</h2>
+        </div>
+        <span class="section-badge">5 RBAC Tiers</span>
+      </div>
+
+      <div class="content-card">
+        <p class="card-lead">
+          Role-Based Access Control (RBAC) is enforced across both the Next.js API server layer and the UI component rendering tree. Default/demo credentials have been purged; the system is strictly operated by the 30 team accounts loaded from <code>username_roles.csv</code>.
+        </p>
+
+        <!-- Searchable / Filterable Role Matrix Table -->
+        <div class="filter-box">
+          <input type="text" id="role-search" class="filter-input" placeholder="Search entity or permission..." onkeyup="filterTable('role-search', 'role-table')">
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="role-table">
+            <thead>
+              <tr>
+                <th>Entity / Feature Module</th>
+                <th>FIELD (Inspector)</th>
+                <th>WAREHOUSE (Receiver)</th>
+                <th>INVENTORY (Manager)</th>
+                <th>FINANCE (Officer)</th>
+                <th>ADMIN (System Admin)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Quality Specs Record</strong></td>
+                <td><span class="badge badge-green">Create / Edit / Select</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Farmer Payment Profile</strong></td>
+                <td><span class="badge badge-green">Create / Edit / Photo</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Purchase Invoices & Receipts</strong></td>
+                <td><span class="badge badge-green">Create / Weigh / Sign</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Transport Truck Dispatch</strong></td>
+                <td><span class="badge badge-green">Create / Dispatch</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-blue">Read Only</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Warehouse Intake Scale Weighing</strong></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-green">Gross/Tare Weigh & Photo</span></td>
+                <td><span class="badge badge-blue">Read Scale Proof</span></td>
+                <td><span class="badge badge-blue">Read Scale Proof</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Inventory Recording & Confirmation</strong></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-blue">Read Status</span></td>
+                <td><span class="badge badge-green">Confirm & Assign Bin</span></td>
+                <td><span class="badge badge-blue">Verify In Stock</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Finance Disbursement & Bank Transfer</strong></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-green">Verify, ABA Export, Disburse</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Master Data & Price Specs Portal</strong></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-purple">Full Control</span></td>
+              </tr>
+              <tr>
+                <td><strong>Database Backup & Clean Test Data</strong></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-rose">No Access</span></td>
+                <td><span class="badge badge-purple">CLI & Web API Only</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="card-title" style="margin-top: 24px;">3.2 Official 30 Accounts Roster & Geographic Scoping</h3>
+        <div class="grid-2">
+          <div style="background: var(--bg-surface); padding: 16px; border-radius: 10px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 800; font-size: 13px; color: var(--emerald-light); margin-bottom: 8px;">🌾 Field Operations Inspectors (23 Accounts)</div>
+            <ul style="font-size: 12px; color: var(--text-muted); line-height: 1.7; margin-left: 16px;">
+              <li><strong>Preah Vihear (7):</strong> <code>piseth</code>, <code>chandara</code>, <code>chin</code>, <code>sokunrath</code>, <code>vornne</code>, <code>sokun</code>, <code>vuthy</code></li>
+              <li><strong>Stung Treng (9):</strong> <code>theavy</code>, <code>samol</code>, <code>yornthy</code>, <code>kalayan</code>, <code>vongrith</code>, <code>samath</code>, <code>kimly</code>, <code>sreypov</code>, <code>thearith</code></li>
+              <li><strong>Ratanakiri (1):</strong> <code>sombath</code></li>
+              <li><strong>Mondulkiri (5):</strong> <code>tong</code>, <code>sokmen</code>, <code>vimean</code>, <code>chantha</code>, <code>thana</code></li>
+            </ul>
+          </div>
+
+          <div style="background: var(--bg-surface); padding: 16px; border-radius: 10px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 800; font-size: 13px; color: var(--primary-light); margin-bottom: 8px;">🏢 Central Mill, Logistics & Admin (7 Accounts)</div>
+            <ul style="font-size: 12px; color: var(--text-muted); line-height: 1.7; margin-left: 16px;">
+              <li><strong>System Administrator (1):</strong> <code>chansetha</code> (Full administrative control)</li>
+              <li><strong>Warehouse Scale Receiver (1):</strong> <code>phearun</code> (Weighbridge terminal intake)</li>
+              <li><strong>Inventory Manager (1):</strong> <code>bousong</code> (Grain stock verification)</li>
+              <li><strong>Finance Team (5):</strong> <code>chanvoleak</code>, <code>sengiy</code>, <code>neath</code>, <code>kanha</code>, <code>heap</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: FIELD APP -->
+    <section id="section-fieldapp" class="doc-section">
+      <div class="section-header">
+        <div class="section-icon">📱</div>
+        <div>
+          <h2 class="section-title">4. Field App Architecture & Offline Synchronization</h2>
+        </div>
+        <span class="section-badge">Flutter Native</span>
+      </div>
+
+      <div class="content-card">
+        <h3 class="card-title">4.1 Mobile Field Application Stack</h3>
+        <p class="card-lead">
+          The field tablet application is written in Flutter Native (Dart) and runs on rugged Android tablets deployed with field teams. It operates 100% offline using a local SQLite embedded engine (<code>sqflite</code>).
+        </p>
+
+        <div class="grid-3">
+          <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 800; font-size: 12px; color: var(--emerald-light); margin-bottom: 4px;">Local SQLite Engine</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Stores all specs records, farmer profiles, purchase invoices, and transport manifests locally with zero network connection.</div>
+          </div>
+
+          <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 800; font-size: 12px; color: var(--primary-light); margin-bottom: 4px;">Dual Signature Canvas</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Captures touchscreen digital signatures for both farmer and field inspector; serialized directly as Base64 strings.</div>
+          </div>
+
+          <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 800; font-size: 12px; color: var(--purple-light); margin-bottom: 4px;">ESC/POS Bluetooth Printing</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Prints physical thermal receipts in the field immediately after weighing via portable battery-powered Bluetooth thermal printers.</div>
+          </div>
+        </div>
+
+        <h3 class="card-title" style="margin-top: 24px;">4.2 Bidirectional Synchronization Protocol</h3>
+        <p class="card-lead">
+          Executed when field teams return to the station or connect to Wi-Fi/4G. Implemented in <code>field_app/lib/services/sync_service.dart</code>.
+        </p>
+
+        <div class="flowchart-container">
+          <div class="pipeline-row">
+            <div class="pipeline-step">
+              <span class="step-tag" style="color: var(--emerald-light);">Step 1: Auth & Pull</span>
+              <div class="step-title">Master Data Sync</div>
+              <div class="step-desc">Downloads latest villages, commercial banks, price specs, and tolerances from <code>/api/config</code>.</div>
+            </div>
+            <div class="step-arrow">➔</div>
+
+            <div class="pipeline-step">
+              <span class="step-tag" style="color: var(--primary-light);">Step 2: Specs Push</span>
+              <div class="step-title">Push Specs Records</div>
+              <div class="step-desc">POSTs unsynced specs to <code>/api/specs</code>; marks local SQLite row <code>isSynced = true</code>.</div>
+            </div>
+            <div class="step-arrow">➔</div>
+
+            <div class="pipeline-step">
+              <span class="step-tag" style="color: var(--amber-light);">Step 3: Profiles Push</span>
+              <div class="step-title">Push Farmer Profiles</div>
+              <div class="step-desc">Uploads passbook photos to <code>/api/upload</code>, then sends farmer profiles to <code>/api/farmers</code>.</div>
+            </div>
+            <div class="step-arrow">➔</div>
+
+            <div class="pipeline-step">
+              <span class="step-tag" style="color: var(--purple-light);">Step 4: Purchases Push</span>
+              <div class="step-title">Push Purchase Invoices</div>
+              <div class="step-desc">POSTs purchase receipts with sack weight arrays and digital signatures to <code>/api/purchases</code>.</div>
+            </div>
+            <div class="step-arrow">➔</div>
+
+            <div class="pipeline-step">
+              <span class="step-tag" style="color: #38bdf8;">Step 5: Manifests Push</span>
+              <div class="step-title">Push Transport Dispatches</div>
+              <div class="step-desc">POSTs truck manifests and links purchase IDs to transport dispatch in <code>/api/transport</code>.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert-box alert-blue">
+          <span class="alert-icon">🔄</span>
+          <div>
+            <strong>Cache & Data Lifecycle Invariant:</strong> Once records are successfully pushed to PostgreSQL, field inspectors can safely use <code>clearSyncedData()</code> to free memory on the Android tablet. The central PostgreSQL server is the authoritative single source of truth.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: DATABASE STRUCTURE -->
+    <section id="section-database" class="doc-section">
+      <div class="section-header">
+        <div class="section-icon">🗄️</div>
+        <div>
+          <h2 class="section-title">5. Database Structure & Relational Schema</h2>
+        </div>
+        <span class="section-badge">PostgreSQL + Prisma</span>
+      </div>
+
+      <div class="content-card">
+        <h3 class="card-title">5.1 Database Overview & Tables Catalog</h3>
+        <p class="card-lead">
+          Engineered using Prisma ORM v6 on PostgreSQL 15. All relational tables include performance indexes (<code>@@index</code>) on primary query dimensions (family code, village, status, created at).
+        </p>
+
+        <!-- Searchable DB Tables -->
+        <div class="filter-box">
+          <input type="text" id="db-search" class="filter-input" placeholder="Search table or column..." onkeyup="filterTable('db-search', 'db-table')">
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="db-table">
+            <thead>
+              <tr>
+                <th>Model / Table</th>
+                <th>Category</th>
+                <th>Primary Key</th>
+                <th>Foreign Keys & Relations</th>
+                <th>Key Attributes & Business Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>User</strong></td>
+                <td><span class="badge badge-purple">Master</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>Linked by all transactional tables</td>
+                <td>Stores 30 official users with roles (<code>Role</code> enum) and <code>assignedProvinces</code>.</td>
+              </tr>
+              <tr>
+                <td><strong>Village</strong></td>
+                <td><span class="badge badge-purple">Master</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>Unique <code>name</code></td>
+                <td>Stores 61 official target villages across Preah Vihear, Stung Treng, Ratanakiri, Mondulkiri.</td>
+              </tr>
+              <tr>
+                <td><strong>Bank</strong></td>
+                <td><span class="badge badge-purple">Master</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>Unique <code>name</code></td>
+                <td>Commercial banks (ABA, ACLEDA, Canadia, Sathapana, Wing, PRASAC, AMK, Hattha, Campu).</td>
+              </tr>
+              <tr>
+                <td><strong>PaddyPriceSpec</strong></td>
+                <td><span class="badge badge-purple">Master</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>Unique <code>(variety, grade)</code></td>
+                <td>Base prices (KHR), max moisture %, max foreign matter %, min whole grain %.</td>
+              </tr>
+              <tr>
+                <td><strong>LocationRegistry</strong></td>
+                <td><span class="badge badge-purple">Master</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>Unique <code>name</code></td>
+                <td>Warehouses (W002, W003, W004, W005) and Buying Stations (ST-PVH, ST-STR, etc.).</td>
+              </tr>
+              <tr>
+                <td><strong>FarmerProfile</strong></td>
+                <td><span class="badge badge-green">Transaction</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>CreatedBy &rarr; User(id)</td>
+                <td><code>familyCode</code>, <code>village</code>, bank name, account number, passbook photo URL.</td>
+              </tr>
+              <tr>
+                <td><strong>SpecsRecord</strong></td>
+                <td><span class="badge badge-green">Transaction</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>CreatedBy &rarr; User(id)</td>
+                <td>Moisture %, foreign matter %, whole grain %, broken rice %, grade, finalPrice/kg.</td>
+              </tr>
+              <tr>
+                <td><strong>PurchaseRecord</strong></td>
+                <td><span class="badge badge-green">Transaction</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>
+                  TransportRecord(id) [SetNull]<br>
+                  CreatedBy &rarr; User(id)
+                </td>
+                <td><code>familyCode</code>, netPayment, seedDeduction, signatures, status (PENDING...DISBURSED).</td>
+              </tr>
+              <tr>
+                <td><strong>PurchaseItem</strong></td>
+                <td><span class="badge badge-green">Transaction</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>PurchaseRecord(id) [Cascade]</td>
+                <td>Paddy variety, grade, sack count, total quantity (kg), <code>sackWeights</code> (JSON string array).</td>
+              </tr>
+              <tr>
+                <td><strong>TransportRecord</strong></td>
+                <td><span class="badge badge-green">Transaction</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>CreatedBy &rarr; User(id)</td>
+                <td>Driver name, truck plate, field weight, destinationWarehouse, payment receipts.</td>
+              </tr>
+              <tr>
+                <td><strong>TransportLot</strong></td>
+                <td><span class="badge badge-green">Transaction</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>TransportRecord(id) [Cascade]</td>
+                <td>Manifest lot breakdown by family code, variety, sacks, and field weight.</td>
+              </tr>
+              <tr>
+                <td><strong>WarehouseIntake</strong></td>
+                <td><span class="badge badge-amber">Intake</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>TransportRecord(id) [1:1, Cascade]</td>
+                <td>Gross/tare scale weights, net weight, weight variance kg/%, arrivedWarehouse, scale photos.</td>
+              </tr>
+              <tr>
+                <td><strong>RejectionLog</strong></td>
+                <td><span class="badge badge-rose">Audit</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>User(id) [Cascade]</td>
+                <td>Target entity, targetModule (FIELD/WAREHOUSE/INVENTORY), rejection reason, resolution status.</td>
+              </tr>
+              <tr>
+                <td><strong>AuditLog</strong></td>
+                <td><span class="badge badge-rose">Audit</span></td>
+                <td><code>id (cuid)</code></td>
+                <td>User(id) [Cascade]</td>
+                <td>Immutable action log (CREATE, UPDATE, DISBURSE, INTAKE, CONFIG), IP address, details JSON.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="card-title" style="margin-top: 24px;">5.2 Key Foreign Key Invariants & Cascades</h3>
+        <div class="grid-2">
+          <div class="alert-box alert-emerald">
+            <span class="alert-icon">🛡️</span>
+            <div>
+              <strong>Transport to Purchase Unlinking:</strong> <code>PurchaseRecord.transportRecordId</code> uses <code>onDelete: SetNull</code>. If a truck manifest is cancelled or deleted, associated purchases are not destroyed—they gracefully return to unassigned status.
+            </div>
+          </div>
+
+          <div class="alert-box alert-amber">
+            <span class="alert-icon">🗑️</span>
+            <div>
+              <strong>Composite Item Cascade:</strong> <code>PurchaseItem</code> and <code>TransportLot</code> use <code>onDelete: Cascade</code>. When a purchase or truck is deleted, its individual line item weights clean up automatically without orphan records.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: REJECTION & RETURN CHAIN -->
+    <section id="section-rejections" class="doc-section">
+      <div class="section-header">
+        <div class="section-icon">🔄</div>
+        <div>
+          <h2 class="section-title">6. Rejection Chains & Operational Return Delegation</h2>
+        </div>
+        <span class="section-badge">Approval Loop</span>
+      </div>
+
+      <div class="content-card">
+        <h3 class="card-title">6.1 Linear Single-Stage Rejection Architecture</h3>
+        <p class="card-lead">
+          To prevent chaos and ensure clear chain of custody, the rejection workflow follows a strict linear backward delegation rule. Rejections never jump stages.
+        </p>
+
+        <!-- Rejection Flow Diagram -->
+        <div class="flowchart-container">
+          <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--rose-light); margin-bottom: 12px;">
+            Single-Stage Rejection Delegation Loop
+          </div>
+
+          <div class="rejection-pipeline">
+            <div class="rejection-node">
+              <div class="rejection-node-title">Stage 4: Finance</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Rejects strictly to <strong>Inventory</strong></div>
+              <div style="font-size: 10px; color: var(--rose-light); font-weight: 700;">Status: Returned by Finance</div>
+            </div>
+
+            <div class="rejection-arrow">➔</div>
+
+            <div class="rejection-node">
+              <div class="rejection-node-title">Stage 3: Inventory</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Can fix or delegate to <strong>Warehouse</strong></div>
+              <div style="font-size: 10px; color: var(--rose-light); font-weight: 700;">Status: Returned to Warehouse</div>
+            </div>
+
+            <div class="rejection-arrow">➔</div>
+
+            <div class="rejection-node">
+              <div class="rejection-node-title">Stage 2: Warehouse</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Can fix scale/photos or reject to <strong>Field</strong></div>
+              <div style="font-size: 10px; color: var(--rose-light); font-weight: 700;">Status: Returned to Field</div>
+            </div>
+
+            <div class="rejection-arrow">➔</div>
+
+            <div class="rejection-node">
+              <div class="rejection-node-title">Stage 1: Field Team</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Updates purchases/manifest & <strong>Resubmits</strong></div>
+              <div style="font-size: 10px; color: var(--emerald-light); font-weight: 700;">Resets to EN_ROUTE (Forward)</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="card-title" style="margin-top: 20px;">6.2 Rejection Resolution Mechanics</h3>
+        <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 20px;">
+          <li><strong>Audit Trail Preservation:</strong> Every rejection creates an immutable <code>RejectionLog</code> entry containing the rejecting staff name, role, timestamp, target module, and mandatory rejection explanation reason.</li>
+          <li><strong>Automated Resolution:</strong> When the responsible team updates and resubmits their corrected record (e.g. Warehouse updates scale weights via <code>PUT /api/warehouse/intake/[id]</code> or Field resubmits via <code>PUT /api/transport/[id]</code>), active rejection logs automatically transition to <code>RESOLVED</code> with the resolving user's identity.</li>
+          <li><strong>Zero State Invalidation:</strong> Other completed trucks and historical disbursements remain completely unaffected when one truck is undergoing rejection correction.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SECTION 7: REVIEW CHECKLIST & OPEN ITEMS -->
+    <section id="section-review-notes" class="doc-section">
+      <div class="section-header">
+        <div class="section-icon">📝</div>
+        <div>
+          <h2 class="section-title">7. System Review Checklist & Feedback Guide</h2>
+        </div>
+        <span class="section-badge">QA Ready</span>
+      </div>
+
+      <div class="content-card">
+        <p class="card-lead">
+          Please review the following verification dimensions and use this checklist to record any discrepancies, missing requirements, or operational adjustments needed before further development.
+        </p>
+
+        <details class="accordion" open>
+          <summary>✓ Checklist 1: Business Logic & Calculations</summary>
+          <div class="accordion-body">
+            <ul style="font-size: 12.5px; color: var(--text-muted); line-height: 1.8; margin-left: 18px;">
+              <li>Are the moisture, foreign matter, and whole grain percentage thresholds in <code>PaddyPriceSpec</code> 100% matched to current lab standards?</li>
+              <li>Is the seasonal seed return interest rate formula (<code>Seed Borrowed &times; 1.10</code>) exactly what is required for all cooperatives?</li>
+              <li>Is the default scale tolerance threshold (1.0% / 300 kg warning, 500 kg critical) appropriate for wet season vs dry season transport?</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="accordion" open>
+          <summary>✓ Checklist 2: User Roles, Permissions & Scoping</summary>
+          <div class="accordion-body">
+            <ul style="font-size: 12.5px; color: var(--text-muted); line-height: 1.8; margin-left: 18px;">
+              <li>Are all 30 staff members assigned to their correct official roles and provincial scopes in <code>username_roles.csv</code>?</li>
+              <li>Is the single-stage rejection delegation (Finance &rarr; Inventory &rarr; Warehouse &rarr; Field) fully aligned with physical management hierarchies?</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="accordion" open>
+          <summary>✓ Checklist 3: Exports & File Naming Formats</summary>
+          <div class="accordion-body">
+            <ul style="font-size: 12.5px; color: var(--text-muted); line-height: 1.8; margin-left: 18px;">
+              <li>Confirm the CSV export naming convention: <code>{truck plate number}_{ddmmyy}_{warehouse id}_{username}_{export csv date}.csv</code>.</li>
+              <li>Confirm the column headers in the Finance export (Order Date, Delivery Date, Warehouse Code, Supplier Code, Supplier Name, Bank Account, Phone Number).</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Interactive Filter & Tab Controller Script -->
+  <script>
+    function switchTab(tabId, btn) {
+      const container = btn.closest('.content-card');
+      const tabs = container.querySelectorAll('.tab-pane');
+      const btns = container.querySelectorAll('.tab-btn');
+
+      tabs.forEach(t => t.classList.remove('active'));
+      btns.forEach(b => b.classList.remove('active'));
+
+      document.getElementById(tabId).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    function filterTable(inputId, tableId) {
+      const input = document.getElementById(inputId);
+      const filter = input.value.toLowerCase();
+      const table = document.getElementById(tableId);
+      const rows = table.getElementsByTagName('tr');
+
+      for (let i = 1; i < rows.length; i++) {
+        const rowText = rows[i].textContent.toLowerCase();
+        if (rowText.includes(filter)) {
+          rows[i].style.display = '';
+        } else {
+          rows[i].style.display = 'none';
+        }
+      }
+    }
+
+    // Scroll spy for sidebar navigation
+    window.addEventListener('scroll', () => {
+      const sections = document.querySelectorAll('.doc-section, .doc-hero');
+      const navLinks = document.querySelectorAll('.nav-link');
+      let currentSectionId = '';
+
+      sections.forEach(section => {
+        const top = section.offsetTop - 100;
+        if (window.scrollY >= top) {
+          currentSectionId = section.getAttribute('id');
+        }
+      });
+
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + currentSectionId) {
+          link.classList.add('active');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
+

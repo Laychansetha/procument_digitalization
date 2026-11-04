@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../config/theme.dart';
 import '../../database/app_database.dart';
@@ -29,6 +30,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   final FocusNode _familyCodeFocusNode = FocusNode();
 
   String? _editingId;
+  String? _editingServerRecordId;
   String? _village;
   String? _paddyType;
   String? _selectedGrade;
@@ -41,10 +43,28 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   void initState() {
     super.initState();
     _loadHistory();
+    AppDatabase.instance.dbChangeNotifier.addListener(_onDbChanged);
+    ConfigDao.instance.configChangeNotifier.addListener(_onConfigChanged);
+  }
+
+  void _onDbChanged() {
+    if (mounted) _loadHistory();
+  }
+
+  void _onConfigChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    AppDatabase.instance.dbChangeNotifier.removeListener(_onDbChanged);
+    ConfigDao.instance.configChangeNotifier.removeListener(_onConfigChanged);
+    _familyCodeController.dispose();
+    _farmerNameController.dispose();
+    _moistureController.dispose();
+    _foreignMatterController.dispose();
+    _wholeGrainController.dispose();
+    _brokenRiceController.dispose();
     _familyCodeFocusNode.dispose();
     _searchController.dispose();
     _impurityController.dispose();
@@ -60,9 +80,11 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
         ? list
         : list.where((s) => allowedVillages.contains(s.village)).toList();
 
-    setState(() {
-      _localHistory = filtered;
-    });
+    if (mounted) {
+      setState(() {
+        _localHistory = filtered;
+      });
+    }
   }
 
   void _applyMasterSpecsForGrade(String variety, String grade) {
@@ -73,11 +95,19 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     );
 
     if (match.isNotEmpty) {
-      _wholeGrainController.text = match['minWholeGrain'] != null ? match['minWholeGrain'].toString() : (match['wholeGrain'] != null ? match['wholeGrain'].toString() : '');
-      _brokenRiceController.text = match['maxBrokenRice'] != null ? match['maxBrokenRice'].toString() : (match['brokenRice'] != null ? match['brokenRice'].toString() : '');
+      _wholeGrainController.text = match['minWholeGrain'] != null
+          ? match['minWholeGrain'].toString()
+          : (match['wholeGrain'] != null ? match['wholeGrain'].toString() : '');
+      _brokenRiceController.text = match['maxBrokenRice'] != null
+          ? match['maxBrokenRice'].toString()
+          : (match['brokenRice'] != null ? match['brokenRice'].toString() : '');
       _impurityController.text = match['impurity'] != null ? match['impurity'].toString() : '';
-      _foreignMatterController.text = match['maxForeignMatter'] != null ? match['maxForeignMatter'].toString() : (match['foreignMatter'] != null ? match['foreignMatter'].toString() : '6.0');
-      _moistureController.text = match['maxMoisture'] != null ? match['maxMoisture'].toString() : (match['moisture'] != null ? match['moisture'].toString() : '13.5');
+      _foreignMatterController.text = match['maxForeignMatter'] != null
+          ? match['maxForeignMatter'].toString()
+          : (match['foreignMatter'] != null ? match['foreignMatter'].toString() : '6.0');
+      _moistureController.text = match['maxMoisture'] != null
+          ? match['maxMoisture'].toString()
+          : (match['moisture'] != null ? match['moisture'].toString() : '13.5');
     } else {
       if (variety == 'Phka Rumduol') {
         if (grade == 'A1') { _wholeGrainController.text = '75'; _brokenRiceController.text = '25'; _impurityController.text = '2'; _foreignMatterController.text = '6.0'; _moistureController.text = '13.5'; }
@@ -111,12 +141,42 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     _impurityController.clear();
     setState(() {
       _editingId = null;
+      _editingServerRecordId = null;
       _village = null;
       _paddyType = null;
       _selectedGrade = null;
       _isOrganic = true;
     });
     _familyCodeFocusNode.requestFocus();
+  }
+
+  /// Auto-fill Farmer Name & Village when Family Code is typed (matching Web App)
+  Future<void> _autoFillFromFamilyCode(String codeVal) async {
+    final norm = codeVal.trim().toLowerCase();
+    if (norm.isEmpty) return;
+
+    final farmers = await AppDatabase.instance.getAllFarmers();
+    final fMatches = farmers.where((f) => f.familyCode.trim().toLowerCase() == norm).toList();
+    if (fMatches.length == 1) {
+      setState(() {
+        if (_farmerNameController.text.trim().isEmpty) {
+          _farmerNameController.text = fMatches.first.farmerName;
+        }
+        _village ??= fMatches.first.village;
+      });
+      return;
+    }
+
+    final specs = await AppDatabase.instance.getAllSpecs();
+    final sMatches = specs.where((s) => s.familyCode.trim().toLowerCase() == norm).toList();
+    if (sMatches.length == 1) {
+      setState(() {
+        if (_farmerNameController.text.trim().isEmpty) {
+          _farmerNameController.text = sMatches.first.farmerName;
+        }
+        _village ??= sMatches.first.village;
+      });
+    }
   }
 
   Future<void> _searchAndLoadFarmerInfo() async {
@@ -148,7 +208,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           _farmerNameController.text = f.farmerName;
           _village = f.village;
         });
-        AppNotification.showSuccess(context, 'Farmer Loaded');
+        if (mounted) AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingFarmers.map((f) => {'code': f.familyCode, 'name': f.farmerName, 'village': f.village}).toList());
       }
@@ -172,7 +232,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           _farmerNameController.text = p.farmerName;
           _village = p.village;
         });
-        AppNotification.showSuccess(context, 'Farmer Loaded');
+        if (mounted) AppNotification.showSuccess(context, 'Farmer Loaded');
       } else {
         _showFarmerSelectionDialog(matchingPurchases.map((p) => {'code': p.familyCode, 'name': p.farmerName, 'village': p.village}).toList());
       }
@@ -253,11 +313,31 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     final maxF = (match['maxForeignMatter'] as num?)?.toDouble() ?? 8.0;
     final isValid = moisture <= maxM && foreignMatter <= maxF;
 
+    final normCode = _familyCodeController.text.trim().toUpperCase();
+    final normVillage = _village!.trim();
+
+    // Check if an unsynced record with the same (familyCode, village, paddyType, selectedGrade) already exists
+    String targetId = _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}';
+    String? targetServerId = _editingServerRecordId;
+    if (_editingId == null) {
+      for (final existing in _localHistory) {
+        if (existing.familyCode.toUpperCase() == normCode &&
+            existing.village == normVillage &&
+            existing.paddyType == _paddyType &&
+            existing.selectedGrade == _selectedGrade) {
+          targetId = existing.id;
+          targetServerId = existing.serverRecordId;
+          break;
+        }
+      }
+    }
+
     final record = SpecsRecord(
-      id: _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}',
-      familyCode: _familyCodeController.text.trim(),
+      id: targetId,
+      serverRecordId: targetServerId,
+      familyCode: normCode,
       farmerName: _farmerNameController.text.trim(),
-      village: _village!,
+      village: normVillage,
       paddyType: _paddyType!,
       selectedGrade: _selectedGrade!,
       isOrganic: _isOrganic,
@@ -272,6 +352,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       finalPrice: finalPrice,
       createdAt: DateTime.now(),
       isSynced: false,
+      syncError: null,
     );
 
     await AppDatabase.instance.insertSpecs(record);
@@ -286,16 +367,19 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
 
   Future<void> _editRecord(SpecsRecord item) async {
     final purchases = await AppDatabase.instance.getAllPurchases();
-    final isUsedInPurchase = purchases.any((p) => p.specsRecordId == item.id);
-    if (isUsedInPurchase) {
+    final isUsedInDispatchedPurchase = purchases.any((p) =>
+        (p.specsRecordId == item.id || (item.serverRecordId != null && p.specsRecordId == item.serverRecordId)) &&
+        (p.status != 'PENDING' || p.transportRecordId != null));
+    if (isUsedInDispatchedPurchase) {
       if (mounted) {
-        _showAlertDialog('Locked Record', 'This Specs Record has already been used for a Purchase Record and cannot be edited.');
+        _showAlertDialog('Locked Record', 'This Specs Record cannot be edited because its linked purchase has already been assigned to transport or dispatched.');
       }
       return;
     }
 
     setState(() {
       _editingId = item.id;
+      _editingServerRecordId = item.serverRecordId;
       _familyCodeController.text = item.familyCode;
       _farmerNameController.text = item.farmerName;
       _village = item.village;
@@ -314,7 +398,8 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
 
   Future<void> _deleteRecord(SpecsRecord item) async {
     final purchases = await AppDatabase.instance.getAllPurchases();
-    final isUsedInPurchase = purchases.any((p) => p.specsRecordId == item.id);
+    final isUsedInPurchase = purchases.any((p) =>
+        p.specsRecordId == item.id || (item.serverRecordId != null && p.specsRecordId == item.serverRecordId));
     if (isUsedInPurchase) {
       if (mounted) {
         _showAlertDialog('Locked Record', 'Cannot delete Specs Record. This record is currently linked to an active Purchase Record.');
@@ -349,34 +434,45 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   }
 
   void _showRecordOptionsDialog(SpecsRecord item) {
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('${item.familyCode} · ${item.farmerName}', style: const TextStyle(color: AppTheme.emeraldLight, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Paddy Category: ${item.paddyType} (${item.selectedGrade})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Moisture: ${item.moisture}% · Foreign Matter: ${item.foreignMatter}%', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Whole Grain: ${item.wholeGrain}% · Broken: ${item.brokenRice}%', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
-            Text('Base Price: ${item.finalPrice.toInt()} KHR/kg', style: const TextStyle(color: AppTheme.emeraldLight, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text('Village: ${item.village}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+            Text('Paddy Category: ${item.paddyType} (${item.selectedGrade})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+            Text('Whole Grain: ${item.wholeGrain ?? '-'}% · Broken: ${item.brokenRice ?? '-'}%', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+            Text('Impurity: ${item.impurity ?? '-'}% · Foreign Matter: ${item.foreignMatter}%', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+            Text('Moisture: ${item.moisture}% · Inspection: ${item.isValid ? '✅ Passed' : '⚠️ Exceeds Limit'}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12)),
+            const SizedBox(height: 6),
+            Text('Base Price: ${NumberFormat('#,###').format(item.finalPrice.toInt())} KHR/kg', style: const TextStyle(color: AppTheme.emeraldLight, fontSize: 13, fontWeight: FontWeight.bold)),
+            Text('Recorded: $dateStr', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
             const SizedBox(height: 8),
-            Text('Status: ${item.isSynced ? '🟢 Synced with Server' : '⏳ Pending Local Sync'}', style: TextStyle(color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text(
+              'Status: ${item.isSynced ? '🟢 Synced with Server' : '⏳ Pending Local Sync'}',
+              style: TextStyle(color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            if (item.syncError != null && item.syncError!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text('⚠️ Sync Warning: ${item.syncError}', style: const TextStyle(color: AppTheme.errorRed, fontSize: 11, fontWeight: FontWeight.bold)),
+            ],
           ],
         ),
         actions: [
-          if (!item.isSynced)
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _editRecord(item);
-              },
-              icon: const Icon(Icons.edit, size: 16, color: AppTheme.skyBlue),
-              label: const Text('Edit', style: TextStyle(color: AppTheme.skyBlue)),
-            ),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _editRecord(item);
+            },
+            icon: const Icon(Icons.edit, size: 16, color: AppTheme.skyBlue),
+            label: const Text('Edit', style: TextStyle(color: AppTheme.skyBlue)),
+          ),
           if (!item.isSynced)
             TextButton.icon(
               onPressed: () {
@@ -404,6 +500,307 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     );
   }
 
+  Widget _buildFormCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.analytics, color: AppTheme.emeraldPrimary, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    _editingId != null ? 'Edit Quality Specs Record' : 'Quality Specs Inspection Entry',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _searchAndLoadFarmerInfo,
+                    icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
+                    label: const Text('Load Farmer Info', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.emeraldPrimary,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                  ),
+                  if (_editingId != null) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: _resetForm,
+                      icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
+                      label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Row 1: Family Code, Farmer Name, Village
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isWide = constraints.maxWidth > 520;
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildFamilyCodeInput()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildFarmerNameInput()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildVillageDropdown()),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildFamilyCodeInput(),
+                        const SizedBox(height: 12),
+                        _buildFarmerNameInput(),
+                        const SizedBox(height: 12),
+                        _buildVillageDropdown(),
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Row 2: Paddy Category & Grade
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isWide = constraints.maxWidth > 480;
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildPaddyCategoryDropdown()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildGradeDropdown()),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildPaddyCategoryDropdown(),
+                        const SizedBox(height: 12),
+                        _buildGradeDropdown(),
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Row 3: Quality Parameters following Master Grading order
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isWide = constraints.maxWidth > 520;
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildWholeGrainInput()),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildBrokenRiceInput()),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildImpurityInput()),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildForeignMatterInput()),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildMoistureInput()),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildWholeGrainInput(),
+                        const SizedBox(height: 12),
+                        _buildBrokenRiceInput(),
+                        const SizedBox(height: 12),
+                        _buildImpurityInput(),
+                        const SizedBox(height: 12),
+                        _buildForeignMatterInput(),
+                        const SizedBox(height: 12),
+                        _buildMoistureInput(),
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 24),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saveSpecs,
+              icon: Icon(_editingId != null ? Icons.check_circle : Icons.save, size: 18, color: const Color(0xFF0B0F19)),
+              label: Text(
+                _editingId != null ? 'Update Quality Specs Record' : 'Save Quality Specs Record',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19)),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.emeraldPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistorySection(List<SpecsRecord> filteredHistory) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.history, color: AppTheme.emeraldLight, size: 18),
+                  SizedBox(width: 8),
+                  Text('Saved Inspection History', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.emeraldPrimary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('${filteredHistory.length} Records', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.emeraldLight)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Search Box
+          TextFormField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search by Family Code, Farmer Name, or Village...',
+              prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: (val) => setState(() => _searchQuery = val.trim()),
+          ),
+          const SizedBox(height: 12),
+
+          filteredHistory.isEmpty
+              ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(color: AppTheme.inputBackground, borderRadius: BorderRadius.circular(12)),
+                  child: const Center(
+                    child: Text('No matching quality inspection records found.', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filteredHistory.length,
+                  itemBuilder: (context, index) {
+                    final item = filteredHistory[index];
+                    final hasError = item.syncError != null && item.syncError!.isNotEmpty;
+                    return Card(
+                      color: AppTheme.inputBackground,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: hasError ? AppTheme.errorRed : AppTheme.borderLight),
+                      ),
+                      child: ListTile(
+                        onTap: () => _showRecordOptionsDialog(item),
+                        title: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${item.familyCode} · ${item.farmerName}',
+                                style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.emeraldLight, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: hasError
+                                    ? AppTheme.errorRed.withOpacity(0.15)
+                                    : (item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15)),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: hasError ? AppTheme.errorRed : (item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
+                                ),
+                              ),
+                              child: Text(
+                                hasError ? '⚠️ Error' : (item.isSynced ? '✓ Synced' : '⏳ Offline'),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: hasError ? AppTheme.errorRed : (item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Text(
+                          '${item.village} · ${item.paddyType} (${item.selectedGrade})\nMoisture: ${item.moisture}% · Impurity: ${item.impurity ?? '-'}% · Price: ${NumberFormat('#,###').format(item.finalPrice.toInt())} KHR/kg',
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                        ),
+                        trailing: const Icon(
+                          Icons.chevron_right,
+                          color: AppTheme.emeraldLight,
+                          size: 18,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredHistory = _localHistory.where((item) {
@@ -411,311 +808,38 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       final q = _searchQuery.toLowerCase();
       return item.familyCode.toLowerCase().contains(q) ||
           item.farmerName.toLowerCase().contains(q) ||
-          item.village.toLowerCase().contains(q);
+          item.village.toLowerCase().contains(q) ||
+          item.paddyType.toLowerCase().contains(q);
     }).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBackground,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.borderLight),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  OrientationBuilder(
-                    builder: (context, orientation) {
-                      bool isLandscape = orientation == Orientation.landscape;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isTabletLandscape = constraints.maxWidth >= 900;
 
-                      if (isLandscape) {
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.analytics, color: AppTheme.emeraldPrimary, size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _editingId != null ? 'Edit Quality Specs Record' : 'Quality Specs Inspection Entry',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                                ),
-                              ],
-                            ),
-                            Row(
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: _searchAndLoadFarmerInfo,
-                                  icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
-                                  label: const Text('Load Farmer Info', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.emeraldPrimary,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  ),
-                                ),
-                                if (_editingId != null) ...[
-                                  const SizedBox(width: 8),
-                                  TextButton.icon(
-                                    onPressed: _resetForm,
-                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
-                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        );
-                      } else {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.analytics, color: AppTheme.emeraldPrimary, size: 20),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _editingId != null ? 'Edit Quality Specs Record' : 'Quality Specs Inspection Entry',
-                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textWhite),
-                                    ),
-                                  ],
-                                ),
-                                if (_editingId != null)
-                                  TextButton.icon(
-                                    onPressed: _resetForm,
-                                    icon: const Icon(Icons.cancel, size: 14, color: AppTheme.amberGold),
-                                    label: const Text('Cancel Edit', style: TextStyle(fontSize: 11, color: AppTheme.amberGold)),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: _searchAndLoadFarmerInfo,
-                              icon: const Icon(Icons.person_search, size: 16, color: Colors.white),
-                              label: const Text('Load Farmer Info', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.emeraldPrimary,
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              ),
-                            ),
-                          ],
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Row 1: Family Code, Farmer Name, Village
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      bool isDesktop = constraints.maxWidth > 600;
-                      return isDesktop
-                          ? Row(
-                              children: [
-                                Expanded(child: _buildFamilyCodeInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildFarmerNameInput()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildVillageDropdown()),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _buildFamilyCodeInput(),
-                                const SizedBox(height: 12),
-                                _buildFarmerNameInput(),
-                                const SizedBox(height: 12),
-                                _buildVillageDropdown(),
-                              ],
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Row 2: Paddy Category, Grade, Organic Switch
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      bool isDesktop = constraints.maxWidth > 600;
-                      return isDesktop
-                          ? Row(
-                              children: [
-                                Expanded(child: _buildPaddyCategoryDropdown()),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildGradeDropdown()),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _buildPaddyCategoryDropdown(),
-                                const SizedBox(height: 12),
-                                _buildGradeDropdown(),
-                              ],
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Row 3: Quality Parameters following Master Grading order
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      bool isDesktop = constraints.maxWidth > 600;
-                      return isDesktop
-                          ? Row(
-                              children: [
-                                Expanded(child: _buildWholeGrainInput()),
-                                const SizedBox(width: 10),
-                                Expanded(child: _buildBrokenRiceInput()),
-                                const SizedBox(width: 10),
-                                Expanded(child: _buildImpurityInput()),
-                                const SizedBox(width: 10),
-                                Expanded(child: _buildForeignMatterInput()),
-                                const SizedBox(width: 10),
-                                Expanded(child: _buildMoistureInput()),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _buildWholeGrainInput(),
-                                const SizedBox(height: 12),
-                                _buildBrokenRiceInput(),
-                                const SizedBox(height: 12),
-                                _buildImpurityInput(),
-                                const SizedBox(height: 12),
-                                _buildForeignMatterInput(),
-                                const SizedBox(height: 12),
-                                _buildMoistureInput(),
-                              ],
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _saveSpecs,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.emeraldPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(
-                        _editingId != null ? 'Update Quality Specs Record' : 'Save Quality Specs Record',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0B0F19)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Saved Records List & Real-time Search Box
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Saved Inspection History', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
-                Text('${filteredHistory.length} Records', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Search Box
-            TextFormField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by Family Code, Farmer Name, or Village...',
-                prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 16, color: AppTheme.textMuted),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-              ),
-              onChanged: (val) => setState(() => _searchQuery = val.trim()),
-            ),
-            const SizedBox(height: 12),
-
-            filteredHistory.isEmpty
-                ? Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: AppTheme.cardBackground, borderRadius: BorderRadius.circular(12)),
-                    child: const Center(
-                      child: Text('No matching quality inspection records found.', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-                    ),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: isTabletLandscape
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 6, child: _buildFormCard()),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 5, child: _buildHistorySection(filteredHistory)),
+                    ],
                   )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filteredHistory.length,
-                    itemBuilder: (context, index) {
-                      final item = filteredHistory[index];
-                      return Card(
-                        color: AppTheme.cardBackground,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: AppTheme.borderLight),
-                        ),
-                        child: ListTile(
-                          onTap: () => _showRecordOptionsDialog(item),
-                          title: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '${item.familyCode} · ${item.farmerName}',
-                                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.emeraldLight, fontSize: 13),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: item.isSynced ? AppTheme.emeraldPrimary.withOpacity(0.15) : AppTheme.amberGold.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: item.isSynced ? AppTheme.emeraldPrimary : AppTheme.amberGold),
-                                ),
-                                child: Text(
-                                  item.isSynced ? '✓ Synced' : '⏳ Offline',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: item.isSynced ? AppTheme.emeraldLight : AppTheme.amberGold),
-                                ),
-                              ),
-                            ],
-                          ),
-                          subtitle: Text('${item.village} · ${item.paddyType} (${item.selectedGrade})\nMoisture: ${item.moisture}% · Final Price: ${item.finalPrice.toInt()} KHR/kg', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                          trailing: const Icon(
-                            Icons.chevron_right,
-                            color: AppTheme.emeraldLight,
-                            size: 18,
-                          ),
-                        ),
-                      );
-                    },
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildFormCard(),
+                      const SizedBox(height: 20),
+                      _buildHistorySection(filteredHistory),
+                    ],
                   ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -723,6 +847,8 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     return TextFormField(
       controller: _familyCodeController,
       focusNode: _familyCodeFocusNode,
+      textCapitalization: TextCapitalization.characters,
+      onChanged: _autoFillFromFamilyCode,
       decoration: InputDecoration(
         labelText: 'FAMILY CODE *',
         hintText: 'e.g. TB034',
@@ -732,7 +858,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           onPressed: _searchAndLoadFarmerInfo,
         ),
       ),
-      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
     );
   }
 
@@ -748,7 +874,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           onPressed: _searchAndLoadFarmerInfo,
         ),
       ),
-      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
     );
   }
 
@@ -761,16 +887,19 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   }
 
   Widget _buildPaddyCategoryDropdown() {
+    final categories = ConfigDao.instance.paddyCategories;
+    final currentCategory = categories.contains(_paddyType) ? _paddyType : null;
+
     return DropdownButtonFormField<String>(
-      value: _paddyType,
+      value: currentCategory,
       decoration: const InputDecoration(
         labelText: 'PADDY CATEGORY *',
         hintText: 'Select Category',
         floatingLabelBehavior: FloatingLabelBehavior.always,
       ),
       hint: const Text('Select Paddy Category', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-      items: ConfigDao.instance.paddyCategories
-          .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
+      items: categories
+          .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 13))))
           .toList(),
       validator: (v) => v == null ? 'Select Category' : null,
       onChanged: (val) {
@@ -778,7 +907,9 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           _paddyType = val;
           final availableGrades = ConfigDao.instance.getGradesForCategory(val);
           if (_selectedGrade != null && !availableGrades.contains(_selectedGrade)) {
-            _selectedGrade = null;
+            _selectedGrade = availableGrades.isNotEmpty ? availableGrades.first : null;
+          } else if (_selectedGrade == null && availableGrades.isNotEmpty) {
+            _selectedGrade = availableGrades.first;
           }
           if (_selectedGrade != null && val != null) {
             _applyMasterSpecsForGrade(val, _selectedGrade!);
@@ -801,7 +932,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       ),
       hint: Text(_paddyType == null ? 'Select Category First' : 'Select Grade', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
       items: availableGrades
-          .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12))))
+          .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 13))))
           .toList(),
       validator: (v) => v == null ? 'Select Grade' : null,
       onChanged: (val) {

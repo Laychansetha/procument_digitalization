@@ -11,6 +11,13 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
 
+  /// Notifies listeners (e.g. HomeDashboard & Form Screens) whenever local SQLite records change
+  final ValueNotifier<int> dbChangeNotifier = ValueNotifier<int>(0);
+
+  void notifyDbChanged() {
+    dbChangeNotifier.value++;
+  }
+
   // In-Memory Storage Fallback for Web platform
   final List<SpecsRecord> _webSpecs = [];
   final List<FarmerProfile> _webFarmers = [];
@@ -201,10 +208,12 @@ class AppDatabase {
     if (kIsWeb) {
       _webSpecs.removeWhere((e) => e.id == record.id);
       _webSpecs.add(record);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.insert('quality_specs', record.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDbChanged();
   }
 
   Future<List<SpecsRecord>> getAllSpecs() async {
@@ -220,10 +229,12 @@ class AppDatabase {
   Future<void> deleteSpecs(String id) async {
     if (kIsWeb) {
       _webSpecs.removeWhere((e) => e.id == id);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.delete('quality_specs', where: 'id = ?', whereArgs: [id]);
+    notifyDbChanged();
   }
 
   // --- Farmer Profiles ---
@@ -231,10 +242,12 @@ class AppDatabase {
     if (kIsWeb) {
       _webFarmers.removeWhere((e) => e.id == record.id);
       _webFarmers.add(record);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.insert('farmer_profiles', record.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDbChanged();
   }
 
   Future<List<FarmerProfile>> getAllFarmers() async {
@@ -250,10 +263,12 @@ class AppDatabase {
   Future<void> deleteFarmer(String id) async {
     if (kIsWeb) {
       _webFarmers.removeWhere((e) => e.id == id);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.delete('farmer_profiles', where: 'id = ?', whereArgs: [id]);
+    notifyDbChanged();
   }
 
   // --- Purchase Records ---
@@ -261,10 +276,12 @@ class AppDatabase {
     if (kIsWeb) {
       _webPurchases.removeWhere((e) => e.id == record.id);
       _webPurchases.add(record);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.insert('purchase_records', record.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDbChanged();
   }
 
   Future<List<PurchaseRecord>> getAllPurchases() async {
@@ -280,24 +297,103 @@ class AppDatabase {
   Future<void> deletePurchase(String id) async {
     if (kIsWeb) {
       _webPurchases.removeWhere((e) => e.id == id);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.delete('purchase_records', where: 'id = ?', whereArgs: [id]);
+    notifyDbChanged();
   }
 
-  Future<List<PurchaseRecord>> getPurchasesForTransport(String transportId) async {
-    if (kIsWeb) {
-      return _webPurchases.where((e) => e.transportRecordId == transportId).toList();
+  Future<List<PurchaseRecord>> getPurchasesForTransport(String transportId, [List<String>? selectedIds]) async {
+    final all = await getAllPurchases();
+    final idSet = <String>{if (selectedIds != null) ...selectedIds};
+    return all.where((p) {
+      if (p.transportRecordId == transportId) return true;
+      if (idSet.contains(p.id)) return true;
+      if (p.serverRecordId != null && idSet.contains(p.serverRecordId)) return true;
+      return false;
+    }).toList();
+  }
+
+  /// Links selected purchase records to a transport record (status -> IN_TRANSIT)
+  /// and unlinks any previously assigned purchases that were removed (status -> PENDING)
+  Future<void> assignPurchasesToTransport(String transportId, List<String> purchaseIds) async {
+    final allPurchases = await getAllPurchases();
+    final selectedSet = purchaseIds.toSet();
+
+    for (final p in allPurchases) {
+      final isSelected = selectedSet.contains(p.id) ||
+          (p.serverRecordId != null && selectedSet.contains(p.serverRecordId));
+
+      if (isSelected && (p.transportRecordId != transportId || p.status == 'PENDING')) {
+        final updated = PurchaseRecord(
+          id: p.id,
+          serverRecordId: p.serverRecordId,
+          familyCode: p.familyCode,
+          farmerName: p.farmerName,
+          village: p.village,
+          variety: p.variety,
+          grade: p.grade,
+          standardPrice: p.standardPrice,
+          additionalPrice: p.additionalPrice,
+          finalPrice: p.finalPrice,
+          sackWeights: p.sackWeights,
+          totalWeight: p.totalWeight,
+          totalPayment: p.totalPayment,
+          seedBorrowed: p.seedBorrowed,
+          seedRepayment: p.seedRepayment,
+          seedDeduction: p.seedDeduction,
+          additionalPremium: p.additionalPremium,
+          netPayment: p.netPayment,
+          signatureFarmer: p.signatureFarmer,
+          signatureStaff: p.signatureStaff,
+          specsRecordId: p.specsRecordId,
+          transportRecordId: transportId,
+          status: 'IN_TRANSIT',
+          createdAt: p.createdAt,
+          isSynced: p.isSynced,
+          syncError: p.syncError,
+        );
+        await insertPurchase(updated);
+      } else if (!isSelected && p.transportRecordId == transportId) {
+        final updated = PurchaseRecord(
+          id: p.id,
+          serverRecordId: p.serverRecordId,
+          familyCode: p.familyCode,
+          farmerName: p.farmerName,
+          village: p.village,
+          variety: p.variety,
+          grade: p.grade,
+          standardPrice: p.standardPrice,
+          additionalPrice: p.additionalPrice,
+          finalPrice: p.finalPrice,
+          sackWeights: p.sackWeights,
+          totalWeight: p.totalWeight,
+          totalPayment: p.totalPayment,
+          seedBorrowed: p.seedBorrowed,
+          seedRepayment: p.seedRepayment,
+          seedDeduction: p.seedDeduction,
+          additionalPremium: p.additionalPremium,
+          netPayment: p.netPayment,
+          signatureFarmer: p.signatureFarmer,
+          signatureStaff: p.signatureStaff,
+          specsRecordId: p.specsRecordId,
+          transportRecordId: null,
+          status: 'PENDING',
+          createdAt: p.createdAt,
+          isSynced: p.isSynced,
+          syncError: p.syncError,
+        );
+        await insertPurchase(updated);
+      }
     }
-    final db = await instance.database;
-    final result = await db!.query(
-      'purchase_records',
-      where: 'transportRecordId = ?',
-      whereArgs: [transportId],
-      orderBy: 'createdAt DESC',
-    );
-    return result.map((json) => PurchaseRecord.fromMap(json)).toList();
+    notifyDbChanged();
+  }
+
+  /// Unlinks all purchase records from a deleted transport record back to PENDING
+  Future<void> unassignPurchasesFromTransport(String transportId) async {
+    await assignPurchasesToTransport(transportId, const []);
   }
 
   // --- Transport Records ---
@@ -305,10 +401,12 @@ class AppDatabase {
     if (kIsWeb) {
       _webTransports.removeWhere((e) => e.id == record.id);
       _webTransports.add(record);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.insert('transport_records', record.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDbChanged();
   }
 
   Future<List<TransportRecord>> getAllTransports() async {
@@ -324,10 +422,12 @@ class AppDatabase {
   Future<void> deleteTransport(String id) async {
     if (kIsWeb) {
       _webTransports.removeWhere((e) => e.id == id);
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
     await db!.delete('transport_records', where: 'id = ?', whereArgs: [id]);
+    notifyDbChanged();
   }
 
   // --- Sync Count ---
@@ -358,6 +458,7 @@ class AppDatabase {
       _webFarmers.removeWhere((e) => e.isSynced);
       _webPurchases.removeWhere((e) => e.isSynced);
       _webTransports.removeWhere((e) => e.isSynced);
+      notifyDbChanged();
       return s + f + p + t;
     }
     final db = await instance.database;
@@ -366,6 +467,7 @@ class AppDatabase {
       final f = await db.delete('farmer_profiles', where: 'isSynced = 1');
       final p = await db.delete('purchase_records', where: 'isSynced = 1');
       final t = await db.delete('transport_records', where: 'isSynced = 1');
+      notifyDbChanged();
       return s + f + p + t;
     }
     return 0;
@@ -378,6 +480,7 @@ class AppDatabase {
       _webFarmers.clear();
       _webPurchases.clear();
       _webTransports.clear();
+      notifyDbChanged();
       return;
     }
     final db = await instance.database;
@@ -386,6 +489,7 @@ class AppDatabase {
       await db.delete('farmer_profiles');
       await db.delete('purchase_records');
       await db.delete('transport_records');
+      notifyDbChanged();
     }
   }
 }

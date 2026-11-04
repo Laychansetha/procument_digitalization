@@ -9,6 +9,7 @@ class SearchableVillageSelect extends StatefulWidget {
   final String label;
   final String hint;
   final String? Function(String?)? validator;
+  final bool includeBuyingStations;
 
   const SearchableVillageSelect({
     Key? key,
@@ -17,6 +18,7 @@ class SearchableVillageSelect extends StatefulWidget {
     this.label = 'VILLAGE *',
     this.hint = 'Select Village...',
     this.validator,
+    this.includeBuyingStations = false,
   }) : super(key: key);
 
   @override
@@ -24,7 +26,7 @@ class SearchableVillageSelect extends StatefulWidget {
 }
 
 class _SearchableVillageSelectState extends State<SearchableVillageSelect> {
-  void _openVillagePickerModal(BuildContext context) {
+  void _openVillagePickerModal(BuildContext context, FormFieldState<String> state) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -32,7 +34,9 @@ class _SearchableVillageSelectState extends State<SearchableVillageSelect> {
       builder: (ctx) => _VillagePickerBottomSheet(
         selectedVillage: widget.value,
         titleLabel: widget.label,
+        includeBuyingStations: widget.includeBuyingStations,
         onSelect: (village) {
+          state.didChange(village);
           widget.onChanged(village);
           Navigator.pop(ctx);
         },
@@ -43,8 +47,9 @@ class _SearchableVillageSelectState extends State<SearchableVillageSelect> {
   @override
   Widget build(BuildContext context) {
     return FormField<String>(
+      key: ValueKey(widget.value),
       initialValue: widget.value,
-      validator: widget.validator,
+      validator: (_) => widget.validator != null ? widget.validator!(widget.value) : null,
       builder: (state) {
         final selectedText = widget.value;
         final hasSelection = selectedText != null && selectedText.isNotEmpty;
@@ -54,7 +59,7 @@ class _SearchableVillageSelectState extends State<SearchableVillageSelect> {
           mainAxisSize: MainAxisSize.min,
           children: [
             InkWell(
-              onTap: () => _openVillagePickerModal(context),
+              onTap: () => _openVillagePickerModal(context, state),
               borderRadius: BorderRadius.circular(10),
               child: InputDecorator(
                 decoration: InputDecoration(
@@ -67,7 +72,7 @@ class _SearchableVillageSelectState extends State<SearchableVillageSelect> {
                 child: Text(
                   hasSelection ? selectedText : widget.hint,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: hasSelection ? FontWeight.bold : FontWeight.normal,
                     color: hasSelection ? AppTheme.textWhite : AppTheme.textMuted,
                   ),
@@ -86,12 +91,14 @@ class _VillagePickerBottomSheet extends StatefulWidget {
   final String? selectedVillage;
   final String titleLabel;
   final ValueChanged<String> onSelect;
+  final bool includeBuyingStations;
 
   const _VillagePickerBottomSheet({
     Key? key,
     this.selectedVillage,
     this.titleLabel = 'VILLAGE',
     required this.onSelect,
+    this.includeBuyingStations = false,
   }) : super(key: key);
 
   @override
@@ -126,8 +133,13 @@ class _VillagePickerBottomSheetState extends State<_VillagePickerBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final allVillages = ConfigDao.instance.getVillagesForProvinces(_userAssignedProvinces);
-    final filtered = allVillages.where((v) {
+    final villages = ConfigDao.instance.getVillagesForProvinces(_userAssignedProvinces);
+    final allOptions = <String>[
+      if (widget.includeBuyingStations)
+        ...ConfigDao.instance.buyingStations.where((s) => !villages.contains(s)),
+      ...villages,
+    ];
+    final filtered = allOptions.where((v) {
       if (_searchQuery.isEmpty) return true;
       return v.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
@@ -154,7 +166,7 @@ class _VillagePickerBottomSheetState extends State<_VillagePickerBottomSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          
+
           // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -176,8 +188,8 @@ class _VillagePickerBottomSheetState extends State<_VillagePickerBottomSheet> {
                   ),
                   child: Text(
                     _userAssignedProvinces.isNotEmpty && _userAssignedProvinces.length < 4
-                        ? '${_userAssignedProvinces.join(", ")} (${filtered.length} Villages)'
-                        : '${filtered.length} Villages',
+                        ? '${_userAssignedProvinces.join(", ")} (${filtered.length} Locations)'
+                        : '${filtered.length} Locations',
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.skyBlue),
                   ),
                 ),
@@ -191,10 +203,10 @@ class _VillagePickerBottomSheetState extends State<_VillagePickerBottomSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: TextField(
               controller: _searchController,
-              autofocus: true,
+              autofocus: false,
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'Search village name...',
+                hintText: 'Search village or location name...',
                 prefixIcon: const Icon(Icons.search, color: AppTheme.skyBlue, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(

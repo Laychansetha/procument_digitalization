@@ -35,6 +35,19 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _loadUserInfo();
     _loadUnsyncedCount();
     ConfigDao.instance.fetchRemoteConfig();
+    AppDatabase.instance.dbChangeNotifier.addListener(_onDbChanged);
+  }
+
+  void _onDbChanged() {
+    if (mounted) {
+      _loadUnsyncedCount();
+    }
+  }
+
+  @override
+  void dispose() {
+    AppDatabase.instance.dbChangeNotifier.removeListener(_onDbChanged);
+    super.dispose();
   }
 
   Future<void> _loadUserInfo() async {
@@ -273,17 +286,24 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Enter your central desktop server LAN IP address or Cloud URL (e.g. http://192.168.1.10:3000):',
+                      'Production Cloud URL (https://procurement.icsserver.com) or local LAN IP:',
                       style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                     ),
                     const SizedBox(height: 14),
 
                     TextFormField(
                       controller: urlController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'SERVER BASE URL',
-                        hintText: 'http://192.168.1.10:3000',
-                        prefixIcon: Icon(Icons.lan, color: AppTheme.skyBlue, size: 18),
+                        hintText: 'https://procurement.icsserver.com',
+                        prefixIcon: const Icon(Icons.cloud_done_outlined, color: AppTheme.skyBlue, size: 18),
+                        suffixIcon: IconButton(
+                          tooltip: 'Reset to Production Server',
+                          icon: const Icon(Icons.restore, color: AppTheme.amberGold, size: 18),
+                          onPressed: () {
+                            urlController.text = 'https://procurement.icsserver.com';
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -597,7 +617,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ],
               ),
             ),
-          Expanded(child: _tabs[_currentIndex]),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _tabs,
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
