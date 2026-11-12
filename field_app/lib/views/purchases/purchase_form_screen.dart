@@ -474,7 +474,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     final now = DateTime.now();
     final recordId = isEditing
         ? _editingId!
-        : IdFormatter.generateUniquePurchaseId(code, _localHistory, now: now);
+        : IdFormatter.generateUniquePurchaseId(code, _localHistory, now);
 
     final record = PurchaseRecord(
       id: recordId,
@@ -895,16 +895,36 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
               final categoryField = DropdownButtonFormField<String>(
                 value: safeSelectedVariety,
+                isExpanded: true,
+                isDense: true,
+                icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
                 decoration: const InputDecoration(
                   labelText: 'PADDY CATEGORY *',
-                  hintText: 'Select Paddy Category',
+                  hintText: 'Select Category',
                   floatingLabelBehavior: FloatingLabelBehavior.always,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 ),
-                hint: const Text('Select Paddy Category', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                hint: const Text(
+                  'Select Category',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 items: varieties
-                    .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12))))
+                    .map((v) => DropdownMenuItem(
+                          value: v,
+                          child: Text(
+                            v,
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ))
                     .toList(),
-                validator: (v) => v == null ? 'Select Paddy Category' : null,
+                validator: (v) => v == null ? 'Select Category' : null,
                 onChanged: (val) {
                   if (val != null) {
                     setState(() {
@@ -923,17 +943,34 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
               final gradeField = DropdownButtonFormField<String>(
                 value: safeSelectedGrade,
+                isExpanded: true,
+                isDense: true,
+                icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
                 decoration: const InputDecoration(
                   labelText: 'GRADE *',
                   hintText: 'Select Grade',
                   floatingLabelBehavior: FloatingLabelBehavior.always,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 ),
                 hint: Text(
                   safeSelectedVariety == null ? 'Select Category First' : 'Select Grade',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 items: availableGrades
-                    .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12))))
+                    .map((g) => DropdownMenuItem(
+                          value: g,
+                          child: Text(
+                            g,
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ))
                     .toList(),
                 validator: (v) => v == null ? 'Select Grade' : null,
                 onChanged: (val) {

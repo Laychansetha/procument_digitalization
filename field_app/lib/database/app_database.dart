@@ -11,6 +11,19 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
 
+  @visibleForTesting
+  static bool useInMemoryForTest = false;
+
+  bool get _useInMemory => kIsWeb || useInMemoryForTest;
+
+  @visibleForTesting
+  void clearInMemoryForTest() {
+    _webSpecs.clear();
+    _webFarmers.clear();
+    _webPurchases.clear();
+    _webTransports.clear();
+  }
+
   /// Notifies listeners (e.g. HomeDashboard & Form Screens) whenever local SQLite records change
   final ValueNotifier<int> dbChangeNotifier = ValueNotifier<int>(0);
 
@@ -27,7 +40,7 @@ class AppDatabase {
   AppDatabase._init();
 
   Future<Database?> get database async {
-    if (kIsWeb) return null;
+    if (_useInMemory) return null;
     if (_database != null) return _database!;
     _database = await _initDB('ibis_field_local.db');
     return _database;
@@ -205,7 +218,7 @@ class AppDatabase {
 
   // --- Quality Specs ---
   Future<void> insertSpecs(SpecsRecord record) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webSpecs.removeWhere((e) => e.id == record.id);
       _webSpecs.add(record);
       notifyDbChanged();
@@ -216,8 +229,27 @@ class AppDatabase {
     notifyDbChanged();
   }
 
+  Future<void> upsertSpecsBatch(List<SpecsRecord> records) async {
+    if (records.isEmpty) return;
+    if (_useInMemory) {
+      for (final record in records) {
+        _webSpecs.removeWhere((e) => e.id == record.id);
+        _webSpecs.add(record);
+      }
+      notifyDbChanged();
+      return;
+    }
+    final db = await instance.database;
+    final batch = db!.batch();
+    for (final record in records) {
+      batch.insert('quality_specs', record.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+    notifyDbChanged();
+  }
+
   Future<List<SpecsRecord>> getAllSpecs() async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webSpecs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return _webSpecs;
     }
@@ -227,7 +259,7 @@ class AppDatabase {
   }
 
   Future<void> deleteSpecs(String id) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webSpecs.removeWhere((e) => e.id == id);
       notifyDbChanged();
       return;
@@ -239,7 +271,7 @@ class AppDatabase {
 
   // --- Farmer Profiles ---
   Future<void> insertFarmer(FarmerProfile record) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webFarmers.removeWhere((e) => e.id == record.id);
       _webFarmers.add(record);
       notifyDbChanged();
@@ -250,8 +282,27 @@ class AppDatabase {
     notifyDbChanged();
   }
 
+  Future<void> upsertFarmersBatch(List<FarmerProfile> records) async {
+    if (records.isEmpty) return;
+    if (_useInMemory) {
+      for (final record in records) {
+        _webFarmers.removeWhere((e) => e.id == record.id);
+        _webFarmers.add(record);
+      }
+      notifyDbChanged();
+      return;
+    }
+    final db = await instance.database;
+    final batch = db!.batch();
+    for (final record in records) {
+      batch.insert('farmer_profiles', record.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+    notifyDbChanged();
+  }
+
   Future<List<FarmerProfile>> getAllFarmers() async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webFarmers.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return _webFarmers;
     }
@@ -261,7 +312,7 @@ class AppDatabase {
   }
 
   Future<void> deleteFarmer(String id) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webFarmers.removeWhere((e) => e.id == id);
       notifyDbChanged();
       return;
@@ -273,7 +324,7 @@ class AppDatabase {
 
   // --- Purchase Records ---
   Future<void> insertPurchase(PurchaseRecord record) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webPurchases.removeWhere((e) => e.id == record.id);
       _webPurchases.add(record);
       notifyDbChanged();
@@ -285,7 +336,7 @@ class AppDatabase {
   }
 
   Future<List<PurchaseRecord>> getAllPurchases() async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webPurchases.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return _webPurchases;
     }
@@ -295,7 +346,7 @@ class AppDatabase {
   }
 
   Future<void> deletePurchase(String id) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webPurchases.removeWhere((e) => e.id == id);
       notifyDbChanged();
       return;
@@ -398,7 +449,7 @@ class AppDatabase {
 
   // --- Transport Records ---
   Future<void> insertTransport(TransportRecord record) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webTransports.removeWhere((e) => e.id == record.id);
       _webTransports.add(record);
       notifyDbChanged();
@@ -410,7 +461,7 @@ class AppDatabase {
   }
 
   Future<List<TransportRecord>> getAllTransports() async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webTransports.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return _webTransports;
     }
@@ -420,7 +471,7 @@ class AppDatabase {
   }
 
   Future<void> deleteTransport(String id) async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webTransports.removeWhere((e) => e.id == id);
       notifyDbChanged();
       return;
@@ -432,7 +483,7 @@ class AppDatabase {
 
   // --- Sync Count ---
   Future<int> getUnsyncedCount() async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       final s = _webSpecs.where((e) => !e.isSynced).length;
       final f = _webFarmers.where((e) => !e.isSynced).length;
       final p = _webPurchases.where((e) => !e.isSynced).length;
@@ -449,7 +500,7 @@ class AppDatabase {
 
   /// Clear only synchronized records from local SQLite (frees up mobile device storage)
   Future<int> clearSyncedData() async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       final s = _webSpecs.where((e) => e.isSynced).length;
       final f = _webFarmers.where((e) => e.isSynced).length;
       final p = _webPurchases.where((e) => e.isSynced).length;
@@ -475,7 +526,7 @@ class AppDatabase {
 
   /// Wipe all local SQLite table data (for fresh app initialization / testing)
   Future<void> clearAllData() async {
-    if (kIsWeb) {
+    if (_useInMemory) {
       _webSpecs.clear();
       _webFarmers.clear();
       _webPurchases.clear();

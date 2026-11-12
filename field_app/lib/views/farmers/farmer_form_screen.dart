@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -459,7 +457,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
               Text('Phone: ${item.phone != null && item.phone!.isNotEmpty ? item.phone : 'N/A'}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
               Text('Bank: ${item.bankName ?? 'N/A'} (${item.paymentMethod})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
               Text('Account #: ${item.accountNumber ?? 'N/A'} (${item.accountHolder ?? item.farmerName})', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
-              Text('Relationship: ${item.relationship}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
+              Text('Relationship: ${item.relationship == 'Self' ? 'Own Account' : item.relationship}', style: const TextStyle(color: AppTheme.textWhite, fontSize: 13)),
               if (item.syncError != null && item.syncError!.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text('⚠️ Sync Warning: ${item.syncError}', style: const TextStyle(color: AppTheme.errorRed, fontSize: 11, fontWeight: FontWeight.bold)),
@@ -869,7 +867,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
                           ],
                         ),
                         subtitle: Text(
-                          '${item.village} · ${item.bankName ?? item.paymentMethod}\nAcc: ${item.accountNumber ?? 'N/A'} (${item.accountHolder ?? item.farmerName} · ${item.relationship})',
+                          '${item.village} · ${item.bankName ?? item.paymentMethod}\nAcc: ${item.accountNumber ?? 'N/A'} (${item.accountHolder ?? item.farmerName} · ${item.relationship == 'Self' ? 'Own Account' : item.relationship})',
                           style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                         ),
                         trailing: const Icon(
@@ -990,14 +988,34 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
 
     return DropdownButtonFormField<String>(
       value: currentMethod,
+      isExpanded: true,
+      isDense: true,
+      icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
       decoration: const InputDecoration(
         labelText: 'PAYMENT METHOD *',
         hintText: 'Select Method',
         floatingLabelBehavior: FloatingLabelBehavior.always,
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
-      hint: const Text('Select Method', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+      hint: const Text(
+        'Select Method',
+        style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
       items: methods
-          .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 13))))
+          .map((m) => DropdownMenuItem(
+                value: m,
+                child: Text(
+                  m,
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ))
           .toList(),
       validator: (v) => v == null ? 'Select Method' : null,
       onChanged: (val) => setState(() => _paymentMethod = val),
@@ -1010,14 +1028,34 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
 
     return DropdownButtonFormField<String>(
       value: currentBank,
+      isExpanded: true,
+      isDense: true,
+      icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
       decoration: const InputDecoration(
         labelText: 'COMMERCIAL BANK *',
         hintText: 'Select Bank',
         floatingLabelBehavior: FloatingLabelBehavior.always,
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
-      hint: const Text('Select Bank', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+      hint: const Text(
+        'Select Bank',
+        style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
       items: banks
-          .map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 13))))
+          .map((b) => DropdownMenuItem(
+                value: b,
+                child: Text(
+                  b,
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ))
           .toList(),
       validator: (v) => _paymentMethod == 'Bank Transfer' && (v == null || v.isEmpty) ? 'Select Bank' : null,
       onChanged: (val) => setState(() => _bankName = val),
@@ -1041,7 +1079,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   }
 
   static const List<Map<String, String>> _relationshipOptions = [
-    {'value': 'Self', 'label': "Self (Farmer's Own Account)"},
+    {'value': 'Self', 'label': 'Own Account'},
     {'value': 'Husband', 'label': 'Husband'},
     {'value': 'Wife', 'label': 'Wife'},
     {'value': 'Father', 'label': 'Father'},
@@ -1064,16 +1102,33 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       children: [
         DropdownButtonFormField<String>(
           value: currentRel,
+          isExpanded: true,
+          isDense: true,
+          icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
           decoration: const InputDecoration(
             labelText: 'RELATIONSHIP TO FARMER',
             hintText: 'Select Relationship',
             floatingLabelBehavior: FloatingLabelBehavior.always,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           ),
-          hint: const Text('Select Relationship', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+          hint: const Text(
+            'Select Relationship',
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+          ),
           items: _relationshipOptions
               .map((r) => DropdownMenuItem(
                     value: r['value'],
-                    child: Text(r['label']!, style: const TextStyle(fontSize: 13)),
+                    child: Text(
+                      r['label']!,
+                      style: const TextStyle(fontSize: 13),
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ))
               .toList(),
           onChanged: (val) {

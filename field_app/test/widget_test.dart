@@ -1,11 +1,22 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ibis_rice_field_app/config/theme.dart';
+import 'package:ibis_rice_field_app/database/app_database.dart';
 import 'package:ibis_rice_field_app/database/config_dao.dart';
 import 'package:ibis_rice_field_app/main.dart';
 import 'package:ibis_rice_field_app/models/farmer_profile.dart';
 import 'package:ibis_rice_field_app/models/purchase_record.dart';
 import 'package:ibis_rice_field_app/models/specs_record.dart';
 import 'package:ibis_rice_field_app/models/transport_record.dart';
+import 'package:ibis_rice_field_app/services/api_service.dart';
+import 'package:ibis_rice_field_app/services/auth_service.dart';
+import 'package:ibis_rice_field_app/services/sync_service.dart';
 import 'package:ibis_rice_field_app/utils/id_formatter.dart';
+import 'package:ibis_rice_field_app/widgets/searchable_village_select.dart';
 
 void main() {
   testWidgets('Login screen smoke test', (WidgetTester tester) async {
@@ -26,15 +37,15 @@ void main() {
           familyCode: 'TB010',
           farmerName: 'Test Farmer',
           village: 'Rovieng',
-          variety: 'Organic Phka Rumduol',
-          grade: 'Grade A',
-          standardPrice: 1700,
+          variety: 'Phka Rumduol',
+          grade: 'A1',
+          standardPrice: 1650,
           additionalPrice: 0,
-          finalPrice: 1700,
+          finalPrice: 1650,
           sackWeights: [90, 85],
           totalWeight: 175,
-          totalPayment: 297500,
-          netPayment: 297500,
+          totalPayment: 288750,
+          netPayment: 288750,
           createdAt: dt,
         ),
       ];
@@ -49,15 +60,15 @@ void main() {
         familyCode: 'TB010',
         farmerName: 'Test Farmer',
         village: 'Rovieng',
-        variety: 'Organic Phka Rumduol',
-        grade: 'Grade A',
-        standardPrice: 1700,
+        variety: 'Phka Rumduol',
+        grade: 'A1',
+        standardPrice: 1650,
         additionalPrice: 0,
-        finalPrice: 1700,
+        finalPrice: 1650,
         sackWeights: [90],
         totalWeight: 90,
-        totalPayment: 153000,
-        netPayment: 153000,
+        totalPayment: 148500,
+        netPayment: 148500,
         createdAt: dt,
       );
       expect(IdFormatter.formatPurchaseId(legacy), 'TB010_281026_14');
@@ -111,14 +122,14 @@ void main() {
         familyCode: 'TB010',
         farmerName: 'Sok Heng',
         village: 'Rovieng',
-        paddyType: 'Organic Phka Rumduol',
-        selectedGrade: 'Grade A',
+        paddyType: 'Phka Rumduol',
+        selectedGrade: 'A1',
         moisture: 13.8,
         foreignMatter: 0.5,
         impurity: 0.5,
         isValid: true,
-        basePrice: 1700,
-        finalPrice: 1700,
+        basePrice: 1650,
+        finalPrice: 1650,
         createdAt: now,
       );
       final map = spec.toMap();
@@ -138,12 +149,382 @@ void main() {
         bankName: 'ABA Bank',
         accountHolder: 'SOK HENG',
         accountNumber: '001234567',
+        relationship: 'Self',
         createdAt: DateTime.now(),
       );
       final restored = FarmerProfile.fromMap(farmer.toMap());
       expect(restored.bankName, 'ABA Bank');
       expect(restored.accountNumber, '001234567');
+      expect(restored.relationship, 'Self');
       expect(restored.toPostJson()['bankName'], 'ABA Bank');
+    });
+  });
+
+  group('UI Layout and Field Sizing Tests', () {
+    testWidgets('Village, Paddy Category, and Grade have consistent sizing and alignment', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1280);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final villageKey = GlobalKey();
+      final categoryKey = GlobalKey();
+      final gradeKey = GlobalKey();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Container(
+                      key: villageKey,
+                      child: SearchableVillageSelect(
+                        value: null,
+                        onChanged: (_) {},
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      key: categoryKey,
+                      child: DropdownButtonFormField<String>(
+                        value: null,
+                        isExpanded: true,
+                        isDense: true,
+                        icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
+                        decoration: const InputDecoration(
+                          labelText: 'PADDY CATEGORY *',
+                          hintText: 'Select Category',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        ),
+                        hint: const Text(
+                          'Select Category',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'Phka Rumduol', child: Text('Phka Rumduol', overflow: TextOverflow.ellipsis)),
+                        ],
+                        onChanged: (_) {},
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      key: gradeKey,
+                      child: DropdownButtonFormField<String>(
+                        value: null,
+                        isExpanded: true,
+                        isDense: true,
+                        icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
+                        decoration: const InputDecoration(
+                          labelText: 'GRADE *',
+                          hintText: 'Select Grade',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        ),
+                        hint: const Text(
+                          'Select Grade',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'A1', child: Text('A1', overflow: TextOverflow.ellipsis)),
+                        ],
+                        onChanged: (_) {},
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final villageSize = tester.getSize(find.byKey(villageKey));
+      final categorySize = tester.getSize(find.byKey(categoryKey));
+      final gradeSize = tester.getSize(find.byKey(gradeKey));
+
+      // All three fields must have identical width across equal columns
+      expect(categorySize.width, equals(villageSize.width));
+      expect(gradeSize.width, equals(categorySize.width));
+
+      // All three fields must have identical height
+      expect(categorySize.height, equals(villageSize.height));
+      expect(gradeSize.height, equals(categorySize.height));
+    });
+  });
+
+  group('Shared Field Team Sync Logic', () {
+    setUp(() {
+      AppDatabase.useInMemoryForTest = true;
+      AppDatabase.instance.clearInMemoryForTest();
+    });
+
+    tearDown(() {
+      AppDatabase.instance.clearInMemoryForTest();
+      AppDatabase.useInMemoryForTest = false;
+    });
+
+    test('downloads shared site Specs & Farmers for FIELD role without duplicating or overwriting unsynced edits', () async {
+      SharedPreferences.setMockInitialValues({
+        AuthService.keyIsLoggedIn: true,
+        AuthService.keyUserId: 'user_piseth',
+        AuthService.keyUserName: 'piseth',
+        AuthService.keyUserRole: 'FIELD',
+        AuthService.keyAssignedProvinces: 'All',
+      });
+
+      // Pre-seed one unsynced local SpecsRecord that must NOT be overwritten
+      await AppDatabase.instance.insertSpecs(
+        SpecsRecord(
+          id: 'local_unsynced_1',
+          serverRecordId: 'srv_spec_2',
+          familyCode: 'TB020',
+          farmerName: 'Local Unsynced Edit',
+          village: 'Rovieng',
+          paddyType: 'Phka Rumduol',
+          selectedGrade: 'A1',
+          moisture: 13.0,
+          foreignMatter: 1.0,
+          isValid: true,
+          basePrice: 1650,
+          finalPrice: 1650,
+          createdAt: DateTime(2026, 11, 12, 9, 0),
+          isSynced: false,
+        ),
+      );
+
+      final mockClient = MockClient((request) async {
+        expect(request.headers['x-user-id'], 'user_piseth');
+        expect(request.headers['x-user-role'], 'FIELD');
+
+        if (request.url.path == '/api/specs') {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 'srv_spec_1',
+                'familyCode': 'TB010',
+                'farmerName': 'Created By Teammate',
+                'village': 'Rovieng',
+                'paddyType': 'Phka Rumduol',
+                'selectedGrade': 'A1',
+                'isOrganic': true,
+                'moisture': 13.5,
+                'foreignMatter': 1.2,
+                'wholeGrain': 75.0,
+                'brokenRice': 25.0,
+                'impurity': 0.5,
+                'isValid': true,
+                'basePrice': 1650,
+                'finalPrice': 1650,
+                'createdAt': '2026-11-12T08:00:00.000Z',
+              },
+              {
+                'id': 'srv_spec_2',
+                'familyCode': 'TB020',
+                'farmerName': 'Server Older Name',
+                'village': 'Rovieng',
+                'paddyType': 'Phka Rumduol',
+                'selectedGrade': 'A1',
+                'isOrganic': true,
+                'moisture': 14.5,
+                'foreignMatter': 2.0,
+                'isValid': true,
+                'basePrice': 1650,
+                'finalPrice': 1650,
+                'createdAt': '2026-11-12T08:30:00.000Z',
+              },
+            ]),
+            200,
+          );
+        }
+
+        if (request.url.path == '/api/farmers') {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 'srv_farmer_1',
+                'familyCode': 'TB010',
+                'farmerName': 'Created By Teammate',
+                'village': 'Rovieng',
+                'phone': '012345678',
+                'paymentMethod': 'Bank Transfer',
+                'bankName': 'ABA Bank',
+                'accountNumber': '001234567',
+                'accountHolder': 'CREATED BY TEAMMATE',
+                'relationship': 'Self',
+                'bankDocumentUrl': '/uploads/doc1.jpg',
+                'createdAt': '2026-11-12T08:00:00.000Z',
+              },
+            ]),
+            200,
+          );
+        }
+
+        return http.Response('[]', 200);
+      });
+
+      final syncService = SyncService(apiService: ApiService(client: mockClient));
+      final firstResult = await syncService.downloadSharedFieldRecords();
+
+      expect(firstResult.hasError, false);
+      expect(firstResult.specsCount, 1); // srv_spec_1 downloaded; srv_spec_2 skipped (unsynced local edit)
+      expect(firstResult.farmersCount, 1);
+
+      // Re-run download to verify zero duplication
+      final secondResult = await syncService.downloadSharedFieldRecords();
+      expect(secondResult.hasError, false);
+
+      final allSpecs = await AppDatabase.instance.getAllSpecs();
+      expect(allSpecs.length, 2);
+      final downloadedSpec = allSpecs.firstWhere((s) => s.familyCode == 'TB010');
+      expect(downloadedSpec.farmerName, 'Created By Teammate');
+      expect(downloadedSpec.serverRecordId, 'srv_spec_1');
+      expect(downloadedSpec.isSynced, true);
+
+      final unsyncedSpec = allSpecs.firstWhere((s) => s.familyCode == 'TB020');
+      expect(unsyncedSpec.farmerName, 'Local Unsynced Edit');
+      expect(unsyncedSpec.isSynced, false);
+
+      final allFarmers = await AppDatabase.instance.getAllFarmers();
+      expect(allFarmers.length, 1);
+      expect(allFarmers.first.bankName, 'ABA Bank');
+      expect(allFarmers.first.serverRecordId, 'srv_farmer_1');
+    });
+
+    test('skips shared Field Team download for non-FIELD roles', () async {
+      SharedPreferences.setMockInitialValues({
+        AuthService.keyIsLoggedIn: true,
+        AuthService.keyUserId: 'user_admin',
+        AuthService.keyUserName: 'chansetha',
+        AuthService.keyUserRole: 'ADMIN',
+      });
+
+      bool apiCalled = false;
+      final mockClient = MockClient((request) async {
+        apiCalled = true;
+        return http.Response('[]', 200);
+      });
+
+      final syncService = SyncService(apiService: ApiService(client: mockClient));
+      final result = await syncService.downloadSharedFieldRecords();
+
+      expect(apiCalled, false);
+      expect(result.specsCount, 0);
+      expect(result.farmersCount, 0);
+    });
+
+    test('enforces strict site separation and does NOT download other users Purchase or Transport records', () async {
+      SharedPreferences.setMockInitialValues({
+        AuthService.keyIsLoggedIn: true,
+        AuthService.keyUserId: 'user_piseth',
+        AuthService.keyUserName: 'piseth',
+        AuthService.keyUserRole: 'FIELD',
+        AuthService.keyAssignedProvinces: 'Preah Vihear',
+      });
+
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/specs') {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 'pvh_spec_1',
+                'familyCode': 'PVH001',
+                'farmerName': 'Preah Vihear Farmer',
+                'village': 'Sambou', // Preah Vihear village
+                'paddyType': 'Phka Rumduol',
+                'selectedGrade': 'A1',
+                'isOrganic': true,
+                'moisture': 13.0,
+                'foreignMatter': 1.0,
+                'isValid': true,
+                'basePrice': 1650,
+                'finalPrice': 1650,
+                'createdAt': '2026-11-12T08:00:00.000Z',
+              },
+              {
+                'id': 'st_spec_1',
+                'familyCode': 'ST001',
+                'farmerName': 'Stung Treng Farmer',
+                'village': 'Doung', // Stung Treng village (different site!)
+                'paddyType': 'Phka Rumduol',
+                'selectedGrade': 'A1',
+                'isOrganic': true,
+                'moisture': 13.0,
+                'foreignMatter': 1.0,
+                'isValid': true,
+                'basePrice': 1650,
+                'finalPrice': 1650,
+                'createdAt': '2026-11-12T08:00:00.000Z',
+              },
+            ]),
+            200,
+          );
+        }
+        if (request.url.path == '/api/purchases') {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 'OTHER_USER_PURCHASE_1',
+                'familyCode': 'PVH001',
+                'farmerName': 'Preah Vihear Farmer',
+                'village': 'Sambou',
+                'status': 'PENDING',
+              },
+            ]),
+            200,
+          );
+        }
+        if (request.url.path == '/api/transport') {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': '3A-9999_121126',
+                'plateNumber': '3A-9999',
+                'status': 'EN_ROUTE',
+              },
+            ]),
+            200,
+          );
+        }
+        return http.Response('[]', 200);
+      });
+
+      final syncService = SyncService(apiService: ApiService(client: mockClient));
+      await syncService.syncAllOfflineRecords();
+
+      // 1. Only Preah Vihear ('Sambou') specs record is stored; Stung Treng ('Doung') is excluded
+      final specs = await AppDatabase.instance.getAllSpecs();
+      expect(specs.length, 1);
+      expect(specs.first.familyCode, 'PVH001');
+      expect(specs.first.village, 'Sambou');
+
+      // 2. Other users' Purchase and Transport records are NEVER downloaded to this Field App account
+      final purchases = await AppDatabase.instance.getAllPurchases();
+      expect(purchases, isEmpty);
+
+      final transports = await AppDatabase.instance.getAllTransports();
+      expect(transports, isEmpty);
     });
   });
 }

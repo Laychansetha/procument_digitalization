@@ -95,6 +95,7 @@ class SpecsRecord {
 
   Map<String, dynamic> toPostJson() {
     return {
+      if (serverRecordId != null && serverRecordId!.isNotEmpty) 'serverRecordId': serverRecordId,
       'familyCode': familyCode,
       'farmerName': farmerName,
       'village': village,

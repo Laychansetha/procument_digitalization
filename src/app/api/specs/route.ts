@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { getResolvedUser } from '@/lib/sync-auth';
+import { getResolvedUser, getSessionOrHeaderUser } from '@/lib/sync-auth';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 import { logAudit } from '@/lib/audit';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const allowedVillages = await getAllowedVillagesForSession(session?.user);
+    const authUser = await getSessionOrHeaderUser(request);
+    const allowedVillages = await getAllowedVillagesForSession(authUser);
 
     const whereClause = allowedVillages !== null ? { village: { in: allowedVillages } } : {};
 
@@ -31,11 +29,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const authUser = await getSessionOrHeaderUser(request);
     const { userId, userName, userRole } = await getResolvedUser(request);
 
     const body = await request.json();
     const {
+      serverRecordId,
       familyCode,
       farmerName,
       village,
@@ -61,14 +60,14 @@ export async function POST(request: Request) {
     const normCode = familyCode.toUpperCase().trim();
     const normVillage = (village || '').trim();
 
-    if (session?.user && !(await isVillageAuthorized(normVillage, session.user))) {
+    if (authUser && !(await isVillageAuthorized(normVillage, authUser))) {
       return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
     }
     const bPrice = parseFloat(basePrice) || 0;
     const fPrice = parseFloat(finalPrice) || bPrice;
 
-    // Check if specs record already exists for this exact (Family Code + Village + Paddy Type + Grade)
-    const existing = await db.specsRecord.findFirst({
+    // Match by composite key and serverRecordId (preventing duplicates when key fields are edited)
+    const compositeMatch = await db.specsRecord.findFirst({
       where: {
         familyCode: normCode,
         village: normVillage,
@@ -77,12 +76,47 @@ export async function POST(request: Request) {
       },
     });
 
+    let existing = null;
+    if (serverRecordId) {
+      const byId = await db.specsRecord.findUnique({
+        where: { id: String(serverRecordId) },
+      });
+      if (byId && authUser && !(await isVillageAuthorized(byId.village, authUser))) {
+        return NextResponse.json({ error: `Unauthorized. Record belongs to village '${byId.village}' which is outside your assigned province.` }, { status: 403 });
+      }
+      if (byId && compositeMatch && byId.id !== compositeMatch.id) {
+        // Another record already owns the target composite key; update compositeMatch to prevent duplicates
+        existing = compositeMatch;
+      } else {
+        existing = byId;
+      }
+    }
+    if (!existing) {
+      existing = compositeMatch;
+    }
+
     let spec;
     if (existing) {
+      // Prevent overwriting a SpecsRecord whose linked purchase has already been dispatched
+      const linkedPurchase = await db.purchaseRecord.findFirst({
+        where: {
+          specsRecordId: existing.id,
+          status: { notIn: ['REJECTED'] },
+        },
+      });
+      if (linkedPurchase && (linkedPurchase.status !== 'PENDING' || linkedPurchase.transportRecordId)) {
+        return NextResponse.json(
+          { error: 'This Specs Record cannot be updated because its linked purchase has already been assigned to transport or dispatched.' },
+          { status: 400 }
+        );
+      }
+
       spec = await db.specsRecord.update({
         where: { id: existing.id },
         data: {
+          familyCode: normCode,
           farmerName: farmerName.trim(),
+          village: normVillage,
           paddyType: paddyType.trim(),
           selectedGrade: selectedGrade.trim(),
           isOrganic: isOrganic !== undefined ? Boolean(isOrganic) : true,
@@ -96,7 +130,7 @@ export async function POST(request: Request) {
           basePrice: bPrice,
           finalPrice: fPrice,
           bestQualifyingGrade: bestQualifyingGrade || selectedGrade,
-          createdBy: userId,
+          createdBy: existing.createdBy || userId,
         },
         include: {
           user: {

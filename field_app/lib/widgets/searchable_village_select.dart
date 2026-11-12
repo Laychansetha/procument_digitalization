@@ -55,7 +55,7 @@ class _SearchableVillageSelectState extends State<SearchableVillageSelect> {
         final hasSelection = selectedText != null && selectedText.isNotEmpty;
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
             InkWell(
@@ -66,17 +66,28 @@ class _SearchableVillageSelectState extends State<SearchableVillageSelect> {
                   labelText: widget.label,
                   floatingLabelBehavior: FloatingLabelBehavior.always,
                   errorText: state.errorText,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                   suffixIcon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
+                  suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 24),
                 ),
                 isEmpty: false,
-                child: Text(
-                  hasSelection ? selectedText : widget.hint,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: hasSelection ? FontWeight.bold : FontWeight.normal,
-                    color: hasSelection ? AppTheme.textWhite : AppTheme.textMuted,
+                child: SizedBox(
+                  height: 24,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      hasSelection ? selectedText : widget.hint,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: hasSelection ? FontWeight.bold : FontWeight.normal,
+                        color: hasSelection ? AppTheme.textWhite : AppTheme.textMuted,
+                      ),
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),

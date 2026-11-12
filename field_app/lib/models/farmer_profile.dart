@@ -75,6 +75,7 @@ class FarmerProfile {
 
   Map<String, dynamic> toPostJson({String? uploadedPhotoUrl}) {
     return {
+      if (serverRecordId != null && serverRecordId!.isNotEmpty) 'serverRecordId': serverRecordId,
       'familyCode': familyCode,
       'farmerName': farmerName,
       'village': village,

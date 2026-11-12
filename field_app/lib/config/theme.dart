@@ -57,6 +57,7 @@ class AppTheme {
           borderSide: const BorderSide(color: emeraldPrimary, width: 2),
         ),
         labelStyle: const TextStyle(color: textMuted, fontSize: 12, fontWeight: FontWeight.bold),
+        floatingLabelStyle: const TextStyle(color: textMuted, fontSize: 11, fontWeight: FontWeight.w700),
         hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

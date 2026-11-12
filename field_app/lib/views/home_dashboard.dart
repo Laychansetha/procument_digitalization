@@ -34,8 +34,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
     super.initState();
     _loadUserInfo();
     _loadUnsyncedCount();
-    ConfigDao.instance.fetchRemoteConfig();
+    _initBackgroundRefresh();
     AppDatabase.instance.dbChangeNotifier.addListener(_onDbChanged);
+  }
+
+  Future<void> _initBackgroundRefresh() async {
+    await ConfigDao.instance.fetchRemoteConfig();
+    await SyncService().downloadSharedFieldRecords();
   }
 
   void _onDbChanged() {
@@ -80,12 +85,24 @@ class _HomeDashboardState extends State<HomeDashboard> {
     await ConfigDao.instance.fetchRemoteConfig();
 
     if (masterOnly) {
+      final sharedRes = await SyncService().downloadSharedFieldRecords(
+        onProgress: (status) {
+          if (mounted) {
+            setState(() {
+              _syncStatusMessage = status;
+            });
+          }
+        },
+      );
+      final totalShared = sharedRes.specsCount + sharedRes.farmersCount;
       if (mounted) {
         setState(() {
           _isSyncing = false;
-          _syncStatusMessage = '✅ Master Data, Prices & Paddy Specs updated successfully from central server.';
+          _syncStatusMessage = totalShared > 0
+              ? '✅ Master Data & $totalShared shared site record(s) (${sharedRes.specsCount} Specs, ${sharedRes.farmersCount} Farmers) updated.'
+              : '✅ Master Data, Prices & Paddy Specs updated successfully from central server.';
         });
-        AppNotification.showSuccess(context, 'Master Data Updated');
+        AppNotification.showSuccess(context, 'Master & Site Data Updated');
       }
       Future.delayed(const Duration(seconds: 4), () {
         if (mounted && _syncStatusMessage.startsWith('✅ Master Data')) {

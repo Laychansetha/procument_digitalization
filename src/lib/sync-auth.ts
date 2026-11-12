@@ -6,6 +6,7 @@ export interface ResolvedUser {
   userId: string;
   userName: string;
   userRole: 'FIELD' | 'WAREHOUSE' | 'INVENTORY' | 'FINANCE' | 'ADMIN';
+  assignedProvinces?: string;
 }
 
 export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
@@ -33,6 +34,7 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
           userId: dbUser.id,
           userName: dbUser.name,
           userRole: dbUser.role as any,
+          assignedProvinces: dbUser.assignedProvinces ?? undefined,
         };
       }
     }
@@ -54,6 +56,7 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
             userId: dbUser.id,
             userName: dbUser.name,
             userRole: dbUser.role as any,
+            assignedProvinces: dbUser.assignedProvinces ?? undefined,
           };
         }
       }
@@ -65,6 +68,7 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
             userId: dbUser.id,
             userName: dbUser.name,
             userRole: dbUser.role as any,
+            assignedProvinces: dbUser.assignedProvinces ?? undefined,
           };
         }
       }
@@ -76,6 +80,7 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
             userId: dbUser.id,
             userName: dbUser.name,
             userRole: dbUser.role as any,
+            assignedProvinces: dbUser.assignedProvinces ?? undefined,
           };
         }
       }
@@ -101,5 +106,34 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
     userId: fieldUser.id,
     userName: fieldUser.name,
     userRole: fieldUser.role as any,
+    assignedProvinces: fieldUser.assignedProvinces ?? undefined,
   };
+}
+
+/**
+ * Resolves the authenticated user (from NextAuth session or Mobile Field App headers)
+ * for site/province scoping on GET/POST requests without falling back to an arbitrary user.
+ */
+export async function getSessionOrHeaderUser(req?: Request) {
+  const session = await getServerSession(authOptions);
+  if (session?.user) {
+    return session.user as { id?: string; role?: string; assignedProvinces?: string; [key: string]: any };
+  }
+
+  if (req) {
+    const headerUserId = req.headers.get('x-user-id');
+    const headerUserEmail = req.headers.get('x-user-email');
+    const headerUserName = req.headers.get('x-user-name');
+
+    if (headerUserId || headerUserEmail || headerUserName) {
+      const resolved = await getResolvedUser(req);
+      return {
+        id: resolved.userId,
+        role: resolved.userRole,
+        assignedProvinces: resolved.assignedProvinces,
+      };
+    }
+  }
+
+  return null;
 }

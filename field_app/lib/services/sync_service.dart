@@ -18,9 +18,23 @@ class SyncResult {
   SyncResult({required this.syncedCount, required this.errorCount, required this.message});
 }
 
+class SharedDownloadResult {
+  final int specsCount;
+  final int farmersCount;
+  final bool hasError;
+
+  SharedDownloadResult({
+    required this.specsCount,
+    required this.farmersCount,
+    this.hasError = false,
+  });
+}
+
 class SyncService {
   static bool _isSyncRunning = false;
-  final ApiService _apiService = ApiService();
+  final ApiService _apiService;
+
+  SyncService({ApiService? apiService}) : _apiService = apiService ?? ApiService();
 
   String _extractErrorMessage(String body, int statusCode) {
     try {
@@ -62,9 +76,17 @@ class SyncService {
           final res = await _apiService.postData('/api/specs', spec.toPostJson());
           if (res.statusCode == 200 || res.statusCode == 201) {
             final data = jsonDecode(res.body);
+            final serverId = data['id']?.toString();
+            if (serverId != null && serverId.isNotEmpty) {
+              for (final other in specsList) {
+                if (other.id != spec.id && (other.id == serverId || other.serverRecordId == serverId)) {
+                  await db.deleteSpecs(other.id);
+                }
+              }
+            }
             final updated = SpecsRecord(
               id: spec.id,
-              serverRecordId: data['id']?.toString(),
+              serverRecordId: serverId,
               familyCode: spec.familyCode,
               farmerName: spec.farmerName,
               village: spec.village,
@@ -153,9 +175,17 @@ class SyncService {
 
           if (res.statusCode == 200 || res.statusCode == 201) {
             final data = jsonDecode(res.body);
+            final serverId = data['id']?.toString();
+            if (serverId != null && serverId.isNotEmpty) {
+              for (final other in farmersList) {
+                if (other.id != farmer.id && (other.id == serverId || other.serverRecordId == serverId)) {
+                  await db.deleteFarmer(other.id);
+                }
+              }
+            }
             final updated = FarmerProfile(
               id: farmer.id,
-              serverRecordId: data['id']?.toString(),
+              serverRecordId: serverId,
               familyCode: farmer.familyCode,
               farmerName: farmer.farmerName,
               village: farmer.village,
@@ -459,14 +489,27 @@ class SyncService {
       // 5. RECONCILE SERVER STATUS FOR EXISTING SYNCED RECORDS
       await _reconcileSyncedStatuses();
 
+      // 6. DOWNLOAD SHARED SITE SPECS & FARMER PROFILES (FIELD TEAM ONLY)
+      final sharedResult = await downloadSharedFieldRecords(onProgress: onProgress);
+      final downloadedTotal = sharedResult.specsCount + sharedResult.farmersCount;
+
+      String message;
+      if (errorCount > 0) {
+        message = 'Sync completed with $errorCount warning(s)${lastErrorMsg != null ? ': $lastErrorMsg' : '.'}';
+      } else if (syncedCount > 0 && downloadedTotal > 0) {
+        message = 'Synced $syncedCount record(s) & updated $downloadedTotal shared site record(s).';
+      } else if (syncedCount > 0) {
+        message = 'Successfully synchronized $syncedCount record(s) with central PostgreSQL server.';
+      } else if (downloadedTotal > 0) {
+        message = 'Downloaded $downloadedTotal shared site record(s) (${sharedResult.specsCount} Specs, ${sharedResult.farmersCount} Farmers).';
+      } else {
+        message = 'All records are up to date!';
+      }
+
       return SyncResult(
         syncedCount: syncedCount,
         errorCount: errorCount,
-        message: syncedCount > 0
-            ? 'Successfully synchronized $syncedCount record(s) with central PostgreSQL server.'
-            : (errorCount > 0
-                ? 'Sync completed with $errorCount warning(s)${lastErrorMsg != null ? ': $lastErrorMsg' : '.'}'
-                : 'All records are up to date!'),
+        message: message,
       );
     } finally {
       _isSyncRunning = false;
@@ -583,6 +626,205 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('Status reconciliation skipped/offline: $e');
+    }
+  }
+
+  /// Downloads all Specs Records and Farmer Payment Information for the Field Team user's
+  /// assigned site/provinces and merges them into local SQLite without duplicating records
+  /// or overwriting unsynced local edits. Restricted strictly to Field Team (FIELD) accounts.
+  Future<SharedDownloadResult> downloadSharedFieldRecords({Function(String status)? onProgress}) async {
+    try {
+      final userInfo = await AuthService.getUserInfo();
+      final userRole = (userInfo['role'] ?? 'FIELD').toUpperCase();
+      if (userRole != 'FIELD') {
+        return SharedDownloadResult(specsCount: 0, farmersCount: 0);
+      }
+
+      final db = AppDatabase.instance;
+      final userProvinces = await AuthService.getAssignedProvinceList();
+      final allowedVillages = ConfigDao.instance.getVillagesForProvinces(userProvinces);
+      final isUnrestricted = userProvinces.isEmpty ||
+          userProvinces.length >= 4 ||
+          userProvinces.any((p) => p.toLowerCase().trim() == 'all' || p.toLowerCase().trim() == 'na');
+      final restrictByVillage = !isUnrestricted && allowedVillages.isNotEmpty;
+
+      int specsCount = 0;
+      int farmersCount = 0;
+      bool hasError = false;
+
+      // 1. Download & merge shared Specs Records
+      if (onProgress != null) onProgress('Downloading shared site Specs Records...');
+      try {
+        final resSpecs = await _apiService.getData('/api/specs');
+        if (resSpecs.statusCode == 200) {
+          final remoteList = jsonDecode(resSpecs.body);
+          if (remoteList is List) {
+            final localSpecs = await db.getAllSpecs();
+            final byServerId = <String, SpecsRecord>{};
+            final byId = <String, SpecsRecord>{};
+            final byComposite = <String, SpecsRecord>{};
+
+            for (final s in localSpecs) {
+              byId[s.id] = s;
+              if (s.serverRecordId != null && s.serverRecordId!.isNotEmpty) {
+                byServerId[s.serverRecordId!] = s;
+              }
+              final key =
+                  '${s.familyCode.toUpperCase().trim()}|${s.village.trim()}|${s.paddyType.trim()}|${s.selectedGrade.trim()}';
+              byComposite[key] = s;
+            }
+
+            final toUpsert = <SpecsRecord>[];
+            for (final raw in remoteList) {
+              if (raw is! Map) continue;
+              final item = Map<String, dynamic>.from(raw);
+              final remoteId = item['id']?.toString();
+              if (remoteId == null || remoteId.isEmpty) continue;
+
+              final familyCode = (item['familyCode']?.toString() ?? '').toUpperCase().trim();
+              final farmerName = (item['farmerName']?.toString() ?? '').trim();
+              final village = (item['village']?.toString() ?? '').trim();
+              final paddyType = (item['paddyType']?.toString() ?? '').trim();
+              final selectedGrade = (item['selectedGrade']?.toString() ?? '').trim();
+
+              if (familyCode.isEmpty || paddyType.isEmpty || selectedGrade.isEmpty) continue;
+              if (restrictByVillage && !allowedVillages.contains(village)) continue;
+
+              final compositeKey = '$familyCode|$village|$paddyType|$selectedGrade';
+              final localMatch = byServerId[remoteId] ?? byId[remoteId] ?? byComposite[compositeKey];
+
+              // Never overwrite unsynced local offline creations/edits
+              if (localMatch != null && !localMatch.isSynced) {
+                continue;
+              }
+
+              final merged = SpecsRecord(
+                id: localMatch?.id ?? remoteId,
+                serverRecordId: remoteId,
+                familyCode: familyCode,
+                farmerName: farmerName,
+                village: village,
+                paddyType: paddyType,
+                selectedGrade: selectedGrade,
+                isOrganic: item['isOrganic'] == true || item['isOrganic'] == 1,
+                moisture: (item['moisture'] as num?)?.toDouble() ?? 0.0,
+                foreignMatter: (item['foreignMatter'] as num?)?.toDouble() ?? 0.0,
+                wholeGrain: item['wholeGrain'] != null ? (item['wholeGrain'] as num).toDouble() : null,
+                brokenRice: item['brokenRice'] != null ? (item['brokenRice'] as num).toDouble() : null,
+                impurity: item['impurity'] != null ? (item['impurity'] as num).toDouble() : null,
+                isValid: item['isValid'] == true || item['isValid'] == 1,
+                basePrice: (item['basePrice'] as num?)?.toDouble() ?? 0.0,
+                organicBonus: 0.0,
+                finalPrice: (item['finalPrice'] as num?)?.toDouble() ?? 0.0,
+                createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
+                isSynced: true,
+                syncError: null,
+              );
+
+              toUpsert.add(merged);
+              specsCount++;
+            }
+
+            if (toUpsert.isNotEmpty) {
+              await db.upsertSpecsBatch(toUpsert);
+            }
+          }
+        } else {
+          hasError = true;
+        }
+      } catch (e) {
+        hasError = true;
+        debugPrint('Shared Specs download skipped/offline: $e');
+      }
+
+      // 2. Download & merge shared Farmer Payment Information
+      if (onProgress != null) onProgress('Downloading shared site Farmer Profiles...');
+      try {
+        final resFarmers = await _apiService.getData('/api/farmers');
+        if (resFarmers.statusCode == 200) {
+          final remoteList = jsonDecode(resFarmers.body);
+          if (remoteList is List) {
+            final localFarmers = await db.getAllFarmers();
+            final byServerId = <String, FarmerProfile>{};
+            final byId = <String, FarmerProfile>{};
+            final byComposite = <String, FarmerProfile>{};
+
+            for (final f in localFarmers) {
+              byId[f.id] = f;
+              if (f.serverRecordId != null && f.serverRecordId!.isNotEmpty) {
+                byServerId[f.serverRecordId!] = f;
+              }
+              final key = '${f.familyCode.toUpperCase().trim()}|${f.village.trim()}';
+              byComposite[key] = f;
+            }
+
+            final toUpsert = <FarmerProfile>[];
+            for (final raw in remoteList) {
+              if (raw is! Map) continue;
+              final item = Map<String, dynamic>.from(raw);
+              final remoteId = item['id']?.toString();
+              if (remoteId == null || remoteId.isEmpty) continue;
+
+              final familyCode = (item['familyCode']?.toString() ?? '').toUpperCase().trim();
+              final farmerName = (item['farmerName']?.toString() ?? '').trim();
+              final village = (item['village']?.toString() ?? '').trim();
+
+              if (familyCode.isEmpty || farmerName.isEmpty) continue;
+              if (restrictByVillage && !allowedVillages.contains(village)) continue;
+
+              final compositeKey = '$familyCode|$village';
+              final localMatch = byServerId[remoteId] ?? byId[remoteId] ?? byComposite[compositeKey];
+
+              // Never overwrite unsynced local offline creations/edits
+              if (localMatch != null && !localMatch.isSynced) {
+                continue;
+              }
+
+              final remoteDocUrl = item['bankDocumentUrl']?.toString();
+              final merged = FarmerProfile(
+                id: localMatch?.id ?? remoteId,
+                serverRecordId: remoteId,
+                familyCode: familyCode,
+                farmerName: farmerName,
+                village: village,
+                phone: item['phone']?.toString(),
+                paymentMethod: item['paymentMethod']?.toString() ?? 'Bank Transfer',
+                bankName: item['bankName']?.toString(),
+                accountNumber: item['accountNumber']?.toString(),
+                accountHolder: item['accountHolder']?.toString(),
+                relationship: item['relationship']?.toString() ?? 'Self',
+                bankDocumentUrl: (remoteDocUrl != null && remoteDocUrl.isNotEmpty)
+                    ? remoteDocUrl
+                    : localMatch?.bankDocumentUrl,
+                createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
+                isSynced: true,
+                syncError: null,
+              );
+
+              toUpsert.add(merged);
+              farmersCount++;
+            }
+
+            if (toUpsert.isNotEmpty) {
+              await db.upsertFarmersBatch(toUpsert);
+            }
+          }
+        } else {
+          hasError = true;
+        }
+      } catch (e) {
+        hasError = true;
+        debugPrint('Shared Farmers download skipped/offline: $e');
+      }
+
+      return SharedDownloadResult(
+        specsCount: specsCount,
+        farmersCount: farmersCount,
+        hasError: hasError,
+      );
+    } catch (e) {
+      debugPrint('downloadSharedFieldRecords error: $e');
+      return SharedDownloadResult(specsCount: 0, farmersCount: 0, hasError: true);
     }
   }
 }

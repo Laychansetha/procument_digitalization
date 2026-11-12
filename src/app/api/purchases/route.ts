@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { getResolvedUser } from '@/lib/sync-auth';
+import { getResolvedUser, getSessionOrHeaderUser } from '@/lib/sync-auth';
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 
 import { generatePurchaseId } from '@/lib/purchase-id';
 import { logAudit } from '@/lib/audit';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const allowedVillages = await getAllowedVillagesForSession(session?.user);
+    const authUser = await getSessionOrHeaderUser(request);
+    const allowedVillages = await getAllowedVillagesForSession(authUser);
 
     const whereClause = allowedVillages !== null ? { village: { in: allowedVillages } } : {};
 
@@ -35,7 +33,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const authUser = await getSessionOrHeaderUser(request);
     const { userId, userName, userRole } = await getResolvedUser(request);
 
     const body = await request.json();
@@ -59,7 +57,7 @@ export async function POST(request: Request) {
     const normCode = familyCode.toUpperCase().trim();
     const normVillage = (village || '').trim();
 
-    if (session?.user && !(await isVillageAuthorized(normVillage, session.user))) {
+    if (authUser && !(await isVillageAuthorized(normVillage, authUser))) {
       return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
     }
 
@@ -157,7 +155,7 @@ export async function POST(request: Request) {
     // Audit Log
     await logAudit({
       userId,
-      userEmail: session?.user?.email,
+      userEmail: authUser?.email,
       userName,
       userRole,
       action: 'CREATE',

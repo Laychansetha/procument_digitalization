@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { getResolvedUser } from '@/lib/sync-auth';
+import { getResolvedUser, getSessionOrHeaderUser } from '@/lib/sync-auth';
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
 import { logAudit } from '@/lib/audit';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const allowedVillages = await getAllowedVillagesForSession(session?.user);
+    const authUser = await getSessionOrHeaderUser(request);
+    const allowedVillages = await getAllowedVillagesForSession(authUser);
 
     const whereClause = allowedVillages !== null ? { village: { in: allowedVillages } } : {};
 
@@ -32,11 +30,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const authUser = await getSessionOrHeaderUser(request);
     const { userId, userName, userRole } = await getResolvedUser(request);
 
     const body = await request.json();
     const {
+      serverRecordId,
       familyCode,
       farmerName,
       village,
@@ -57,17 +56,35 @@ export async function POST(request: Request) {
     const normCode = familyCode.toUpperCase().trim();
     const normVillage = (village || '').trim();
 
-    if (session?.user && !(await isVillageAuthorized(normVillage, session.user))) {
+    if (authUser && !(await isVillageAuthorized(normVillage, authUser))) {
       return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
     }
 
-    // Check if profile exists for composite key (Family Code + Village)
-    const existing = await db.farmerProfile.findFirst({
+    // Match by composite key and serverRecordId (preventing duplicates when key fields are edited)
+    const compositeMatch = await db.farmerProfile.findFirst({
       where: {
         familyCode: normCode,
         village: normVillage,
       },
     });
+
+    let existing = null;
+    if (serverRecordId) {
+      const byId = await db.farmerProfile.findUnique({
+        where: { id: String(serverRecordId) },
+      });
+      if (byId && authUser && !(await isVillageAuthorized(byId.village, authUser))) {
+        return NextResponse.json({ error: `Unauthorized. Profile belongs to village '${byId.village}' which is outside your assigned province.` }, { status: 403 });
+      }
+      if (byId && compositeMatch && byId.id !== compositeMatch.id) {
+        existing = compositeMatch;
+      } else {
+        existing = byId;
+      }
+    }
+    if (!existing) {
+      existing = compositeMatch;
+    }
 
     const savedDocUrl = await processAndSaveImage(bankDocumentUrl, 'doc');
 
@@ -76,7 +93,9 @@ export async function POST(request: Request) {
       profile = await db.farmerProfile.update({
         where: { id: existing.id },
         data: {
+          familyCode: normCode,
           farmerName: farmerName.trim(),
+          village: normVillage,
           phone: phone || existing.phone,
           paymentMethod: paymentMethod || existing.paymentMethod,
           bankName: paymentMethod === 'Bank Transfer' ? (bankName || existing.bankName) : (paymentMethod === 'Cash' ? 'Cash' : bankName),
@@ -85,7 +104,7 @@ export async function POST(request: Request) {
           relationship: relationship || existing.relationship,
           bankDocumentUrl: savedDocUrl || existing.bankDocumentUrl,
           notes: notes || existing.notes,
-          createdBy: userId,
+          createdBy: existing.createdBy || userId,
         },
         include: {
           user: {

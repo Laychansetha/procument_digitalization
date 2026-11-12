@@ -28,7 +28,6 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
   final _driverNameController = TextEditingController();
   final _plateNumberController = TextEditingController();
   final _mobileNumberController = TextEditingController();
-  final _notesController = TextEditingController();
   final _modalSearchController = TextEditingController();
   final _historySearchController = TextEditingController();
 
@@ -138,7 +137,6 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     _driverNameController.dispose();
     _plateNumberController.dispose();
     _mobileNumberController.dispose();
-    _notesController.dispose();
     _modalSearchController.dispose();
     _historySearchController.dispose();
     _driverSignatureController.dispose();
@@ -174,7 +172,6 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
     _driverNameController.clear();
     _plateNumberController.clear();
     _mobileNumberController.clear();
-    _notesController.clear();
     _driverSignatureController.clear();
 
     setState(() {
@@ -460,7 +457,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
       final now = DateTime.now();
       final recordId = isEditing
           ? _editingId!
-          : IdFormatter.generateUniqueTransportId(plate, _localHistory, now: now);
+          : IdFormatter.generateUniqueTransportId(plate, _localHistory, now);
 
       final record = TransportRecord(
         id: recordId,
@@ -472,7 +469,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
         driverSignature: driverSigBase64,
         loadingLocation: _loadingLocation!,
         destinationWarehouse: ConfigDao.getWarehouseId(_destinationWarehouse),
-        notes: _notesController.text.trim(),
+        notes: null,
         totalSacks: totalSacks,
         totalFieldWeight: totalFieldWeight,
         selectedPurchaseIds: _selectedPurchases.map((p) => p.id).toList(),
@@ -511,7 +508,6 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
       _driverNameController.text = item.driverName;
       _plateNumberController.text = item.plateNumber;
       _mobileNumberController.text = item.mobileNumber ?? '';
-      _notesController.text = item.notes ?? '';
       _loadingLocation = item.loadingLocation;
       final warehouses = ConfigDao.instance.destinationWarehouses;
       final displayWh = ConfigDao.getWarehouseDisplay(item.destinationWarehouse);
@@ -881,14 +877,34 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
 
               final warehouseField = DropdownButtonFormField<String>(
                 value: safeDestinationWarehouse,
+                isExpanded: true,
+                isDense: true,
+                icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
                 decoration: const InputDecoration(
                   labelText: 'DESTINATION WAREHOUSE *',
                   hintText: 'Select Destination Warehouse...',
                   floatingLabelBehavior: FloatingLabelBehavior.always,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 ),
-                hint: const Text('Select Destination Warehouse...', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                hint: const Text(
+                  'Select Destination Warehouse...',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 items: destinationWarehouses
-                    .map((wh) => DropdownMenuItem(value: wh, child: Text(wh, style: const TextStyle(fontSize: 12))))
+                    .map((wh) => DropdownMenuItem(
+                          value: wh,
+                          child: Text(
+                            wh,
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ))
                     .toList(),
                 validator: (v) => v == null ? 'Select Destination Warehouse' : null,
                 onChanged: (val) => setState(() => _destinationWarehouse = val),
@@ -970,16 +986,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                     );
             },
           ),
-          const SizedBox(height: 12),
-
-          TextFormField(
-            controller: _notesController,
-            decoration: const InputDecoration(
-              labelText: 'DISPATCH NOTES / REMARKS (OPTIONAL)',
-              hintText: 'e.g. Tarpaulin covered, seal number, or special instructions',
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
           InkWell(
             onTap: () => setState(() => _truckCleaned = !_truckCleaned),

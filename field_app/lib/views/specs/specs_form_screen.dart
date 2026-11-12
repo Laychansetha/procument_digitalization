@@ -611,23 +611,32 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Row 3: Quality Parameters following Master Grading order
+          // Row 3: Quality Parameters following Master Grading order (Split into 2 rows for optimal tablet readability)
           LayoutBuilder(
             builder: (context, constraints) {
               bool isWide = constraints.maxWidth > 520;
               return isWide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ? Column(
                       children: [
-                        Expanded(child: _buildWholeGrainInput()),
-                        const SizedBox(width: 10),
-                        Expanded(child: _buildBrokenRiceInput()),
-                        const SizedBox(width: 10),
-                        Expanded(child: _buildImpurityInput()),
-                        const SizedBox(width: 10),
-                        Expanded(child: _buildForeignMatterInput()),
-                        const SizedBox(width: 10),
-                        Expanded(child: _buildMoistureInput()),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _buildWholeGrainInput()),
+                            const SizedBox(width: 12),
+                            Expanded(child: _buildBrokenRiceInput()),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _buildImpurityInput()),
+                            const SizedBox(width: 12),
+                            Expanded(child: _buildForeignMatterInput()),
+                            const SizedBox(width: 12),
+                            Expanded(child: _buildMoistureInput()),
+                          ],
+                        ),
                       ],
                     )
                   : Column(
@@ -892,14 +901,34 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
 
     return DropdownButtonFormField<String>(
       value: currentCategory,
+      isExpanded: true,
+      isDense: true,
+      icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
       decoration: const InputDecoration(
         labelText: 'PADDY CATEGORY *',
         hintText: 'Select Category',
         floatingLabelBehavior: FloatingLabelBehavior.always,
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
-      hint: const Text('Select Paddy Category', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+      hint: const Text(
+        'Select Category',
+        style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
       items: categories
-          .map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 13))))
+          .map((v) => DropdownMenuItem(
+                value: v,
+                child: Text(
+                  v,
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ))
           .toList(),
       validator: (v) => v == null ? 'Select Category' : null,
       onChanged: (val) {
@@ -925,14 +954,34 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
 
     return DropdownButtonFormField<String>(
       value: currentGradeValue,
+      isExpanded: true,
+      isDense: true,
+      icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
       decoration: const InputDecoration(
         labelText: 'GRADE *',
         hintText: 'Select Grade',
         floatingLabelBehavior: FloatingLabelBehavior.always,
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
-      hint: Text(_paddyType == null ? 'Select Category First' : 'Select Grade', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+      hint: Text(
+        _paddyType == null ? 'Select Category First' : 'Select Grade',
+        style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
       items: availableGrades
-          .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 13))))
+          .map((g) => DropdownMenuItem(
+                value: g,
+                child: Text(
+                  g,
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ))
           .toList(),
       validator: (v) => v == null ? 'Select Grade' : null,
       onChanged: (val) {
