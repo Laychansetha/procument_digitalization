@@ -14,11 +14,11 @@ export async function GET(request: Request) {
 
     const whereClause = allowedVillages !== null
       ? {
-          OR: [
-            { lots: { some: { village: { in: allowedVillages } } } },
-            { purchases: { some: { village: { in: allowedVillages } } } },
-          ],
-        }
+        OR: [
+          { lots: { some: { village: { in: allowedVillages } } } },
+          { purchases: { some: { village: { in: allowedVillages } } } },
+        ],
+      }
       : {};
 
     const transports = await db.transportRecord.findMany({
