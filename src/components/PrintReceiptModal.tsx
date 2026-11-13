@@ -1,6 +1,6 @@
 'use client';
 
-import { Printer, X, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Printer, X, ShieldCheck } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
 import { getReportTranslation } from '@/lib/report-translations';
 import { formatPurchaseId } from '@/lib/purchase-id';
@@ -39,13 +39,13 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
         <div className="bg-white text-slate-900 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
           {/* Top Control Bar */}
           <div className="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
-            <h3 className="font-extrabold text-sm text-slate-800">Printable Paddy Purchase Receipt</h3>
+            <h3 className="font-extrabold text-sm text-slate-800">Paddy Purchase Invoice</h3>
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePrint}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-extrabold text-xs flex items-center gap-2 shadow-md"
               >
-                <Printer className="w-4 h-4" /> Print Receipt
+                <Printer className="w-4 h-4" /> Print Invoice
               </button>
               <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg">
                 <X className="w-5 h-5" />
@@ -55,29 +55,51 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
 
           {/* Screen Preview Content */}
           <div className="p-6 overflow-y-auto space-y-4 text-xs font-sans">
-            {/* Header */}
+            {/* Header: Farmer Information */}
             <div className="text-center border-b border-slate-300 pb-3 space-y-1">
-              <div className="w-12 h-12 bg-black border border-slate-700 rounded-xl flex items-center justify-center p-1 mx-auto mb-1.5 shadow-sm">
-                <img src="/logo.png" alt="IBIS RICE CONSERVATION CO., LTD." className="w-full h-full object-contain rounded" />
-              </div>
-              <h1 className="text-base font-black text-slate-900 tracking-wide uppercase">
-                {t.companyName}
-              </h1>
-              <p className="text-[11px] text-slate-700 font-extrabold uppercase tracking-wider">{t.receiptTitle}</p>
-              <p className="text-[10px] text-slate-500">{t.receiptSubtitle}</p>
+              <p className="text-sm font-black text-slate-900 tracking-wide">
+                <span className="text-slate-600 font-bold">{t.familyCode}</span>{' '}
+                <span className="text-emerald-700">{purchase.familyCode}</span>
+              </p>
+              <p className="text-xs font-bold text-slate-900">
+                <span className="text-slate-600">{t.farmerName}</span> {purchase.farmerName}
+              </p>
+              <p className="text-xs text-slate-800">
+                <span className="text-slate-600 font-bold">{t.village}</span> {purchase.village}
+              </p>
             </div>
 
-            {/* Details Grid */}
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-              <div>
-                <p><strong className="text-slate-600">{t.receiptNo}</strong> <span className="font-mono font-bold text-slate-900">{receiptId}</span></p>
-                <p><strong className="text-slate-600">{t.dateTime}</strong> {new Date(purchase.createdAt).toLocaleString()}</p>
-                <p><strong className="text-slate-600">{t.purchasingStaff}</strong> {purchase.purchasingStaffName || 'Field Inspector'}</p>
+            {/* Two-Column Billing & Invoice Information */}
+            <div className="grid grid-cols-12 gap-5 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs items-start">
+              <div className="col-span-7 space-y-1 leading-relaxed">
+                <p>
+                  <strong className="text-slate-600">Bill To:</strong>{' '}
+                  <span className="font-bold text-slate-900">IBIS RICE CONSERVATION CO., LTD</span>
+                </p>
+                <p>
+                  <strong className="text-slate-600">Address:</strong>{' '}
+                  <span className="text-slate-800">
+                    No.361, Street Tumnub 7 Makara, Serey Deydos Village, Sangkat Prey Veng, Khan Dangkor, Phnom Penh
+                  </span>
+                </p>
+                <p>
+                  <strong className="text-slate-600">VAT TIN:</strong>{' '}
+                  <span className="font-mono font-semibold text-slate-900">K006-901800972</span>
+                </p>
               </div>
-              <div>
-                <p><strong className="text-slate-600">{t.familyCode}</strong> <span className="font-bold text-emerald-700">{purchase.familyCode}</span></p>
-                <p><strong className="text-slate-600">{t.farmerName}</strong> {purchase.farmerName}</p>
-                <p><strong className="text-slate-600">{t.village}</strong> {purchase.village}</p>
+              <div className="col-span-5 space-y-1 leading-relaxed">
+                <p>
+                  <strong className="text-slate-600">Invoice No:</strong>{' '}
+                  <span className="font-mono font-bold text-slate-900">{receiptId}</span>
+                </p>
+                <p>
+                  <strong className="text-slate-600">Invoice Date &amp; Time:</strong>{' '}
+                  <span className="text-slate-800">{new Date(purchase.createdAt).toLocaleString()}</span>
+                </p>
+                <p>
+                  <strong className="text-slate-600">Purchase Staff:</strong>{' '}
+                  <span className="text-slate-800">{purchase.purchasingStaffName || 'Field Inspector'}</span>
+                </p>
               </div>
             </div>
 
@@ -96,7 +118,9 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
                 <tbody className="divide-y divide-slate-200">
                   <tr>
                     <td className="p-2.5 font-bold">
-                      {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>Organic {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})</span>
+                      </span>
                     </td>
                     <td className="p-2.5 text-center font-bold">{purchase.items?.[0]?.sacks || sackWeightsList.length}</td>
                     <td className="p-2.5 text-right font-mono font-bold">{Math.round(purchase.totalWeight).toLocaleString()} kg</td>
@@ -123,6 +147,12 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
                 <span>{t.netPaymentToFarmer}</span>
                 <span className="font-mono">{purchase.netPayment.toLocaleString()} KHR</span>
               </div>
+            </div>
+
+            {/* Organic Certification Declaration */}
+            <div className="flex items-center justify-center gap-2 bg-emerald-50/70 border border-emerald-200 rounded-lg px-3 py-2 text-[11px] text-emerald-950">
+              <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+              <p className="font-bold text-emerald-900">EU &amp; NOP Organic Certification Status: 100% Certified Organic Paddy</p>
             </div>
 
             {/* Dual Signatures Block */}
@@ -157,29 +187,51 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
 
       {/* 2. DEDICATED OFFICIAL PAPER REPORT TEMPLATE (Rendered ONLY during window.print()) */}
       <div className="official-print-document hidden print:block w-full bg-white text-slate-900 font-sans p-2">
-        {/* Header */}
+        {/* Header: Farmer Information */}
         <div className="text-center border-b-2 border-slate-900 pb-3 mb-4 space-y-1">
-          <div className="w-16 h-16 bg-black rounded-xl flex items-center justify-center p-1 mx-auto mb-2">
-            <img src="/logo.png" alt="IBIS RICE CONSERVATION CO., LTD." className="w-full h-full object-contain" />
-          </div>
-          <h1 className="text-lg font-black tracking-wide text-slate-900 uppercase">
-            {t.companyName}
-          </h1>
-          <h2 className="text-xs font-black uppercase text-slate-800 tracking-wider">{t.receiptTitle}</h2>
-          <p className="text-[10px] text-slate-600 font-bold">{t.receiptSubtitle}</p>
+          <p className="text-base font-black tracking-wide text-slate-900">
+            <span className="text-slate-700 font-bold">{t.familyCode}</span>{' '}
+            <span className="text-emerald-800">{purchase.familyCode}</span>
+          </p>
+          <p className="text-sm font-bold text-slate-900">
+            <span className="text-slate-700">{t.farmerName}</span> {purchase.farmerName}
+          </p>
+          <p className="text-xs text-slate-800">
+            <span className="text-slate-700 font-bold">{t.village}</span> {purchase.village}
+          </p>
         </div>
 
-        {/* Metadata Grid */}
-        <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 border border-slate-300 rounded-lg mb-4 text-xs">
-          <div className="space-y-1">
-            <p><strong className="text-slate-700">{t.receiptNo}</strong> <span className="font-mono font-bold text-slate-900">{receiptId}</span></p>
-            <p><strong className="text-slate-700">{t.dateTime}</strong> {new Date(purchase.createdAt).toLocaleString()}</p>
-            <p><strong className="text-slate-700">{t.purchasingStaff}</strong> {purchase.purchasingStaffName || 'Field Inspector'}</p>
+        {/* Two-Column Billing & Invoice Information */}
+        <div className="grid grid-cols-12 gap-6 p-3.5 bg-slate-50 border border-slate-300 rounded-lg mb-4 text-xs items-start">
+          <div className="col-span-7 space-y-1 leading-relaxed">
+            <p>
+              <strong className="text-slate-700">Bill To:</strong>{' '}
+              <span className="font-bold text-slate-900">IBIS RICE CONSERVATION CO., LTD</span>
+            </p>
+            <p>
+              <strong className="text-slate-700">Address:</strong>{' '}
+              <span className="text-slate-800">
+                No.361, Street Tumnub 7 Makara, Serey Deydos Village, Sangkat Prey Veng, Khan Dangkor, Phnom Penh
+              </span>
+            </p>
+            <p>
+              <strong className="text-slate-700">VAT TIN:</strong>{' '}
+              <span className="font-mono font-semibold text-slate-900">K006-901800972</span>
+            </p>
           </div>
-          <div className="space-y-1">
-            <p><strong className="text-slate-700">{t.familyCode}</strong> <span className="font-bold text-emerald-800">{purchase.familyCode}</span></p>
-            <p><strong className="text-slate-700">{t.farmerName}</strong> <span className="font-bold text-slate-900">{purchase.farmerName}</span></p>
-            <p><strong className="text-slate-700">{t.village}</strong> {purchase.village}</p>
+          <div className="col-span-5 space-y-1 leading-relaxed">
+            <p>
+              <strong className="text-slate-700">Invoice No:</strong>{' '}
+              <span className="font-mono font-bold text-slate-900">{receiptId}</span>
+            </p>
+            <p>
+              <strong className="text-slate-700">Invoice Date &amp; Time:</strong>{' '}
+              <span className="text-slate-800">{new Date(purchase.createdAt).toLocaleString()}</span>
+            </p>
+            <p>
+              <strong className="text-slate-700">Purchase Staff:</strong>{' '}
+              <span className="text-slate-800">{purchase.purchasingStaffName || 'Field Inspector'}</span>
+            </p>
           </div>
         </div>
 
@@ -197,7 +249,7 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
           <tbody className="divide-y divide-slate-200">
             <tr>
               <td className="p-2.5 font-bold border-r border-slate-200">
-                {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
+                Organic {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
               </td>
               <td className="p-2.5 text-center font-bold border-r border-slate-200">{purchase.items?.[0]?.sacks || sackWeightsList.length}</td>
               <td className="p-2.5 text-right font-mono font-bold border-r border-slate-200">{Math.round(purchase.totalWeight).toLocaleString()} kg</td>
@@ -223,6 +275,12 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
             <span>{t.netPaymentToFarmer}</span>
             <span className="font-mono">{purchase.netPayment.toLocaleString()} KHR</span>
           </div>
+        </div>
+
+        {/* Organic Certification Declaration */}
+        <div className="flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-2 mb-5 text-[11px] text-slate-900">
+          <ShieldCheck className="w-4 h-4 text-emerald-800 shrink-0" />
+          <p className="font-bold text-slate-900">EU &amp; NOP Organic Certification Status: 100% Certified Organic Paddy</p>
         </div>
 
         {/* Dual Signatures */}
