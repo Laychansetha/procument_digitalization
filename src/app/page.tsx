@@ -739,25 +739,6 @@ export default function OperationsDashboard() {
     }
   };
 
-  const handlePFamilyCodeChange = (codeVal: string) => {
-    setPFamilyCode(codeVal);
-    const match = findFarmerByFamilyCode(codeVal, pVillage);
-    if (match) {
-      if (match.farmerName) setPFarmerName(match.farmerName);
-      if (match.village && !pVillage) setPVillage(match.village);
-    }
-  };
-
-  const handlePVillageChange = (vName: string) => {
-    setPVillage(vName);
-    if (pFamilyCode) {
-      const match = findFarmerByFamilyCode(pFamilyCode, vName);
-      if (match) {
-        if (match.farmerName) setPFarmerName(match.farmerName);
-      }
-    }
-  };
-
   // Delete Purchase Record Handler (2-Step Confirmation & Stage Guard)
   const handleDeletePurchaseRecord = async (p: any) => {
     const formattedId = formatPurchaseId(p);
@@ -4095,7 +4076,7 @@ export default function OperationsDashboard() {
                     )}
 
                     {/* Farmer Info Banner */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white/5 border border-white/10 rounded-xl p-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white/5 border border-white/10 rounded-xl p-2.5">
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-slate-400 font-bold uppercase text-[10px]">FAMILY CODE *</span>
@@ -4108,6 +4089,9 @@ export default function OperationsDashboard() {
                           readOnly
                           required
                           value={pFamilyCode}
+                          onClick={() => {
+                            if (!selectedSpecsRecordId && !editingPurchaseId) setIsSpecsModalOpen(true);
+                          }}
                           placeholder="Load from Specs..."
                           className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-extrabold cursor-not-allowed select-none"
                         />
@@ -4124,6 +4108,28 @@ export default function OperationsDashboard() {
                           readOnly
                           required
                           value={pFarmerName}
+                          onClick={() => {
+                            if (!selectedSpecsRecordId && !editingPurchaseId) setIsSpecsModalOpen(true);
+                          }}
+                          placeholder="Load from Specs..."
+                          className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-bold cursor-not-allowed select-none"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-slate-400 font-bold uppercase text-[10px]">VILLAGE *</span>
+                          <span className="text-[10px] text-emerald-400/80 font-semibold flex items-center gap-0.5">
+                            <LockIcon className="w-2.5 h-2.5" /> Auto from Specs
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          readOnly
+                          required
+                          value={pVillage}
+                          onClick={() => {
+                            if (!selectedSpecsRecordId && !editingPurchaseId) setIsSpecsModalOpen(true);
+                          }}
                           placeholder="Load from Specs..."
                           className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-bold cursor-not-allowed select-none"
                         />
@@ -4164,6 +4170,9 @@ export default function OperationsDashboard() {
                             readOnly
                             required
                             value={pVariety}
+                            onClick={() => {
+                              if (!selectedSpecsRecordId && !editingPurchaseId) setIsSpecsModalOpen(true);
+                            }}
                             placeholder="Load from Specs..."
                             className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-bold cursor-not-allowed select-none"
                           />
@@ -4181,6 +4190,9 @@ export default function OperationsDashboard() {
                             readOnly
                             required
                             value={pGrade}
+                            onClick={() => {
+                              if (!selectedSpecsRecordId && !editingPurchaseId) setIsSpecsModalOpen(true);
+                            }}
                             placeholder="Load from Specs..."
                             className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-bold cursor-not-allowed select-none"
                           />
@@ -4199,6 +4211,9 @@ export default function OperationsDashboard() {
                             type="text"
                             readOnly
                             value={pStandardPrice > 0 ? pStandardPrice.toLocaleString() : ''}
+                            onClick={() => {
+                              if (!selectedSpecsRecordId && !editingPurchaseId) setIsSpecsModalOpen(true);
+                            }}
                             placeholder="--"
                             className="w-full bg-[#1e293b]/60 border border-slate-700/70 rounded-lg px-2.5 py-1.5 text-white font-extrabold text-amber-400 placeholder:text-slate-500 cursor-not-allowed select-none"
                           />
@@ -4216,6 +4231,7 @@ export default function OperationsDashboard() {
                           </label>
                           <input
                             type="text"
+                            inputMode="numeric"
                             value={pAdditionalPriceInput}
                             onFocus={(e) => {
                               if (e.target.value === '0') setPAdditionalPriceInput('');
@@ -4223,7 +4239,7 @@ export default function OperationsDashboard() {
                             onBlur={(e) => {
                               if (!e.target.value.trim()) setPAdditionalPriceInput('0');
                             }}
-                            onChange={(e) => setPAdditionalPriceInput(e.target.value)}
+                            onChange={(e) => setPAdditionalPriceInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
                             placeholder="0"
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold focus:border-emerald-500 focus:outline-none"
                           />
@@ -4317,6 +4333,7 @@ export default function OperationsDashboard() {
                           </label>
                           <input
                             type="text"
+                            inputMode="numeric"
                             value={pSeedBorrowedInput}
                             onFocus={(e) => {
                               if (e.target.value === '0') setPSeedBorrowedInput('');
@@ -4324,7 +4341,7 @@ export default function OperationsDashboard() {
                             onBlur={(e) => {
                               if (!e.target.value.trim()) setPSeedBorrowedInput('0');
                             }}
-                            onChange={(e) => setPSeedBorrowedInput(e.target.value)}
+                            onChange={(e) => setPSeedBorrowedInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
                             placeholder="0"
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold focus:border-emerald-500 focus:outline-none"
                           />

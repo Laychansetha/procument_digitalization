@@ -42,6 +42,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   String? _editingId;
   DateTime? _editingCreatedAt;
   String? _editingServerRecordId;
+  String? _editingSpecsRecordId;
   String? _selectedVillage;
   String? _selectedVariety;
   String? _selectedGrade;
@@ -171,6 +172,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       _editingId = null;
       _editingCreatedAt = null;
       _editingServerRecordId = null;
+      _editingSpecsRecordId = null;
       _selectedVillage = null;
       _selectedVariety = null;
       _selectedGrade = null;
@@ -181,10 +183,21 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   }
 
   PurchaseRecord? _getExistingPurchaseForSpecs(SpecsRecord spec) {
+    final specCode = spec.familyCode.trim().toLowerCase();
+    final specVillage = spec.village.trim().toLowerCase();
+    final specVariety = spec.paddyType.trim().toLowerCase();
+    final specGrade = spec.selectedGrade.trim().toLowerCase();
+
     for (var p in _localHistory) {
       if (_editingId != null && p.id == _editingId) continue;
       if (p.specsRecordId != null && p.specsRecordId == spec.id) return p;
       if (spec.serverRecordId != null && p.specsRecordId == spec.serverRecordId) return p;
+
+      final familyMatch = p.familyCode.trim().toLowerCase() == specCode;
+      final villageMatch = p.village.trim().isEmpty || specVillage.isEmpty || p.village.trim().toLowerCase() == specVillage;
+      final varietyMatch = p.variety.trim().toLowerCase() == specVariety;
+      final gradeMatch = p.grade.trim().toLowerCase() == specGrade;
+      if (familyMatch && villageMatch && varietyMatch && gradeMatch) return p;
     }
     return null;
   }
@@ -467,7 +480,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       additionalPremium: addPremiumPerKg,
       netPayment: netPayment,
       signatureFarmer: farmerSigBase64,
-      specsRecordId: _selectedLoadedSpecs?.id,
+      specsRecordId: _selectedLoadedSpecs?.id ?? _editingSpecsRecordId,
       createdAt: _editingCreatedAt ?? now,
       isSynced: false,
       serverRecordId: _editingServerRecordId,
@@ -489,10 +502,25 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       return;
     }
 
+    SpecsRecord? matchedSpec;
+    for (final s in _availableSpecs) {
+      if (item.specsRecordId != null &&
+          (s.id == item.specsRecordId || (s.serverRecordId != null && s.serverRecordId == item.specsRecordId))) {
+        matchedSpec = s;
+        break;
+      }
+    }
+
+    final formattedQty = item.totalWeight > 0
+        ? (item.totalWeight % 1 == 0 ? item.totalWeight.toInt().toString() : item.totalWeight.toString())
+        : '';
+
     setState(() {
       _editingId = item.id;
       _editingCreatedAt = item.createdAt;
       _editingServerRecordId = item.serverRecordId;
+      _editingSpecsRecordId = item.specsRecordId;
+      _selectedLoadedSpecs = matchedSpec;
       _familyCodeController.text = item.familyCode;
       _farmerNameController.text = item.farmerName;
       _selectedVillage = item.village;
@@ -500,7 +528,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       _selectedGrade = item.grade;
       _standardPrice = item.standardPrice;
       _sacksCountController.text = item.sacks > 0 ? item.sacks.toString() : '';
-      _quantityKgController.text = item.totalWeight > 0 ? item.totalWeight.round().toString() : '';
+      _quantityKgController.text = formattedQty;
       _seedBorrowedController.text = item.seedBorrowed.round().toInt().toString();
       _premiumAmountController.text = item.additionalPremium.round().toInt().toString();
       _existingFarmerSignatureBase64 = item.signatureFarmer;
@@ -809,7 +837,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
           LayoutBuilder(
             builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 500;
+              final isWide = constraints.maxWidth > 520;
               final isSpecsMissing = _selectedLoadedSpecs == null && _editingId == null;
 
               final familyCodeField = TextFormField(
@@ -838,31 +866,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                 validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
               );
 
-              return isWide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: familyCodeField),
-                        const SizedBox(width: 12),
-                        Expanded(child: farmerNameField),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        familyCodeField,
-                        const SizedBox(height: 12),
-                        farmerNameField,
-                      ],
-                    );
-            },
-          ),
-          const SizedBox(height: 12),
-
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 520;
-              final isSpecsMissing = _selectedLoadedSpecs == null && _editingId == null;
-
               final villageField = TextFormField(
                 key: ValueKey('village_${_selectedVillage ?? ''}'),
                 initialValue: _selectedVillage ?? '',
@@ -876,6 +879,35 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                 ),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
               );
+
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: familyCodeField),
+                        const SizedBox(width: 12),
+                        Expanded(child: farmerNameField),
+                        const SizedBox(width: 12),
+                        Expanded(child: villageField),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        familyCodeField,
+                        const SizedBox(height: 12),
+                        farmerNameField,
+                        const SizedBox(height: 12),
+                        villageField,
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: 12),
+
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 520;
+              final isSpecsMissing = _selectedLoadedSpecs == null && _editingId == null;
 
               final categoryField = TextFormField(
                 key: ValueKey('variety_${safeSelectedVariety ?? _selectedVariety ?? ''}'),
@@ -905,24 +937,43 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                 validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
               );
 
+              final formattedStdPrice = _standardPrice > 0
+                  ? (_standardPrice % 1 == 0
+                      ? numberFormat.format(_standardPrice.toInt())
+                      : _standardPrice.toString())
+                  : '';
+
+              final stdPriceField = TextFormField(
+                key: ValueKey('stdPrice_$_standardPrice'),
+                initialValue: formattedStdPrice,
+                readOnly: true,
+                canRequestFocus: false,
+                onTap: isSpecsMissing ? _searchAndLoadSpecs : null,
+                decoration: const InputDecoration(
+                  labelText: 'STANDARD BASE PRICE (KHR/KG) (AUTO)',
+                  hintText: '--',
+                  suffixIcon: Icon(Icons.lock_outline, size: 16, color: AppTheme.emeraldLight),
+                ),
+              );
+
               return isWide
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: villageField),
-                        const SizedBox(width: 12),
                         Expanded(child: categoryField),
                         const SizedBox(width: 12),
                         Expanded(child: gradeField),
+                        const SizedBox(width: 12),
+                        Expanded(child: stdPriceField),
                       ],
                     )
                   : Column(
                       children: [
-                        villageField,
-                        const SizedBox(height: 12),
                         categoryField,
                         const SizedBox(height: 12),
                         gradeField,
+                        const SizedBox(height: 12),
+                        stdPriceField,
                       ],
                     );
             },

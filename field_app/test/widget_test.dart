@@ -526,5 +526,49 @@ void main() {
       final transports = await AppDatabase.instance.getAllTransports();
       expect(transports, isEmpty);
     });
+
+    test('PurchaseRecord serializes direct sacks count and totalWeight in SQLite and API JSON', () async {
+      final record = PurchaseRecord(
+        id: 'TB010_141126_10',
+        familyCode: 'TB010',
+        farmerName: 'Test Farmer',
+        village: 'Prey Veng',
+        variety: 'Organic Phka Rumduol',
+        grade: 'A',
+        standardPrice: 1500,
+        additionalPrice: 50,
+        finalPrice: 1550,
+        sacks: 25,
+        sackWeights: const [],
+        totalWeight: 2150.5,
+        totalPayment: 3333275,
+        seedBorrowed: 100,
+        netPayment: 3333275,
+        specsRecordId: 'specs-123',
+        createdAt: DateTime.parse('2026-11-14T10:00:00.000Z'),
+      );
+
+      await AppDatabase.instance.insertPurchase(record);
+      final saved = await AppDatabase.instance.getAllPurchases();
+      expect(saved.length, 1);
+      expect(saved.first.sacks, 25);
+      expect(saved.first.totalWeight, 2150.5);
+      expect(saved.first.sackWeights, isEmpty);
+      expect(saved.first.specsRecordId, 'specs-123');
+      expect(saved.first.finalPrice, 1550);
+
+      final postJson = saved.first.toPostJson();
+      expect(postJson['totalWeight'], 2150.5);
+      expect(postJson['seedBorrowed'], 100);
+      expect(postJson['specsRecordId'], 'specs-123');
+      final items = postJson['items'] as List<dynamic>;
+      expect(items.length, 1);
+      final item = items.first as Map<String, dynamic>;
+      expect(item['sacks'], 25);
+      expect(item['quantity'], 2150.5);
+      expect(item['additionalPrice'], 50);
+      expect(item['finalPrice'], 1550);
+      expect(item['sackWeights'], isNull);
+    });
   });
 }
