@@ -12,7 +12,6 @@ import '../../models/specs_record.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_notification.dart';
 import '../../utils/id_formatter.dart';
-import '../../widgets/searchable_village_select.dart';
 
 class PurchaseFormScreen extends StatefulWidget {
   const PurchaseFormScreen({super.key});
@@ -25,9 +24,12 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _familyCodeController = TextEditingController();
   final _farmerNameController = TextEditingController();
-  final _sacksInputController = TextEditingController();
+  final _sacksCountController = TextEditingController();
+  final _quantityKgController = TextEditingController();
   final _seedBorrowedController = TextEditingController();
   final _premiumAmountController = TextEditingController();
+  final _seedBorrowedFocusNode = FocusNode();
+  final _premiumFocusNode = FocusNode();
   final _searchController = TextEditingController();
   final _modalSearchController = TextEditingController();
 
@@ -46,7 +48,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   double _standardPrice = 0.0;
   String? _existingFarmerSignatureBase64;
 
-  List<double> _sackWeights = [];
   List<PurchaseRecord> _localHistory = [];
   List<SpecsRecord> _availableSpecs = [];
   SpecsRecord? _selectedLoadedSpecs;
@@ -57,11 +58,39 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     super.initState();
     _seedBorrowedController.text = '0';
     _premiumAmountController.text = '0';
+    _seedBorrowedFocusNode.addListener(_onSeedBorrowedFocusChange);
+    _premiumFocusNode.addListener(_onPremiumFocusChange);
     _loadAvailableSpecs();
     _loadHistory();
     ConfigDao.instance.fetchRemoteConfig();
     AppDatabase.instance.dbChangeNotifier.addListener(_onDbChanged);
     ConfigDao.instance.configChangeNotifier.addListener(_onConfigChanged);
+  }
+
+  void _onSeedBorrowedFocusChange() {
+    if (_seedBorrowedFocusNode.hasFocus) {
+      if (_seedBorrowedController.text.trim() == '0') {
+        _seedBorrowedController.clear();
+      }
+    } else {
+      if (_seedBorrowedController.text.trim().isEmpty) {
+        _seedBorrowedController.text = '0';
+        if (mounted) setState(() {});
+      }
+    }
+  }
+
+  void _onPremiumFocusChange() {
+    if (_premiumFocusNode.hasFocus) {
+      if (_premiumAmountController.text.trim() == '0') {
+        _premiumAmountController.clear();
+      }
+    } else {
+      if (_premiumAmountController.text.trim().isEmpty) {
+        _premiumAmountController.text = '0';
+        if (mounted) setState(() {});
+      }
+    }
   }
 
   void _onDbChanged() {
@@ -84,7 +113,12 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     ConfigDao.instance.configChangeNotifier.removeListener(_onConfigChanged);
     _familyCodeController.dispose();
     _farmerNameController.dispose();
-    _sacksInputController.dispose();
+    _sacksCountController.dispose();
+    _quantityKgController.dispose();
+    _seedBorrowedFocusNode.removeListener(_onSeedBorrowedFocusChange);
+    _premiumFocusNode.removeListener(_onPremiumFocusChange);
+    _seedBorrowedFocusNode.dispose();
+    _premiumFocusNode.dispose();
     _seedBorrowedController.dispose();
     _premiumAmountController.dispose();
     _searchController.dispose();
@@ -125,37 +159,11 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     }
   }
 
-  Future<void> _onFamilyCodeChanged(String value) async {
-    final code = value.trim().toUpperCase();
-    if (code.length < 2 || _editingId != null) return;
-
-    final farmers = await AppDatabase.instance.getAllFarmers();
-    final matchedFarmer = farmers.where((f) => f.familyCode.toUpperCase() == code).firstOrNull;
-    if (matchedFarmer != null && mounted) {
-      setState(() {
-        if (_farmerNameController.text.trim().isEmpty) {
-          _farmerNameController.text = matchedFarmer.farmerName;
-        }
-        _selectedVillage ??= matchedFarmer.village;
-      });
-      return;
-    }
-
-    final matchedSpec = _availableSpecs.where((s) => s.familyCode.toUpperCase() == code).firstOrNull;
-    if (matchedSpec != null && mounted) {
-      setState(() {
-        if (_farmerNameController.text.trim().isEmpty) {
-          _farmerNameController.text = matchedSpec.farmerName;
-        }
-        _selectedVillage ??= matchedSpec.village;
-      });
-    }
-  }
-
   void _resetForm() {
     _familyCodeController.clear();
     _farmerNameController.clear();
-    _sacksInputController.clear();
+    _sacksCountController.clear();
+    _quantityKgController.clear();
     _seedBorrowedController.text = '0';
     _premiumAmountController.text = '0';
     _farmerSignatureController.clear();
@@ -166,66 +174,9 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       _selectedVillage = null;
       _selectedVariety = null;
       _selectedGrade = null;
-      _sackWeights = [];
       _selectedLoadedSpecs = null;
       _standardPrice = 0.0;
       _existingFarmerSignatureBase64 = null;
-    });
-  }
-
-  void _parseSackWeights(String input) {
-    if (input.trim().isEmpty) {
-      setState(() {
-        _sackWeights = [];
-      });
-      return;
-    }
-
-    final tokens = input.replaceAll(',', ' ').split(RegExp(r'\s+'));
-    final List<double> weights = [];
-    for (var t in tokens) {
-      final clean = t.replaceAll(RegExp(r'[^0-9]'), '');
-      if (clean.isNotEmpty) {
-        final max3Digits = clean.length > 3 ? clean.substring(0, 3) : clean;
-        final parsed = double.tryParse(max3Digits);
-        if (parsed != null && parsed > 0 && parsed <= 999) {
-          weights.add(parsed);
-        }
-      }
-    }
-
-    setState(() {
-      _sackWeights = weights;
-    });
-  }
-
-  void _removeSackAt(int index) {
-    if (index < 0 || index >= _sackWeights.length) return;
-    setState(() {
-      _sackWeights.removeAt(index);
-      _sacksInputController.text = _sackWeights.map((w) => w.round().toString()).join(' ');
-    });
-  }
-
-  void _clearSacks() {
-    setState(() {
-      _sackWeights = [];
-      _sacksInputController.clear();
-    });
-  }
-
-  void _updatePaddyPrice() {
-    if (_selectedVariety == null || _selectedGrade == null) return;
-    final paddySpecs = ConfigDao.instance.paddySpecs;
-    final found = paddySpecs.firstWhere(
-      (ps) => ps['variety'] == _selectedVariety && ps['grade'] == _selectedGrade,
-      orElse: () => {'basePrice': 1650.0},
-    );
-
-    final base = (found['basePrice'] as num?)?.toDouble() ?? 1650.0;
-
-    setState(() {
-      _standardPrice = base;
     });
   }
 
@@ -429,12 +380,22 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   }
 
   Future<void> _savePurchaseRecord() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_seedBorrowedController.text.trim().isEmpty) {
+      _seedBorrowedController.text = '0';
+    }
+    if (_premiumAmountController.text.trim().isEmpty) {
+      _premiumAmountController.text = '0';
+    }
 
-    if (_selectedVillage == null || _selectedVariety == null || _selectedGrade == null) {
+    if ((_editingId == null && _selectedLoadedSpecs == null) ||
+        _selectedVillage == null ||
+        _selectedVariety == null ||
+        _selectedGrade == null ||
+        _familyCodeController.text.trim().isEmpty ||
+        _farmerNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Please select Village, Paddy Category, and Grade.'),
+          content: Text('⚠️ Please tap "Load Quality Specs" to select a farmer\'s approved specs record first.'),
           backgroundColor: AppTheme.amberGold,
           duration: Duration(seconds: 3),
         ),
@@ -442,9 +403,21 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       return;
     }
 
-    if (_sackWeights.isEmpty) {
+    if (!_formKey.currentState!.validate()) return;
+
+    final sacksCount = int.tryParse(_sacksCountController.text.trim()) ?? 0;
+    final totalWeight = double.tryParse(_quantityKgController.text.trim()) ?? 0.0;
+
+    if (sacksCount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter individual sack weights (kg).'), backgroundColor: AppTheme.errorRed),
+        const SnackBar(content: Text('Please enter Number of Sacks.'), backgroundColor: AppTheme.errorRed),
+      );
+      return;
+    }
+
+    if (totalWeight <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Quantity (Kg).'), backgroundColor: AppTheme.errorRed),
       );
       return;
     }
@@ -453,7 +426,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     final name = _farmerNameController.text.trim();
     final addPremiumPerKg = double.tryParse(_premiumAmountController.text) ?? 0.0;
     final finalPricePerKg = _standardPrice + addPremiumPerKg;
-    final totalWeight = _sackWeights.fold(0.0, (a, b) => a + b);
     final grossValue = (totalWeight * finalPricePerKg).roundToDouble();
     final seedBorrowedKg = double.tryParse(_seedBorrowedController.text) ?? 0.0;
     final returnedSeedKg = seedBorrowedKg * ConfigDao.instance.seedInterestRate;
@@ -486,7 +458,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       standardPrice: _standardPrice,
       additionalPrice: addPremiumPerKg,
       finalPrice: finalPricePerKg,
-      sackWeights: List.from(_sackWeights),
+      sacks: sacksCount,
       totalWeight: totalWeight,
       totalPayment: grossValue,
       seedBorrowed: seedBorrowedKg,
@@ -527,8 +499,8 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       _selectedVariety = item.variety;
       _selectedGrade = item.grade;
       _standardPrice = item.standardPrice;
-      _sackWeights = List.from(item.sackWeights);
-      _sacksInputController.text = item.sackWeights.map((w) => w.round().toInt().toString()).join(' ');
+      _sacksCountController.text = item.sacks > 0 ? item.sacks.toString() : '';
+      _quantityKgController.text = item.totalWeight > 0 ? item.totalWeight.round().toString() : '';
       _seedBorrowedController.text = item.seedBorrowed.round().toInt().toString();
       _premiumAmountController.text = item.additionalPremium.round().toInt().toString();
       _existingFarmerSignatureBase64 = item.signatureFarmer;
@@ -653,9 +625,8 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
               ],
               const Divider(color: Colors.white24, height: 16),
 
-              Text('Sacks Count: ${item.sackWeights.length} Bags', style: const TextStyle(color: AppTheme.skyBlue, fontSize: 12, fontWeight: FontWeight.bold)),
-              Text('Sack Weights: [ ${item.sackWeights.map((w) => w.round()).join(', ')} ] kg', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
-              Text('Total Weight: ${item.totalWeight.round()} kg', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('Number of Sacks: ${item.sacks} Sacks', style: const TextStyle(color: AppTheme.skyBlue, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('Quantity (Kg): ${item.totalWeight.round()} kg', style: const TextStyle(color: AppTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
 
               Text('Base Price: ${numberFormat.format(item.standardPrice.toInt())} KHR/kg${item.additionalPremium > 0 ? ' (+${numberFormat.format(item.additionalPremium.toInt())} Premium)' : ''}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
@@ -839,43 +810,48 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 500;
+              final isSpecsMissing = _selectedLoadedSpecs == null && _editingId == null;
+
+              final familyCodeField = TextFormField(
+                controller: _familyCodeController,
+                readOnly: true,
+                canRequestFocus: false,
+                onTap: isSpecsMissing ? _searchAndLoadSpecs : null,
+                decoration: const InputDecoration(
+                  labelText: 'FAMILY CODE * (AUTO FROM SPECS)',
+                  hintText: 'Load from Quality Specs...',
+                  suffixIcon: Icon(Icons.lock_outline, size: 16, color: AppTheme.emeraldLight),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
+              );
+
+              final farmerNameField = TextFormField(
+                controller: _farmerNameController,
+                readOnly: true,
+                canRequestFocus: false,
+                onTap: isSpecsMissing ? _searchAndLoadSpecs : null,
+                decoration: const InputDecoration(
+                  labelText: 'FARMER NAME * (AUTO FROM SPECS)',
+                  hintText: 'Load from Quality Specs...',
+                  suffixIcon: Icon(Icons.lock_outline, size: 16, color: AppTheme.emeraldLight),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
+              );
+
               return isWide
                   ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _familyCodeController,
-                            textCapitalization: TextCapitalization.characters,
-                            decoration: const InputDecoration(labelText: 'FAMILY CODE *', hintText: 'e.g. TB010'),
-                            onChanged: _onFamilyCodeChanged,
-                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                          ),
-                        ),
+                        Expanded(child: familyCodeField),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _farmerNameController,
-                            decoration: const InputDecoration(labelText: 'FARMER NAME *', hintText: 'e.g. Heng Sok'),
-                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                          ),
-                        ),
+                        Expanded(child: farmerNameField),
                       ],
                     )
                   : Column(
                       children: [
-                        TextFormField(
-                          controller: _familyCodeController,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: const InputDecoration(labelText: 'FAMILY CODE *', hintText: 'e.g. TB010'),
-                          onChanged: _onFamilyCodeChanged,
-                          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                        ),
+                        familyCodeField,
                         const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _farmerNameController,
-                          decoration: const InputDecoration(labelText: 'FARMER NAME *', hintText: 'e.g. Heng Sok'),
-                          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                        ),
+                        farmerNameField,
                       ],
                     );
             },
@@ -885,100 +861,48 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 520;
-              final villageField = SearchableVillageSelect(
-                value: _selectedVillage,
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedVillage = val);
-                },
-                validator: (v) => v == null || v.isEmpty ? 'Select Village' : null,
+              final isSpecsMissing = _selectedLoadedSpecs == null && _editingId == null;
+
+              final villageField = TextFormField(
+                key: ValueKey('village_${_selectedVillage ?? ''}'),
+                initialValue: _selectedVillage ?? '',
+                readOnly: true,
+                canRequestFocus: false,
+                onTap: isSpecsMissing ? _searchAndLoadSpecs : null,
+                decoration: const InputDecoration(
+                  labelText: 'VILLAGE * (AUTO FROM SPECS)',
+                  hintText: 'Load from Quality Specs...',
+                  suffixIcon: Icon(Icons.lock_outline, size: 16, color: AppTheme.emeraldLight),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
               );
 
-              final categoryField = DropdownButtonFormField<String>(
-                value: safeSelectedVariety,
-                isExpanded: true,
-                isDense: true,
-                icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
+              final categoryField = TextFormField(
+                key: ValueKey('variety_${safeSelectedVariety ?? _selectedVariety ?? ''}'),
+                initialValue: safeSelectedVariety ?? _selectedVariety ?? '',
+                readOnly: true,
+                canRequestFocus: false,
+                onTap: isSpecsMissing ? _searchAndLoadSpecs : null,
                 decoration: const InputDecoration(
-                  labelText: 'PADDY CATEGORY *',
-                  hintText: 'Select Category',
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  labelText: 'PADDY CATEGORY * (AUTO FROM SPECS)',
+                  hintText: 'Load from Quality Specs...',
+                  suffixIcon: Icon(Icons.lock_outline, size: 16, color: AppTheme.emeraldLight),
                 ),
-                hint: const Text(
-                  'Select Category',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                items: varieties
-                    .map((v) => DropdownMenuItem(
-                          value: v,
-                          child: Text(
-                            v,
-                            style: const TextStyle(fontSize: 13),
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ))
-                    .toList(),
-                validator: (v) => v == null ? 'Select Category' : null,
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _selectedVariety = val;
-                      final gradesForVal = ConfigDao.instance.getGradesForCategory(val);
-                      if (gradesForVal.length == 1) {
-                        _selectedGrade = gradesForVal.first;
-                      } else if (_selectedGrade != null && !gradesForVal.contains(_selectedGrade)) {
-                        _selectedGrade = null;
-                      }
-                    });
-                    _updatePaddyPrice();
-                  }
-                },
+                validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
               );
 
-              final gradeField = DropdownButtonFormField<String>(
-                value: safeSelectedGrade,
-                isExpanded: true,
-                isDense: true,
-                icon: const Icon(Icons.arrow_drop_down, color: AppTheme.skyBlue),
+              final gradeField = TextFormField(
+                key: ValueKey('grade_${safeSelectedGrade ?? _selectedGrade ?? ''}'),
+                initialValue: safeSelectedGrade ?? _selectedGrade ?? '',
+                readOnly: true,
+                canRequestFocus: false,
+                onTap: isSpecsMissing ? _searchAndLoadSpecs : null,
                 decoration: const InputDecoration(
-                  labelText: 'GRADE *',
-                  hintText: 'Select Grade',
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  labelText: 'GRADE * (AUTO FROM SPECS)',
+                  hintText: 'Load from Quality Specs...',
+                  suffixIcon: Icon(Icons.lock_outline, size: 16, color: AppTheme.emeraldLight),
                 ),
-                hint: Text(
-                  safeSelectedVariety == null ? 'Select Category First' : 'Select Grade',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                items: availableGrades
-                    .map((g) => DropdownMenuItem(
-                          value: g,
-                          child: Text(
-                            g,
-                            style: const TextStyle(fontSize: 13),
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ))
-                    .toList(),
-                validator: (v) => v == null ? 'Select Grade' : null,
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => _selectedGrade = val);
-                    _updatePaddyPrice();
-                  }
-                },
+                validator: (v) => v == null || v.trim().isEmpty ? 'Load Quality Specs first' : null,
               );
 
               return isWide
@@ -1005,146 +929,90 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
           ),
           const SizedBox(height: 16),
 
-          TextFormField(
-            controller: _sacksInputController,
-            keyboardType: TextInputType.number,
-            maxLines: null,
-            minLines: 1,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9\s,]')),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _sacksCountController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'NUMBER OF SACKS *',
+                    hintText: 'e.g. 20',
+                  ),
+                  onChanged: (v) => setState(() {}),
+                  validator: (v) {
+                    final parsed = int.tryParse((v ?? '').trim()) ?? 0;
+                    return parsed <= 0 ? 'Required' : null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _quantityKgController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'QUANTITY (KG) *',
+                    hintText: 'e.g. 1000',
+                  ),
+                  onChanged: (v) => setState(() {}),
+                  validator: (v) {
+                    final parsed = double.tryParse((v ?? '').trim()) ?? 0.0;
+                    return parsed <= 0 ? 'Required' : null;
+                  },
+                ),
+              ),
             ],
-            decoration: InputDecoration(
-              labelText: 'INDIVIDUAL SACK WEIGHTS (KG) *',
-              hintText: 'e.g. 90 85 92 88 or 90,85,92,88',
-              suffixIcon: _sackWeights.isNotEmpty
-                  ? TextButton(
-                      onPressed: _clearSacks,
-                      child: const Text('Clear', style: TextStyle(fontSize: 11, color: AppTheme.amberGold, fontWeight: FontWeight.bold)),
-                    )
-                  : null,
-            ),
-            onChanged: _parseSackWeights,
-            validator: (v) => _sackWeights.isEmpty ? 'Enter sack weights separated by spaces or commas' : null,
-          ),
-          if (_sackWeights.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: List.generate(_sackWeights.length, (idx) {
-                final w = _sackWeights[idx].round();
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.emeraldPrimary.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.emeraldPrimary.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: AppTheme.emeraldPrimary.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          '#${idx + 1}',
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$w kg',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      const SizedBox(width: 4),
-                      InkWell(
-                        onTap: () => _removeSackAt(idx),
-                        child: const Icon(Icons.close, size: 13, color: AppTheme.textMuted),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ),
-          ],
-          const SizedBox(height: 12),
-
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.inputBackground,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Sacks Count: ${_sackWeights.length} Bags', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.skyBlue)),
-                Text('Total Weight: ${totalWeight.round()} kg', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.emeraldLight)),
-              ],
-            ),
           ),
           const SizedBox(height: 16),
 
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 500;
+              final seedBorrowedField = TextFormField(
+                controller: _seedBorrowedController,
+                focusNode: _seedBorrowedFocusNode,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(3),
+                ],
+                decoration: const InputDecoration(labelText: 'SEED BORROWED (KG)', hintText: '0'),
+                onChanged: (v) => setState(() {}),
+              );
+
+              final premiumField = TextFormField(
+                controller: _premiumAmountController,
+                focusNode: _premiumFocusNode,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(3),
+                ],
+                decoration: const InputDecoration(labelText: 'ADDITIONAL PREMIUM (KHR/KG)', hintText: '0'),
+                onChanged: (v) => setState(() {}),
+              );
+
               return isWide
                   ? Row(
                       children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _seedBorrowedController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(3),
-                            ],
-                            decoration: const InputDecoration(labelText: 'SEED BORROWED (KG)', hintText: '0'),
-                            onChanged: (v) => setState(() {}),
-                          ),
-                        ),
+                        Expanded(child: seedBorrowedField),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _premiumAmountController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(3),
-                            ],
-                            decoration: const InputDecoration(labelText: 'ADDITIONAL PREMIUM (KHR/KG)', hintText: '0'),
-                            onChanged: (v) => setState(() {}),
-                          ),
-                        ),
+                        Expanded(child: premiumField),
                       ],
                     )
                   : Column(
                       children: [
-                        TextFormField(
-                          controller: _seedBorrowedController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(3),
-                          ],
-                          decoration: const InputDecoration(labelText: 'SEED BORROWED (KG)', hintText: '0'),
-                          onChanged: (v) => setState(() {}),
-                        ),
+                        seedBorrowedField,
                         const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _premiumAmountController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(3),
-                          ],
-                          decoration: const InputDecoration(labelText: 'ADDITIONAL PREMIUM (KHR/KG)', hintText: '0'),
-                          onChanged: (v) => setState(() {}),
-                        ),
+                        premiumField,
                       ],
                     );
             },
@@ -1410,7 +1278,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '${item.variety} (${item.grade}) · Weight: ${item.totalWeight.round()} kg (${item.sackWeights.length} Bags)\nNet Payment: ${numberFormat.format(item.netPayment.toInt())} KHR · $dateStr',
+                        '${item.variety} (${item.grade}) · Weight: ${item.totalWeight.round()} kg (${item.sacks} Sacks)\nNet Payment: ${numberFormat.format(item.netPayment.toInt())} KHR · $dateStr',
                         style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                       ),
                     ],
@@ -1491,7 +1359,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     final addPremiumPerKg = double.tryParse(_premiumAmountController.text) ?? 0.0;
     final finalPricePerKg = _standardPrice + addPremiumPerKg;
-    final totalWeight = _sackWeights.isEmpty ? 0.0 : _sackWeights.fold(0.0, (a, b) => a + b);
+    final totalWeight = double.tryParse(_quantityKgController.text.trim()) ?? 0.0;
     final grossValue = (totalWeight * finalPricePerKg).roundToDouble();
     final seedBorrowedKg = double.tryParse(_seedBorrowedController.text) ?? 0.0;
     final returnedSeedKg = seedBorrowedKg * ConfigDao.instance.seedInterestRate;

@@ -17,14 +17,7 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
 
   const t = getReportTranslation(lang);
   const item = purchase.items?.[0] || {};
-  let sackWeightsList: number[] = [];
-  try {
-    if (item.sackWeights) {
-      sackWeightsList = JSON.parse(item.sackWeights);
-    }
-  } catch (e) {
-    sackWeightsList = [];
-  }
+  const sacksCount = item.sacks || 0;
 
   const handlePrint = () => {
     window.print();
@@ -122,7 +115,7 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
                         <span>Organic {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})</span>
                       </span>
                     </td>
-                    <td className="p-2.5 text-center font-bold">{purchase.items?.[0]?.sacks || sackWeightsList.length}</td>
+                    <td className="p-2.5 text-center font-bold">{sacksCount}</td>
                     <td className="p-2.5 text-right font-mono font-bold">{Math.round(purchase.totalWeight).toLocaleString()} kg</td>
                     <td className="p-2.5 text-right font-mono">{(item.finalPrice || item.standardPrice || 0).toLocaleString()}</td>
                     <td className="p-2.5 text-right font-mono font-bold text-slate-900">
@@ -251,7 +244,7 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
               <td className="p-2.5 font-bold border-r border-slate-200">
                 Organic {item.variety || 'Red Jasmine'} ({item.grade || 'A1'})
               </td>
-              <td className="p-2.5 text-center font-bold border-r border-slate-200">{purchase.items?.[0]?.sacks || sackWeightsList.length}</td>
+              <td className="p-2.5 text-center font-bold border-r border-slate-200">{sacksCount}</td>
               <td className="p-2.5 text-right font-mono font-bold border-r border-slate-200">{Math.round(purchase.totalWeight).toLocaleString()} kg</td>
               <td className="p-2.5 text-right font-mono border-r border-slate-200">{(item.finalPrice || item.standardPrice || 0).toLocaleString()}</td>
               <td className="p-2.5 text-right font-mono font-bold text-slate-900">

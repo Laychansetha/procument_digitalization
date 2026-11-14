@@ -11,6 +11,7 @@ class PurchaseRecord {
   final double standardPrice;
   final double additionalPrice;
   final double finalPrice;
+  final int sacks;
   final List<double> sackWeights;
   final double totalWeight;
   final double totalPayment;
@@ -39,7 +40,8 @@ class PurchaseRecord {
     required this.standardPrice,
     this.additionalPrice = 0.0,
     required this.finalPrice,
-    required this.sackWeights,
+    int? sacks,
+    this.sackWeights = const [],
     required this.totalWeight,
     required this.totalPayment,
     this.seedBorrowed = 0.0,
@@ -55,7 +57,7 @@ class PurchaseRecord {
     required this.createdAt,
     this.isSynced = false,
     this.syncError,
-  });
+  }) : sacks = sacks ?? sackWeights.length;
 
   Map<String, dynamic> toMap() {
     return {
@@ -69,7 +71,7 @@ class PurchaseRecord {
       'standardPrice': standardPrice,
       'additionalPrice': additionalPrice,
       'finalPrice': finalPrice,
-      'sackWeightsJson': jsonEncode(sackWeights),
+      'sackWeightsJson': jsonEncode({'sacks': sacks}),
       'totalWeight': totalWeight,
       'totalPayment': totalPayment,
       'seedBorrowed': seedBorrowed,
@@ -89,11 +91,15 @@ class PurchaseRecord {
   }
 
   factory PurchaseRecord.fromMap(Map<String, dynamic> map) {
+    int parsedSacks = (map['sacks'] as num?)?.toInt() ?? 0;
     List<double> weights = [];
     if (map['sackWeightsJson'] != null) {
       final decoded = jsonDecode(map['sackWeightsJson']);
-      if (decoded is List) {
+      if (decoded is Map) {
+        parsedSacks = (decoded['sacks'] as num?)?.toInt() ?? parsedSacks;
+      } else if (decoded is List) {
         weights = decoded.map((e) => (e as num).toDouble()).toList();
+        if (parsedSacks == 0) parsedSacks = weights.length;
       }
     }
 
@@ -108,6 +114,7 @@ class PurchaseRecord {
       standardPrice: (map['standardPrice'] as num).toDouble(),
       additionalPrice: (map['additionalPrice'] as num?)?.toDouble() ?? 0.0,
       finalPrice: (map['finalPrice'] as num).toDouble(),
+      sacks: parsedSacks,
       sackWeights: weights,
       totalWeight: (map['totalWeight'] as num).toDouble(),
       totalPayment: (map['totalPayment'] as num).toDouble(),
@@ -149,10 +156,10 @@ class PurchaseRecord {
           'standardPrice': standardPrice,
           'additionalPrice': additionalPrice,
           'finalPrice': finalPrice,
-          'sacks': sackWeights.length,
+          'sacks': sacks,
           'quantity': totalWeight,
           'totalValue': totalPayment,
-          'sackWeights': sackWeights,
+          'sackWeights': null,
         }
       ],
     };

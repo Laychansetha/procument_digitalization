@@ -251,8 +251,8 @@ export default function OperationsDashboard() {
   const [pAdditionalPriceInput, setPAdditionalPriceInput] = useState('0');
   const [pSeedBorrowedInput, setPSeedBorrowedInput] = useState('0');
 
-  const [pSackInput, setPSackInput] = useState('');
-  const [pSackWeights, setPSackWeights] = useState<number[]>([]);
+  const [pSacksCountInput, setPSacksCountInput] = useState('');
+  const [pQuantityKgInput, setPQuantityKgInput] = useState('');
   const [pFarmerSignature, setPFarmerSignature] = useState('');
   const [pStaffSignature, setPStaffSignature] = useState('');
   const [sigClearKey, setSigClearKey] = useState(0);
@@ -867,37 +867,6 @@ export default function OperationsDashboard() {
     setSyncStatus(`✓ Loaded Approved Specs for Family Code ${spec.familyCode} (${spec.farmerName})`);
   };
 
-  // Add Sack Weight(s) to Array (Integer Kg up to 3 digits only: 1 - 999 kg)
-  const handleAddSackWeight = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!pSackInput.trim()) return;
-
-    const parsedWeights = pSackInput
-      .split(/[\s,]+/)
-      .map((val) => {
-        const clean = val.replace(/[^0-9]/g, '');
-        if (!clean) return NaN;
-        const bounded = clean.length > 3 ? clean.substring(0, 3) : clean;
-        return parseInt(bounded, 10);
-      })
-      .filter((w) => !isNaN(w) && w > 0 && w <= 999);
-
-    if (parsedWeights.length > 0) {
-      setPSackWeights((prev) => [...prev, ...parsedWeights]);
-      setPSackInput('');
-    }
-  };
-
-  // Remove individual sack weight
-  const handleRemoveSackWeight = (indexToRemove: number) => {
-    setPSackWeights((prev) => prev.filter((_, idx) => idx !== indexToRemove));
-  };
-
-  // Clear all sacks
-  const handleClearAllSacks = () => {
-    setPSackWeights([]);
-  };
-
   // Helper reset function to clear entire purchase form after saving
   const resetPurchaseForm = () => {
     setEditingPurchaseId(null);
@@ -908,8 +877,8 @@ export default function OperationsDashboard() {
     setPGrade('');
     setPStandardPrice(0);
     setPAdditionalPriceInput('0');
-    setPSackWeights([]);
-    setPSackInput('');
+    setPSacksCountInput('');
+    setPQuantityKgInput('');
     setPSeedBorrowedInput('0');
     setPFarmerSignature('');
     setPStaffSignature('');
@@ -922,9 +891,9 @@ export default function OperationsDashboard() {
   const pSeedBorrowed = Math.min(999, Math.max(0, parseInt(pSeedBorrowedInput.replace(/[^0-9]/g, '') || '0', 10)));
 
   const finalPurchasePrice = pStandardPrice + pAdditionalPrice;
-  const totalSacksCount = pSackWeights.length;
-  const totalWeightKg = pSackWeights.reduce((sum, w) => sum + w, 0);
-  const totalPaddyValue = totalWeightKg * finalPurchasePrice;
+  const totalSacksCount = Math.max(0, parseInt(pSacksCountInput.replace(/[^0-9]/g, '') || '0', 10));
+  const totalWeightKg = Math.max(0, parseFloat(pQuantityKgInput.replace(/[^0-9.]/g, '') || '0'));
+  const totalPaddyValue = Math.round(totalWeightKg * finalPurchasePrice);
 
   // Seed Return Deduction Calculations: 10% Interest, deducted at final purchase price (Standard Base Price + Additional Premium)
   const seedRepaymentQty = pSeedBorrowed * 1.1; // 10% interest
@@ -1404,8 +1373,13 @@ export default function OperationsDashboard() {
       return;
     }
 
-    if (totalSacksCount === 0) {
-      alert('Please add at least one sack weight before saving.');
+    if (totalSacksCount <= 0) {
+      alert('Please enter the Number of Sacks before saving.');
+      return;
+    }
+
+    if (totalWeightKg <= 0) {
+      alert('Please enter the Quantity (Kg) before saving.');
       return;
     }
 
@@ -1428,7 +1402,7 @@ export default function OperationsDashboard() {
           sacks: totalSacksCount,
           quantity: totalWeightKg,
           totalValue: totalPaddyValue,
-          sackWeights: pSackWeights,
+          sackWeights: null,
         },
       ],
     };
@@ -1499,12 +1473,18 @@ export default function OperationsDashboard() {
     if (purchase.signatureFarmer) setPFarmerSignature(purchase.signatureFarmer);
     if (purchase.signatureStaff) setPStaffSignature(purchase.signatureStaff);
 
-    try {
-      if (item.sackWeights) setPSackWeights(JSON.parse(item.sackWeights));
-      else setPSackWeights([]);
-    } catch (e) {
-      setPSackWeights([]);
+    let fallbackSacksCount = item.sacks || 0;
+    if (!fallbackSacksCount && item.sackWeights) {
+      try {
+        const parsed = JSON.parse(item.sackWeights);
+        if (Array.isArray(parsed)) fallbackSacksCount = parsed.length;
+      } catch {
+        // ignore
+      }
     }
+    const existingQty = item.quantity ?? purchase.totalWeight ?? 0;
+    setPSacksCountInput(fallbackSacksCount > 0 ? String(fallbackSacksCount) : '');
+    setPQuantityKgInput(existingQty > 0 ? String(existingQty) : '');
 
     setSuccessBanner(`Editing Purchase Record ${formatPurchaseId(purchase)}. Make your changes above and click Update.`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4084,7 +4064,7 @@ export default function OperationsDashboard() {
                         🌾 Weighing & Purchase Invoice
                       </h2>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Select approved Specs Record, weigh sacks individually, add premiums, and sign electronically.
+                        Select approved Specs Record, enter total sacks and quantity (kg), add premiums, and sign electronically.
                       </p>
                     </div>
 
@@ -4265,112 +4245,50 @@ export default function OperationsDashboard() {
                         </div>
                       </div>
 
-                      {/* Sack Weighing Entry Box (Compact Dynamic Height!) */}
-                      <div className="p-3 bg-white/5 border border-emerald-500/30 rounded-xl space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Package className="w-3.5 h-3.5" /> SACK WEIGHING ENTRY (WEIGH ONE BY ONE)
+                      {/* Row 3: Number of Sacks & Quantity (Kg) in the same row */}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">
+                            Number of Sacks *
                           </label>
-                          {pSackWeights.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={handleClearAllSacks}
-                              className="px-2.5 py-0.5 bg-white/10 hover:bg-red-500/20 text-slate-300 hover:text-red-400 rounded-lg text-[10px] font-bold transition-colors"
-                            >
-                              Clear All Sacks
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="flex gap-2">
                           <input
                             type="text"
-                            value={pSackInput}
-                            onChange={(e) => setPSackInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddSackWeight();
-                              }
+                            inputMode="numeric"
+                            value={pSacksCountInput}
+                            onChange={(e) => {
+                              const clean = e.target.value.replace(/[^0-9]/g, '');
+                              setPSacksCountInput(clean);
                             }}
-                            placeholder="Enter weight in kg (e.g. 85 or 85, 83, 80)"
-                            className="flex-1 bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                            placeholder="Enter total sacks (e.g. 20)"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-2 text-white font-mono font-bold text-sm focus:border-emerald-500 focus:outline-none"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleAddSackWeight()}
-                            className="bg-[#10b981] hover:bg-[#059669] text-[#0b0f19] px-3.5 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1 shadow-md shadow-emerald-500/20"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Add Sack
-                          </button>
-                        </div>
-
-                        <div className={`pt-0.5 overflow-y-auto transition-all ${pSackWeights.length === 0 ? 'max-h-[32px]' : 'max-h-[100px]'}`}>
-                          {pSackWeights.length === 0 ? (
-                            <div className="text-slate-500 text-[10px] italic py-0.5">
-                              No sacks weighed yet. Enter weight above and click "Add Sack".
-                            </div>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {pSackWeights.map((w, idx) => (
-                                <div
-                                  key={idx}
-                                  className="bg-[#1e293b] border border-emerald-500/40 text-emerald-300 px-2 py-1 rounded-lg flex items-center gap-1.5 font-mono text-xs shadow-sm"
-                                >
-                                  <span className="bg-emerald-500/20 text-emerald-300 font-extrabold px-1.5 py-0.5 rounded text-[10px] border border-emerald-500/30">
-                                    #{idx + 1}
-                                  </span>
-                                  <span className="font-extrabold text-white text-xs">
-                                    {Math.round(w)} kg
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveSackWeight(idx)}
-                                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded p-0.5 ml-0.5 transition-colors"
-                                    title="Remove sack"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Row 4: Auto Totals */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">
-                            NUMBER OF SACKS (AUTO)
-                          </label>
-                          <div className="px-2.5 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-white font-extrabold text-sm sm:text-base font-mono">
-                            {totalSacksCount} Sacks
-                          </div>
                         </div>
 
                         <div>
                           <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">
-                            TOTAL QUANTITY (KG) (AUTO)
+                            Quantity (Kg) *
                           </label>
-                          <div className="px-2.5 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-emerald-400 font-extrabold text-sm sm:text-base font-mono">
-                            {Math.round(totalWeightKg).toLocaleString()} kg
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-slate-400 font-bold uppercase text-[10px] mb-1">
-                            PADDY VALUE (KHR) (AUTO)
-                          </label>
-                          <div className="px-2.5 py-1.5 bg-[#1e293b] border border-slate-700 rounded-lg text-amber-400 font-extrabold text-sm sm:text-base font-mono">
-                            {totalPaddyValue.toLocaleString()} KHR
-                          </div>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={pQuantityKgInput}
+                            onChange={(e) => {
+                              const clean = e.target.value
+                                .replace(/[^0-9.]/g, '')
+                                .replace(/(\..*)\./g, '$1');
+                              setPQuantityKgInput(clean);
+                            }}
+                            placeholder="Enter total weight in kg (e.g. 1000)"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-2 text-emerald-400 font-mono font-bold text-sm focus:border-emerald-500 focus:outline-none"
+                          />
                         </div>
                       </div>
 
                       <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-300">📦 Subtotal A — Total Paddy Value</span>
-                        <span className="font-extrabold text-amber-400 font-mono">
+                        <span className="font-bold text-slate-300">
+                          📦 Subtotal A — Total Paddy Value ({totalSacksCount} Sacks · {totalWeightKg.toLocaleString()} kg)
+                        </span>
+                        <span className="font-extrabold text-amber-400 font-mono text-sm">
                           {totalPaddyValue.toLocaleString()} KHR
                         </span>
                       </div>

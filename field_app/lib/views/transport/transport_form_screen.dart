@@ -229,7 +229,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
             }).toList();
 
             double totalWeightKg = tempSelected.fold(0.0, (sum, item) => sum + item.totalWeight);
-            int totalSacks = tempSelected.fold(0, (sum, item) => sum + item.sackWeights.length);
+            int totalSacks = tempSelected.fold(0, (sum, item) => sum + item.sacks);
 
             return Dialog(
               backgroundColor: AppTheme.cardBackground,
@@ -358,7 +358,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                                       ],
                                     ),
                                     subtitle: Text(
-                                      'Variety: ${p.variety} (${p.grade}) · Weight: ${p.totalWeight.round()} kg (${p.sackWeights.length} Sacks)\nDate: $dateStr',
+                                      'Variety: ${p.variety} (${p.grade}) · Weight: ${p.totalWeight.round()} kg (${p.sacks} Sacks)\nDate: $dateStr',
                                       style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
                                     ),
                                   ),
@@ -441,7 +441,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
 
     try {
       final totalFieldWeight = _selectedPurchases.fold(0.0, (sum, p) => sum + p.totalWeight);
-      final totalSacks = _selectedPurchases.fold(0, (sum, p) => sum + p.sackWeights.length);
+      final totalSacks = _selectedPurchases.fold(0, (sum, p) => sum + p.sacks);
 
       String? driverSigBase64;
       if (_driverSignatureController.isNotEmpty) {
@@ -764,7 +764,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                                     children: [
                                       Text('$formattedPurchaseId · ${p.farmerName} (${p.familyCode})', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textWhite)),
                                       Text('Village: ${p.village} · ${p.variety} (${p.grade})', style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
-                                      Text('Cargo: ${p.totalWeight.round()} kg (${p.sackWeights.length} Bags) · Net: ${numberFormat.format(p.netPayment.toInt())} KHR', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.emeraldLight)),
+                                      Text('Cargo: ${p.totalWeight.round()} kg (${p.sacks} Sacks) · Net: ${numberFormat.format(p.netPayment.toInt())} KHR', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.emeraldLight)),
                                     ],
                                   ),
                                 ),
@@ -1495,7 +1495,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
   @override
   Widget build(BuildContext context) {
     final totalCargoWeight = _selectedPurchases.fold(0.0, (sum, p) => sum + p.totalWeight);
-    final totalSacksCount = _selectedPurchases.fold(0, (sum, p) => sum + p.sackWeights.length);
+    final totalSacksCount = _selectedPurchases.fold(0, (sum, p) => sum + p.sacks);
     final destinationWarehouses = ConfigDao.instance.destinationWarehouses;
     final safeDestinationWarehouse = destinationWarehouses.contains(_destinationWarehouse) ? _destinationWarehouse : null;
 

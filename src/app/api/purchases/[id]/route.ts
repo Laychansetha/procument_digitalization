@@ -125,7 +125,7 @@ export async function PUT(
           sacks: sacksCount,
           quantity: totalWeightKg,
           totalValue: totalPaddyValue,
-          sackWeights: JSON.stringify(item.sackWeights || []),
+          sackWeights: Array.isArray(item.sackWeights) ? JSON.stringify(item.sackWeights) : null,
         },
       });
     } else {
@@ -140,7 +140,7 @@ export async function PUT(
           sacks: sacksCount,
           quantity: totalWeightKg,
           totalValue: totalPaddyValue,
-          sackWeights: JSON.stringify(item.sackWeights || []),
+          sackWeights: Array.isArray(item.sackWeights) ? JSON.stringify(item.sackWeights) : null,
         },
       });
     }

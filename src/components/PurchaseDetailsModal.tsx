@@ -14,14 +14,7 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
   if (!isOpen || !purchase) return null;
 
   const item = purchase.items?.[0] || {};
-  let sackWeightsList: number[] = [];
-  try {
-    if (item.sackWeights) {
-      sackWeightsList = JSON.parse(item.sackWeights);
-    }
-  } catch (e) {
-    sackWeightsList = [];
-  }
+  const sacksCount = item.sacks || 0;
 
   const purchaseIdFormatted = formatPurchaseId(purchase);
 
@@ -94,36 +87,24 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
             </div>
           </div>
 
-          {/* Sack-by-Sack Weights Breakdown */}
-          <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
-            <div className="flex items-center justify-between">
+          {/* Number of Sacks & Quantity (Kg) Summary */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
               <span className="font-extrabold text-xs text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Package className="w-4 h-4" /> Weighed Sacks List ({purchase.items?.[0]?.sacks || sackWeightsList.length} Sacks Total)
+                <Package className="w-4 h-4" /> Number of Sacks
               </span>
-              <span className="font-extrabold text-emerald-400">
-                Total: {Math.round(purchase.totalWeight).toLocaleString()} kg
+              <span className="font-extrabold text-white font-mono text-sm">
+                {sacksCount} Sacks
               </span>
             </div>
-
-            {sackWeightsList.length > 0 ? (
-              <div className="flex flex-wrap gap-2 pt-1 max-h-[140px] overflow-y-auto">
-                {sackWeightsList.map((w, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-[#1e293b] border border-sky-500/30 text-sky-300 px-2 py-1 rounded-lg font-mono text-xs flex items-center gap-1.5"
-                  >
-                    <span className="bg-sky-500/20 text-sky-300 font-extrabold px-1.5 py-0.5 rounded text-[10px] border border-sky-500/30">
-                      #{idx + 1}
-                    </span>
-                    <span className="font-extrabold text-white text-xs">
-                      {Math.round(w)} kg
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-slate-500 text-[11px] italic">No individual sack weights recorded.</div>
-            )}
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
+              <span className="font-extrabold text-xs text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Scale className="w-4 h-4" /> Quantity (Kg)
+              </span>
+              <span className="font-extrabold text-emerald-400 font-mono text-sm">
+                {Math.round(purchase.totalWeight).toLocaleString()} kg
+              </span>
+            </div>
           </div>
 
           {/* Payment & Deduction Totals */}
