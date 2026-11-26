@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertOctagon, CheckCircle2, Clock } from 'lucide-react';
+import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface RejectionLogItem {
   id: string;
@@ -77,8 +78,7 @@ export default function RejectionHistorySection({ entityType, entityId }: Reject
                 <span className="text-slate-500">➔ Returned to {log.targetModule}</span>
               </div>
               <span className="text-slate-400 font-mono text-[10px]">
-                {new Date(log.createdAt).toLocaleDateString()}{' '}
-                {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatDateTimeDDMMYYYY(log.createdAt)}
               </span>
             </div>
 
@@ -106,7 +106,7 @@ export default function RejectionHistorySection({ entityType, entityId }: Reject
               {log.resolvedAt && (
                 <span className="text-slate-400">
                   Resolved by: <strong className="text-white">{log.resolvedByName}</strong> (
-                  {new Date(log.resolvedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                  {formatDateTimeDDMMYYYY(log.resolvedAt)})
                 </span>
               )}
             </div>

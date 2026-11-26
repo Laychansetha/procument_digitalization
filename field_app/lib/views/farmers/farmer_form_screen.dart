@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../config/theme.dart';
@@ -331,6 +332,28 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       }
     }
 
+    final cleanedAccountNumber = _accountNumberController.text.trim();
+    if (_paymentMethod == 'Bank Transfer') {
+      if (cleanedAccountNumber.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bank Account Number is required for Bank Transfer.'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+        return;
+      }
+      if (!RegExp(r'^[0-9]+$').hasMatch(cleanedAccountNumber)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bank Account Number must contain numbers only (0-9).'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+        return;
+      }
+    }
+
     final record = FarmerProfile(
       id: targetId,
       serverRecordId: targetServerId,
@@ -340,7 +363,7 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       phone: _phoneController.text.trim(),
       paymentMethod: _paymentMethod!,
       bankName: _paymentMethod == 'Bank Transfer' ? (_bankName ?? (ConfigDao.instance.banks.isNotEmpty ? ConfigDao.instance.banks.first : 'ABA Bank')) : 'Cash',
-      accountNumber: _paymentMethod == 'Bank Transfer' ? _accountNumberController.text.trim() : '—',
+      accountNumber: _paymentMethod == 'Bank Transfer' ? cleanedAccountNumber : '—',
       accountHolder: _accountHolderController.text.trim().isEmpty ? farmerName : _accountHolderController.text.trim(),
       relationship: finalRelationship,
       bankDocumentUrl: _passbookPhotoPath,
@@ -375,7 +398,9 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
       _bankName = (item.bankName != null && banks.contains(item.bankName))
           ? item.bankName
           : (banks.isNotEmpty ? banks.first : null);
-      _accountNumberController.text = (item.accountNumber == '—') ? '' : (item.accountNumber ?? '');
+      _accountNumberController.text = (item.accountNumber == '—')
+          ? ''
+          : (item.accountNumber ?? '').replaceAll(RegExp(r'[^0-9]'), '');
       _accountHolderController.text = item.accountHolder ?? item.farmerName;
 
       if (stdValues.contains(rel)) {
@@ -1065,9 +1090,23 @@ class _FarmerFormScreenState extends State<FarmerFormScreen> {
   Widget _buildAccountNumberInput() {
     return TextFormField(
       controller: _accountNumberController,
-      keyboardType: TextInputType.text,
-      decoration: const InputDecoration(labelText: 'BANK ACCOUNT NUMBER *', hintText: '000 123 456'),
-      validator: (v) => _paymentMethod == 'Bank Transfer' && (v == null || v.trim().isEmpty) ? 'Enter Account #' : null,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+      ],
+      decoration: const InputDecoration(
+        labelText: 'BANK ACCOUNT NUMBER *',
+        hintText: '000123456',
+      ),
+      validator: (v) {
+        if (_paymentMethod != 'Bank Transfer') return null;
+        final val = v?.trim() ?? '';
+        if (val.isEmpty) return 'Enter Account #';
+        if (!RegExp(r'^[0-9]+$').hasMatch(val)) {
+          return 'Numbers only (0-9)';
+        }
+        return null;
+      },
     );
   }
 

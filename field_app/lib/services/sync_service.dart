@@ -245,51 +245,18 @@ class SyncService {
       for (var purchase in unsyncedPurchases) {
         if (onProgress != null) onProgress('Syncing Purchase Invoice for ${purchase.familyCode} (${purchase.village})...');
         try {
-          // Guard against duplicate submission if serverRecordId is already present
-          if (purchase.serverRecordId != null && purchase.serverRecordId!.isNotEmpty) {
-            final alreadySynced = PurchaseRecord(
-              id: purchase.id,
-              serverRecordId: purchase.serverRecordId,
-              familyCode: purchase.familyCode,
-              farmerName: purchase.farmerName,
-              village: purchase.village,
-              variety: purchase.variety,
-              grade: purchase.grade,
-              standardPrice: purchase.standardPrice,
-              additionalPrice: purchase.additionalPrice,
-              finalPrice: purchase.finalPrice,
-              sacks: purchase.sacks,
-              sackWeights: purchase.sackWeights,
-              totalWeight: purchase.totalWeight,
-              totalPayment: purchase.totalPayment,
-              seedBorrowed: purchase.seedBorrowed,
-              seedRepayment: purchase.seedRepayment,
-              seedDeduction: purchase.seedDeduction,
-              additionalPremium: purchase.additionalPremium,
-              netPayment: purchase.netPayment,
-              signatureFarmer: purchase.signatureFarmer,
-              signatureStaff: purchase.signatureStaff,
-              specsRecordId: purchase.specsRecordId,
-              transportRecordId: purchase.transportRecordId,
-              status: purchase.status,
-              createdAt: purchase.createdAt,
-              isSynced: true,
-              syncError: null,
-            );
-            await db.insertPurchase(alreadySynced);
-            syncedCount++;
-            continue;
-          }
-
           final payload = purchase.toPostJson();
           if (purchase.specsRecordId != null && specsServerMap.containsKey(purchase.specsRecordId)) {
             payload['specsRecordId'] = specsServerMap[purchase.specsRecordId];
           }
 
-          final res = await _apiService.postData('/api/purchases', payload);
+          final isUpdate = purchase.serverRecordId != null && purchase.serverRecordId!.isNotEmpty;
+          final res = isUpdate
+              ? await _apiService.putData('/api/purchases/${purchase.serverRecordId}', payload)
+              : await _apiService.postData('/api/purchases', payload);
           if (res.statusCode == 200 || res.statusCode == 201) {
             final data = jsonDecode(res.body);
-            final serverId = data['id']?.toString();
+            final serverId = data['id']?.toString() ?? purchase.serverRecordId;
             final updated = PurchaseRecord(
               id: purchase.id,
               serverRecordId: serverId,
@@ -379,32 +346,6 @@ class SyncService {
       for (var transport in unsyncedTransport) {
         if (onProgress != null) onProgress('Syncing Transport Dispatch for ${transport.plateNumber}...');
         try {
-          if (transport.serverRecordId != null && transport.serverRecordId!.isNotEmpty) {
-            final alreadySynced = TransportRecord(
-              id: transport.id,
-              serverRecordId: transport.serverRecordId,
-              driverName: transport.driverName,
-              plateNumber: transport.plateNumber,
-              mobileNumber: transport.mobileNumber,
-              truckCleaned: transport.truckCleaned,
-              truckPhotoUrl: transport.truckPhotoUrl,
-              driverSignature: transport.driverSignature,
-              loadingLocation: transport.loadingLocation,
-              destinationWarehouse: ConfigDao.getWarehouseId(transport.destinationWarehouse),
-              notes: transport.notes,
-              totalSacks: transport.totalSacks,
-              totalFieldWeight: transport.totalFieldWeight,
-              selectedPurchaseIds: transport.selectedPurchaseIds,
-              status: transport.status,
-              createdAt: transport.createdAt,
-              isSynced: true,
-              syncError: null,
-            );
-            await db.insertTransport(alreadySynced);
-            syncedCount++;
-            continue;
-          }
-
           String? remotePhotoUrl;
           if (!kIsWeb && transport.truckPhotoUrl != null && transport.truckPhotoUrl!.isNotEmpty) {
             try {
@@ -431,10 +372,13 @@ class SyncService {
           payload['destinationWarehouse'] = ConfigDao.getWarehouseId(transport.destinationWarehouse);
           payload['fieldStaffName'] = staffName;
 
-          final res = await _apiService.postData('/api/transport', payload);
+          final isUpdate = transport.serverRecordId != null && transport.serverRecordId!.isNotEmpty;
+          final res = isUpdate
+              ? await _apiService.putData('/api/transport/${transport.serverRecordId}', payload)
+              : await _apiService.postData('/api/transport', payload);
           if (res.statusCode == 200 || res.statusCode == 201) {
             final data = jsonDecode(res.body);
-            final serverTransportId = data['id']?.toString();
+            final serverTransportId = data['id']?.toString() ?? transport.serverRecordId;
             final updated = TransportRecord(
               id: transport.id,
               serverRecordId: serverTransportId,

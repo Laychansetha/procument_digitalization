@@ -594,7 +594,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   }
 
   void _showRecordDetailsModal(PurchaseRecord item) {
-    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
+    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(item.createdAt);
     final formattedId = IdFormatter.formatPurchaseId(item);
     final numberFormat = NumberFormat('#,###');
     final isLocked = item.status != 'PENDING' || item.transportRecordId != null;
@@ -1256,7 +1256,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
             itemCount: filteredHistory.length,
             itemBuilder: (context, index) {
               final item = filteredHistory[index];
-              final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
+              final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(item.createdAt);
               final formattedId = IdFormatter.formatPurchaseId(item);
               final isLocked = item.status != 'PENDING' || item.transportRecordId != null;
 
@@ -1421,7 +1421,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       if (_searchQuery.isEmpty) return true;
       final q = _searchQuery.toLowerCase();
       final formattedId = IdFormatter.formatPurchaseId(item).toLowerCase();
-      final dateStr = DateFormat('yyyy-MM-dd').format(item.createdAt).toLowerCase();
+      final dateStr = DateFormat('dd/MM/yyyy').format(item.createdAt).toLowerCase();
       return formattedId.contains(q) ||
           item.familyCode.toLowerCase().contains(q) ||
           item.farmerName.toLowerCase().contains(q) ||

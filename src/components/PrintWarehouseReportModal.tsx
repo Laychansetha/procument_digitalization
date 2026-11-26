@@ -5,6 +5,7 @@ import { getReportTranslation } from '@/lib/report-translations';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
 import { getWarehouseDisplay, getWarehouseId } from '@/lib/warehouse-config';
+import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface PrintWarehouseReportModalProps {
   isOpen: boolean;
@@ -75,7 +76,7 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
                 <p><strong className="text-slate-600">{t.driverName}</strong> {transport.driverName}</p>
               </div>
               <div>
-                <p><strong className="text-slate-600">{t.dateTime}</strong> {new Date(intake.createdAt).toLocaleString()}</p>
+                <p><strong className="text-slate-600">{t.dateTime}</strong> {formatDateTimeDDMMYYYY(intake.createdAt)}</p>
                 <p><strong className="text-slate-600">Receiving Staff:</strong> {intake.receivingStaffName || 'Warehouse Scale Staff'}</p>
                 <p><strong className="text-slate-600">Arrived Warehouse:</strong> <span className="font-mono font-bold text-slate-800">{getWarehouseDisplay(intake.arrivedWarehouse || transport.destinationWarehouse)}</span></p>
                 <p><strong className="text-slate-600">Loaded Farmers:</strong> {purchases.length} Invoices Loaded</p>
@@ -185,7 +186,7 @@ export default function PrintWarehouseReportModal({ isOpen, onClose, intake, lan
             <p><strong className="text-slate-700">{t.driverName}</strong> {transport.driverName}</p>
           </div>
           <div className="space-y-1">
-            <p><strong className="text-slate-700">{t.dateTime}</strong> {new Date(intake.createdAt).toLocaleString()}</p>
+            <p><strong className="text-slate-700">{t.dateTime}</strong> {formatDateTimeDDMMYYYY(intake.createdAt)}</p>
             <p><strong className="text-slate-700">Receiving Staff:</strong> {intake.receivingStaffName || 'Warehouse Scale Staff'}</p>
             <p><strong className="text-slate-700">Arrived Warehouse:</strong> <span className="font-mono font-bold text-slate-800">{getWarehouseDisplay(intake.arrivedWarehouse || transport.destinationWarehouse)}</span></p>
             <p><strong className="text-slate-700">Loaded Farmers:</strong> {purchases.length} Invoices Loaded</p>

@@ -1,8 +1,9 @@
 'use client';
 
-import { X, CheckCircle2, User, Scale, ShieldCheck, MapPin, AlertCircle, FileSpreadsheet, Package } from 'lucide-react';
+import { X, Scale, Package } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
 import { formatPurchaseId } from '@/lib/purchase-id';
+import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -35,7 +36,7 @@ export default function PurchaseDetailsModal({ isOpen, onClose, purchase }: Purc
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Purchased on {new Date(purchase.createdAt).toLocaleString()} by {purchase.purchasingStaffName || 'Field Staff'}
+                Purchased on {formatDateTimeDDMMYYYY(purchase.createdAt)} by {purchase.purchasingStaffName || 'Field Staff'}
               </p>
             </div>
           </div>

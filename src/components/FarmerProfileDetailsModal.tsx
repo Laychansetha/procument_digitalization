@@ -2,6 +2,7 @@
 
 import { X, Edit, CreditCard, UserCheck, Image } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
+import { formatDateDDMMYYYY } from '@/lib/date-format';
 
 interface FarmerProfileDetailsModalProps {
   isOpen: boolean;
@@ -133,7 +134,7 @@ export default function FarmerProfileDetailsModal({
         {/* Footer Actions */}
         <div className="p-4 bg-white/5 border-t border-white/10 flex items-center justify-between gap-3">
           <div className="text-[11px] text-slate-400">
-            Registered: {new Date(profile.createdAt || Date.now()).toLocaleDateString()}
+            Registered: {formatDateDDMMYYYY(profile.createdAt || Date.now())}
           </div>
           <div className="flex items-center gap-2">
             {onEdit && (

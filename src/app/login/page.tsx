@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Lock, Mail, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -36,7 +36,7 @@ export default function LoginPage() {
         router.push('/');
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);

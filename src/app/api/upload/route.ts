@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-import { getResolvedUser } from '@/lib/sync-auth';
+import { getSessionOrHeaderUser } from '@/lib/sync-auth';
 
 const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
 const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 export async function POST(request: Request) {
   try {
-    await getResolvedUser(request);
+    const authUser = await getSessionOrHeaderUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    }
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;

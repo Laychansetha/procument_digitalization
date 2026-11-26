@@ -43,6 +43,28 @@ export async function PUT(
         ? (await processAndSaveImage(body.bankDocumentUrl, 'doc')) || body.bankDocumentUrl
         : existing.bankDocumentUrl;
 
+    const effectivePaymentMethod = body.paymentMethod !== undefined ? body.paymentMethod : existing.paymentMethod;
+    let validatedAccountNumber = existing.accountNumber;
+    if (effectivePaymentMethod === 'Bank Transfer') {
+      const candidate =
+        body.accountNumber !== undefined ? String(body.accountNumber ?? '').trim() : String(existing.accountNumber ?? '').trim();
+      if (!candidate || candidate === '—') {
+        return NextResponse.json(
+          { error: 'Bank Account Number is required for Bank Transfer.' },
+          { status: 400 }
+        );
+      }
+      if (!/^[0-9]+$/.test(candidate)) {
+        return NextResponse.json(
+          { error: 'Bank Account Number must contain numbers only (0-9) without spaces, hyphens, or special characters.' },
+          { status: 400 }
+        );
+      }
+      validatedAccountNumber = candidate;
+    } else {
+      validatedAccountNumber = '—';
+    }
+
     const updated = await db.farmerProfile.update({
       where: { id },
       data: {
@@ -50,9 +72,9 @@ export async function PUT(
         farmerName: body.farmerName !== undefined ? String(body.farmerName).trim() : existing.farmerName,
         accountHolder: body.accountHolder !== undefined ? body.accountHolder : existing.accountHolder,
         relationship: body.relationship !== undefined ? body.relationship : existing.relationship,
-        paymentMethod: body.paymentMethod !== undefined ? body.paymentMethod : existing.paymentMethod,
+        paymentMethod: effectivePaymentMethod,
         bankName: body.bankName !== undefined ? body.bankName : existing.bankName,
-        accountNumber: body.accountNumber !== undefined ? body.accountNumber : existing.accountNumber,
+        accountNumber: validatedAccountNumber,
         bankDocumentUrl: savedDocUrl,
         village: body.village !== undefined ? body.village : existing.village,
         phone: body.phone !== undefined ? body.phone : existing.phone,

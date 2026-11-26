@@ -225,7 +225,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                   p.familyCode.toLowerCase().contains(q) ||
                   p.farmerName.toLowerCase().contains(q) ||
                   p.village.toLowerCase().contains(q) ||
-                  DateFormat('yyyy-MM-dd').format(p.createdAt).contains(q);
+                  DateFormat('dd/MM/yyyy').format(p.createdAt).contains(q);
             }).toList();
 
             double totalWeightKg = tempSelected.fold(0.0, (sum, item) => sum + item.totalWeight);
@@ -310,7 +310,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
                               itemBuilder: (context, index) {
                                 final p = filtered[index];
                                 final isChecked = tempSelected.any((element) => element.id == p.id);
-                                final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(p.createdAt);
+                                final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(p.createdAt);
                                 final formattedPurchaseId = IdFormatter.formatPurchaseId(p);
 
                                 return Card(
@@ -567,7 +567,7 @@ class _TransportFormScreenState extends State<TransportFormScreen> {
   }
 
   void _showManifestDetailsModal(TransportRecord item) {
-    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
+    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(item.createdAt);
     final formattedTransportId = IdFormatter.formatTransportId(item);
     final warehouseDisplay = ConfigDao.getWarehouseDisplay(item.destinationWarehouse);
     final isLocked = item.status != 'EN_ROUTE' && item.status != 'REJECTED';

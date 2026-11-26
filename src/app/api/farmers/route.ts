@@ -55,6 +55,23 @@ export async function POST(request: Request) {
 
     const normCode = familyCode.toUpperCase().trim();
     const normVillage = (village || '').trim();
+    const effectivePaymentMethod = paymentMethod || 'Bank Transfer';
+    const rawAccountNumber = accountNumber !== undefined && accountNumber !== null ? String(accountNumber).trim() : '';
+
+    if (effectivePaymentMethod === 'Bank Transfer') {
+      if (!rawAccountNumber || rawAccountNumber === '—') {
+        return NextResponse.json(
+          { error: 'Bank Account Number is required for Bank Transfer.' },
+          { status: 400 }
+        );
+      }
+      if (!/^[0-9]+$/.test(rawAccountNumber)) {
+        return NextResponse.json(
+          { error: 'Bank Account Number must contain numbers only (0-9) without spaces, hyphens, or special characters.' },
+          { status: 400 }
+        );
+      }
+    }
 
     if (authUser && !(await isVillageAuthorized(normVillage, authUser))) {
       return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
@@ -99,7 +116,7 @@ export async function POST(request: Request) {
           phone: phone || existing.phone,
           paymentMethod: paymentMethod || existing.paymentMethod,
           bankName: paymentMethod === 'Bank Transfer' ? (bankName || existing.bankName) : (paymentMethod === 'Cash' ? 'Cash' : bankName),
-          accountNumber: paymentMethod === 'Bank Transfer' ? (accountNumber || existing.accountNumber) : '—',
+          accountNumber: effectivePaymentMethod === 'Bank Transfer' ? rawAccountNumber : '—',
           accountHolder: paymentMethod === 'Bank Transfer' ? (accountHolder || farmerName) : farmerName,
           relationship: relationship || existing.relationship,
           bankDocumentUrl: savedDocUrl || existing.bankDocumentUrl,
@@ -121,7 +138,7 @@ export async function POST(request: Request) {
           phone: phone || '',
           paymentMethod: paymentMethod || 'Bank Transfer',
           bankName: paymentMethod === 'Bank Transfer' ? bankName : (paymentMethod === 'Cash' ? 'Cash' : bankName),
-          accountNumber: paymentMethod === 'Bank Transfer' ? (accountNumber || '—') : '—',
+          accountNumber: effectivePaymentMethod === 'Bank Transfer' ? rawAccountNumber : '—',
           accountHolder: paymentMethod === 'Bank Transfer' ? (accountHolder || farmerName) : farmerName,
           relationship: relationship || 'Self',
           bankDocumentUrl: savedDocUrl || null,

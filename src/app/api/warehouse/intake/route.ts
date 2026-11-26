@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/audit';
 import { getWarehouseId } from '@/lib/warehouse-config';
+import { processAndSaveImage } from '@/lib/image-upload-server';
 
 export async function GET() {
   try {
@@ -36,8 +37,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch warehouse intake records.' }, { status: 500 });
   }
 }
-
-import { processAndSaveImage } from '@/lib/image-upload-server';
 
 export async function POST(request: Request) {
   try {
