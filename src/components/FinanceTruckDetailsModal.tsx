@@ -8,6 +8,7 @@ import RejectionHistorySection from '@/components/RejectionHistorySection';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
 import { formatReceivingIdWithDate, getWarehouseId } from '@/lib/warehouse-config';
+import { formatDateDDMMYYYY } from '@/lib/date-format';
 
 interface FinanceTruckDetailsModalProps {
   isOpen: boolean;
@@ -129,16 +130,6 @@ export default function FinanceTruckDetailsModal({
       'Bank Document Proof Attached',
       'Farmer Signed',
     ]);
-
-    const formatDateDDMMYYYY = (dateVal: any) => {
-      if (!dateVal) return 'N/A';
-      const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return 'N/A';
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
-    };
 
     const deliveryDateFormatted = formatDateDDMMYYYY(intake.createdAt || transport.createdAt);
     const warehouseCode = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
@@ -397,7 +388,7 @@ export default function FinanceTruckDetailsModal({
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">Paid Date & Officer</span>
                   <span className="font-bold text-slate-200">
-                    {transport.paidAt ? new Date(transport.paidAt).toLocaleDateString() : 'N/A'}{' '}
+                    {transport.paidAt ? formatDateDDMMYYYY(transport.paidAt) : 'N/A'}{' '}
                     <span className="text-slate-400">({transport.paidByStaffName || 'Finance Officer'})</span>
                   </span>
                 </div>

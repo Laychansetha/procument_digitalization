@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, X, CheckSquare, Square, Package, Scale, FileText, CheckCircle2 } from 'lucide-react';
+import { Search, X, CheckSquare, Square, CheckCircle2 } from 'lucide-react';
 import { formatPurchaseId } from '@/lib/purchase-id';
 
 interface PurchaseSelectorModalProps {
@@ -87,7 +87,6 @@ export default function PurchaseSelectorModal({
   const uniqueFarmersCount = new Set(selectedRecords.map((p) => p.familyCode)).size;
   const totalSacks = selectedRecords.reduce((sum, p) => sum + (p.items?.[0]?.sacks || 0), 0);
   const totalWeight = selectedRecords.reduce((sum, p) => sum + p.totalWeight, 0);
-  const totalNetPayment = selectedRecords.reduce((sum, p) => sum + p.netPayment, 0);
 
   const handleConfirm = () => {
     onConfirm(selectedRecords);

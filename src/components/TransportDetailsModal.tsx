@@ -1,12 +1,13 @@
 'use client';
 
-import { X, Truck, Calendar, User, UserCheck, MapPin, Package, Scale, ShieldCheck, FileSpreadsheet } from 'lucide-react';
+import { X, UserCheck, MapPin, FileSpreadsheet } from 'lucide-react';
 
 import RejectionHistorySection from '@/components/RejectionHistorySection';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
 import { getWarehouseId, getWarehouseName } from '@/lib/warehouse-config';
 import { formatImageSrc } from '@/lib/image-utils';
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface TransportDetailsModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
     ]);
     rows.push([
       transportIdFormatted,
-      new Date(transport.createdAt).toLocaleString(),
+      formatDateDDMMYYYY(transport.createdAt),
       transport.fieldStaffName || 'Field Staff',
       transport.driverName || '',
       transport.plateNumber || '',
@@ -121,7 +122,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                 </span>
               </h3>
               <p className="text-[10.5px] text-slate-400">
-                Dispatched on {new Date(transport.createdAt).toLocaleString()} by {transport.fieldStaffName || 'Field Inspector'}
+                Dispatched on {formatDateTimeDDMMYYYY(transport.createdAt)} by {transport.fieldStaffName || 'Field Inspector'}
               </p>
             </div>
           </div>
@@ -288,7 +289,7 @@ export default function TransportDetailsModal({ isOpen, onClose, transport }: Tr
                 </div>
                 <div className="truncate">
                   <span className="text-slate-400 text-[10px] font-bold mr-1">Paid Date:</span>
-                  <span className="text-slate-200">{transport.paidAt ? new Date(transport.paidAt).toLocaleDateString() : 'Completed'} ({transport.paidByStaffName || 'Finance'})</span>
+                  <span className="text-slate-200">{transport.paidAt ? formatDateDDMMYYYY(transport.paidAt) : 'Completed'} ({transport.paidByStaffName || 'Finance'})</span>
                 </div>
                 <div className="truncate">
                   {formatImageSrc(transport.paymentReceiptUrl) ? (

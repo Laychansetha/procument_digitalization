@@ -1,6 +1,7 @@
 'use client';
 
 import { X, Edit, Lock, CheckCircle2, XCircle } from 'lucide-react';
+import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface SpecsDetailsModalProps {
   isOpen: boolean;
@@ -74,7 +75,7 @@ export default function SpecsDetailsModal({
               </div>
               <div>
                 <span className="text-slate-400">Date & Time:</span>{' '}
-                <span className="text-slate-200">{new Date(spec.createdAt || spec.date).toLocaleString()}</span>
+                <span className="text-slate-200">{formatDateTimeDDMMYYYY(spec.createdAt || spec.date)}</span>
               </div>
               <div className="col-span-2 pt-1 border-t border-white/5 flex items-center justify-between">
                 <span className="text-slate-400">Recorded By (Staff):</span>{' '}

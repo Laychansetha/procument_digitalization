@@ -54,6 +54,20 @@ class ApiService {
         .timeout(const Duration(seconds: AppConfig.syncTimeoutSeconds));
   }
 
+  /// Update JSON payload on API endpoint with user context headers
+  Future<http.Response> putData(String path, Map<String, dynamic> body) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}$path');
+    final headers = await _buildAuthHeaders(includeJsonContentType: true);
+
+    return await client
+        .put(
+          uri,
+          headers: headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: AppConfig.syncTimeoutSeconds));
+  }
+
   /// Upload file (e.g. Bank passbook photo or Loaded Truck photo) to /api/upload
   Future<String?> uploadPhoto(File imageFile) async {
     try {

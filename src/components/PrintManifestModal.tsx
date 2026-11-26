@@ -6,6 +6,7 @@ import { getReportTranslation } from '@/lib/report-translations';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
 import { getWarehouseDisplay } from '@/lib/warehouse-config';
+import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface PrintManifestModalProps {
   isOpen: boolean;
@@ -96,7 +97,7 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
                 <p><strong className="text-slate-600">{t.transportId}</strong> <span className="font-mono font-bold text-sky-900">{transportId}</span></p>
                 <p><strong className="text-slate-600">{t.truckPlate}</strong> <span className="font-mono font-bold">{transport.plateNumber}</span></p>
                 <p><strong className="text-slate-600">{t.driverName}</strong> {transport.driverName} ({transport.mobileNumber || 'N/A'})</p>
-                <p><strong className="text-slate-600">{t.dateTime}</strong> {new Date(transport.createdAt).toLocaleString()}</p>
+                <p><strong className="text-slate-600">{t.dateTime}</strong> {formatDateTimeDDMMYYYY(transport.createdAt)}</p>
               </div>
               <div>
                 <p><strong className="text-slate-600">{t.loadingStation}</strong> {transport.loadingLocation || 'Preah Vihear'}</p>
@@ -200,7 +201,7 @@ export default function PrintManifestModal({ isOpen, onClose, transport, lang = 
             <p><strong className="text-slate-700">{t.transportId}</strong> <span className="font-mono font-bold text-sky-900">{transportId}</span></p>
             <p><strong className="text-slate-700">{t.truckPlate}</strong> <span className="font-mono font-bold">{transport.plateNumber}</span></p>
             <p><strong className="text-slate-700">{t.driverName}</strong> {transport.driverName} ({transport.mobileNumber || 'N/A'})</p>
-            <p><strong className="text-slate-700">{t.dateTime}</strong> {new Date(transport.createdAt).toLocaleString()}</p>
+            <p><strong className="text-slate-700">{t.dateTime}</strong> {formatDateTimeDDMMYYYY(transport.createdAt)}</p>
           </div>
           <div className="space-y-1">
             <p><strong className="text-slate-700">{t.loadingStation}</strong> {transport.loadingLocation || 'Chhaeb Buying Station'}</p>

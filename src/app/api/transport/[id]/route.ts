@@ -5,17 +5,18 @@ import { db } from '@/lib/db';
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { logAudit } from '@/lib/audit';
 import { getWarehouseId } from '@/lib/warehouse-config';
+import { getSessionOrHeaderUser } from '@/lib/sync-auth';
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as { id?: string })?.id;
-    const userRole = (session?.user as { role?: string })?.role;
+    const authUser = await getSessionOrHeaderUser(request);
+    const userId = authUser?.id;
+    const userRole = authUser?.role;
 
-    if (!session || !userId) {
+    if (!authUser || !userId) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
@@ -83,6 +84,7 @@ export async function PUT(
     const totalFieldWeight = purchasesToAssign.reduce((sum, p) => sum + p.totalWeight, 0);
 
     const savedTruckPhoto = truckPhotoUrl !== undefined ? await processAndSaveImage(truckPhotoUrl, 'truck_loading') : existing.truckPhotoUrl;
+    const savedDriverSig = driverSignature !== undefined ? await processAndSaveImage(driverSignature, 'sig_driver') : existing.driverSignature;
 
     // 1. Unlink purchases that were removed from this truck
     await db.purchaseRecord.updateMany({
@@ -120,8 +122,8 @@ export async function PUT(
         mobileNumber: mobileNumber !== undefined ? mobileNumber : existing.mobileNumber,
         fieldStaffName: fieldStaffName !== undefined ? fieldStaffName.trim() : existing.fieldStaffName,
         truckCleaned: truckCleaned !== undefined ? Boolean(truckCleaned) : existing.truckCleaned,
-        truckPhotoUrl: savedTruckPhoto !== undefined ? savedTruckPhoto : existing.truckPhotoUrl,
-        driverSignature: driverSignature !== undefined ? driverSignature : existing.driverSignature,
+        truckPhotoUrl: savedTruckPhoto || truckPhotoUrl || existing.truckPhotoUrl,
+        driverSignature: savedDriverSig || driverSignature || existing.driverSignature,
         loadingLocation: loadingLocation || existing.loadingLocation,
         destinationWarehouse: destinationWarehouse ? getWarehouseId(destinationWarehouse) : existing.destinationWarehouse,
         notes: notes !== undefined ? notes : existing.notes,
@@ -180,15 +182,15 @@ export async function PUT(
       data: {
         status: 'RESOLVED',
         resolvedAt: new Date(),
-        resolvedByName: session.user?.name || session.user?.email || 'Field Staff',
+        resolvedByName: authUser.name || authUser.email || 'Field Staff',
       },
     });
 
     // Audit Log
     await logAudit({
       userId,
-      userEmail: session.user?.email,
-      userName: session.user?.name || 'Field Staff',
+      userEmail: authUser.email,
+      userName: authUser.name || 'Field Staff',
       userRole,
       action: 'UPDATE',
       entityType: 'TransportRecord',

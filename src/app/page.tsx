@@ -4,13 +4,13 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { formatImageSrc } from '@/lib/image-utils';
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM } from '@/lib/date-format';
 import {
   Search,
   CreditCard,
   Truck,
   ShieldAlert,
   LogOut,
-  Upload,
   CheckCircle2,
   AlertTriangle,
   Eye,
@@ -18,7 +18,6 @@ import {
   FileSpreadsheet,
   Plus,
   Trash2,
-  Settings,
   MapPin,
   Tag,
   Landmark,
@@ -32,7 +31,6 @@ import {
   Printer,
   Edit,
   Pencil,
-  Filter,
   XCircle,
   Clock,
   CheckSquare,
@@ -157,8 +155,6 @@ export default function OperationsDashboard() {
   const [invSearchQuery, setInvSearchQuery] = useState('');
   const [invStatusFilter, setInvStatusFilter] = useState<'ALL' | 'WAITING_FOR_INVENTORY' | 'INVENTORY_RECORDED' | 'REJECTED'>('ALL');
   const [invConfirmModalIntake, setInvConfirmModalIntake] = useState<any>(null);
-  const [invLocationInput, setInvLocationInput] = useState('');
-  const [invNotesInput, setInvNotesInput] = useState('');
   const [isSubmittingInventory, setIsSubmittingInventory] = useState(false);
 
   // Finance Modals & Truck State
@@ -170,11 +166,11 @@ export default function OperationsDashboard() {
 
   // Finance Payment Modal State
   const [paymentModalTruck, setPaymentModalTruck] = useState<any>(null);
-  const [payMethodInput, setPayMethodInput] = useState('ABA Bulk Transfer');
+  const payMethodInput = 'ABA Bulk Transfer';
   const [payBatchInput, setPayBatchInput] = useState(`BATCH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`);
 
   // Admin Configurable Tolerance (%)
-  const [maxWeightTolerancePercent, setMaxWeightTolerancePercent] = useState<number>(1.0);
+  const maxWeightTolerancePercent = 1.0;
 
   // User Management State
   const [userAccounts, setUserAccounts] = useState<any[]>([]);
@@ -1222,7 +1218,11 @@ export default function OperationsDashboard() {
     setPayPhone(profile.phone || '');
     setPayMethod(profile.paymentMethod || 'Bank Transfer');
     setPayBankName(profile.bankName || banks[0]?.name || 'ABA Bank');
-    setPayAccountNumber(profile.accountNumber || '');
+    setPayAccountNumber(
+      profile.accountNumber && profile.accountNumber !== '—'
+        ? String(profile.accountNumber).replace(/[^0-9]/g, '')
+        : ''
+    );
     setPayAccountHolder(profile.accountHolder || profile.farmerName || '');
 
     const rel = profile.relationship || 'Self';
@@ -1248,6 +1248,18 @@ export default function OperationsDashboard() {
 
     const finalRelationship = payRelationship === 'Other' ? (payCustomRelationship.trim() || 'Other') : payRelationship;
     const finalAccountHolder = payAccountHolder.trim() || payFarmerName.trim();
+    const cleanedAccountNumber = payAccountNumber.trim();
+
+    if (payMethod === 'Bank Transfer') {
+      if (!cleanedAccountNumber) {
+        alert('Bank Account Number is required for Bank Transfer.');
+        return;
+      }
+      if (!/^[0-9]+$/.test(cleanedAccountNumber)) {
+        alert('Bank Account Number must contain numbers only (0-9) without spaces, hyphens, or special characters.');
+        return;
+      }
+    }
 
     const payload = {
       familyCode: payFamilyCode,
@@ -1256,7 +1268,7 @@ export default function OperationsDashboard() {
       phone: payPhone,
       paymentMethod: payMethod,
       bankName: payMethod === 'Bank Transfer' ? payBankName : 'Cash',
-      accountNumber: payAccountNumber,
+      accountNumber: payMethod === 'Bank Transfer' ? cleanedAccountNumber : '—',
       accountHolder: finalAccountHolder,
       relationship: finalRelationship,
       bankDocumentUrl: payBankPhotoUrl,
@@ -1286,60 +1298,12 @@ export default function OperationsDashboard() {
       resetFarmerProfileForm();
       refreshAllData();
     } else {
-      alert(editingProfileId ? 'Failed to update Farmer Payment Profile.' : 'Failed to save Farmer Payment Profile.');
+      const errData = await res.json().catch(() => ({}));
+      alert(
+        errData.error ||
+          (editingProfileId ? 'Failed to update Farmer Payment Profile.' : 'Failed to save Farmer Payment Profile.')
+      );
     }
-  };
-
-  // Export Farmer Profiles to CSV
-  const exportFarmerProfilesCSV = () => {
-    if (!farmerProfiles.length) {
-      alert('No farmer payment profiles to export.');
-      return;
-    }
-
-    const rows = [
-      [
-        'Family Code',
-        'Farmer Name',
-        'Village',
-        'Phone Number',
-        'Payment Method',
-        'Bank Name',
-        'Account Number',
-        'Account Holder Name',
-        'Relationship to Farmer',
-        'Bank Document Photo Attached',
-        'Registered By (Staff)',
-        'Created Date',
-      ],
-    ];
-
-    farmerProfiles.forEach((p) => {
-      const staffUser = p.user?.name || (p.user?.email ? p.user.email.split('@')[0] : '') || 'Field Staff';
-      rows.push([
-        p.familyCode,
-        p.farmerName,
-        p.village,
-        p.phone || '',
-        p.paymentMethod,
-        p.bankName || '',
-        p.accountNumber || '',
-        p.accountHolder || p.farmerName,
-        p.relationship || 'Self',
-        p.bankDocumentUrl ? 'Yes' : 'No',
-        staffUser,
-        new Date(p.createdAt).toLocaleDateString(),
-      ]);
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + rows.map((e) => e.map((c) => `"${c}"`).join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `IBIS_RICE_Farmer_Bank_Profiles_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // Submit / Update Purchase Invoice
@@ -1473,18 +1437,6 @@ export default function OperationsDashboard() {
 
 
 
-  const handleDeletePurchase = async (id: string, familyCode: string) => {
-    if (!confirm(`Are you sure you want to delete Purchase Record for ${familyCode}?`)) return;
-
-    const res = await fetch(`/api/purchases/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setSyncStatus(`✅ Purchase Record deleted by Admin.`);
-      refreshAllData();
-    } else {
-      alert('Failed to delete purchase record.');
-    }
-  };
-
   const handleDeleteTransportRecord = async (id: string, plateNumber: string) => {
     if (!confirm(`Are you sure you want to delete Transport Dispatch Record for truck ${plateNumber}? Linked purchases will be unassigned.`)) return;
 
@@ -1544,7 +1496,7 @@ export default function OperationsDashboard() {
       const pId = formatPurchaseId(p);
       rows.push([
         pId,
-        new Date(p.createdAt).toLocaleString(),
+        formatDateDDMMYYYY(p.createdAt),
         p.familyCode,
         p.farmerName,
         p.village,
@@ -1744,14 +1696,14 @@ export default function OperationsDashboard() {
       ]);
 
       if (purchasesList.length === 0) {
-        rows.push([tIdFormatted, new Date(t.createdAt).toLocaleString(), t.fieldStaffName || 'Field Staff', t.driverName, t.plateNumber, t.loadingLocation, getWarehouseId(t.destinationWarehouse), 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 0, 0, 'N/A']);
+        rows.push([tIdFormatted, formatDateDDMMYYYY(t.createdAt), t.fieldStaffName || 'Field Staff', t.driverName, t.plateNumber, t.loadingLocation, getWarehouseId(t.destinationWarehouse), 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 0, 0, 'N/A']);
       } else {
         purchasesList.forEach((p: any) => {
           const item = p.items?.[0] || {};
           const pIdFormatted = formatPurchaseId(p);
           rows.push([
             tIdFormatted,
-            new Date(t.createdAt).toLocaleString(),
+            formatDateDDMMYYYY(t.createdAt),
             t.fieldStaffName || 'Field Staff',
             t.driverName,
             t.plateNumber,
@@ -1813,7 +1765,7 @@ export default function OperationsDashboard() {
     ]);
     rows.push([
       tIdFormatted,
-      new Date(transport.createdAt).toLocaleString(),
+      formatDateDDMMYYYY(transport.createdAt),
       transport.fieldStaffName || 'Field Staff',
       transport.driverName || '',
       transport.plateNumber || '',
@@ -1988,13 +1940,12 @@ export default function OperationsDashboard() {
 
       if (res.ok) {
         setInvConfirmModalIntake(null);
-        setInvNotesInput('');
         refreshAllData();
       } else {
         const err = await res.json();
         alert('Failed to record inventory: ' + (err.error || 'Server error'));
       }
-    } catch (err) {
+    } catch {
       alert('Error connecting to server.');
     } finally {
       setIsSubmittingInventory(false);
@@ -2038,7 +1989,7 @@ export default function OperationsDashboard() {
 
       rows.push([
         receivingId,
-        new Date(intake.createdAt).toLocaleString(),
+        formatDateDDMMYYYY(intake.createdAt),
         trId,
         transport.driverName || '',
         transport.plateNumber || '',
@@ -2145,7 +2096,7 @@ export default function OperationsDashboard() {
         wrId,
         t.transport.plateNumber,
         t.transport.driverName,
-        new Date(t.transport.createdAt).toLocaleString(),
+        formatDateDDMMYYYY(t.transport.createdAt),
         t.totalFarmersCount,
         t.purchases.length,
         t.transport.totalSacks,
@@ -2253,16 +2204,6 @@ export default function OperationsDashboard() {
       'Farmer Signed',
     ]);
 
-    const formatDateDDMMYYYY = (dateVal: any) => {
-      if (!dateVal) return 'N/A';
-      const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return 'N/A';
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
-    };
-
     const deliveryDateFormatted = formatDateDDMMYYYY(intake.createdAt || transport.createdAt);
     const warehouseCode = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
 
@@ -2338,7 +2279,7 @@ export default function OperationsDashboard() {
       ? intake.weightDiffPercent
       : (fieldWeight > 0 ? (diffKg / fieldWeight) * 100 : 0);
 
-    const receivingDateTime = new Date(intake.createdAt).toLocaleString();
+    const receivingDateTime = formatDateDDMMYYYY(intake.createdAt);
     const warehouseStaff = intake.receivingStaffName || 'Warehouse Staff';
     const totalFarmers = new Set(purchases.map((p: any) => p.familyCode)).size;
     const totalSacks = purchases.reduce((acc: number, p: any) => acc + (p.items?.[0]?.sacks || 0), 0);
@@ -2465,7 +2406,7 @@ export default function OperationsDashboard() {
       const staffUser = rec.user?.name || (rec.user?.email ? rec.user.email.split('@')[0] : '') || 'Field Staff';
       return [
         specId,
-        new Date(rec.createdAt || rec.date).toLocaleString(),
+        formatDateDDMMYYYY(rec.createdAt || rec.date),
         staffUser,
         rec.familyCode || '',
         rec.farmerName || '',
@@ -2534,7 +2475,7 @@ export default function OperationsDashboard() {
         p.paymentMethod || 'Bank Transfer',
         p.bankDocumentUrl ? 'Yes' : 'No',
         staffUser,
-        new Date(p.createdAt || Date.now()).toLocaleDateString(),
+        formatDateDDMMYYYY(p.createdAt || Date.now()),
       ];
     });
 
@@ -2941,11 +2882,6 @@ export default function OperationsDashboard() {
 
   // Warehouse Dashboard Metrics
   const enRouteTrucksCount = transports.filter((t) => t.status === 'EN_ROUTE').length;
-  const todayStr = new Date().toDateString();
-  const trucksReceivedTodayCount = warehouseIntakes.filter((wi) => {
-    const d = new Date(wi.arrivalTime || wi.createdAt);
-    return d.toDateString() === todayStr;
-  }).length;
 
   // Self Relationship Account Name Mismatch Warning
   const isAccountHolderNameMismatch =
@@ -3500,27 +3436,16 @@ export default function OperationsDashboard() {
                         </div>
                       </div>
 
-                      {/* Quality Specifications following Master Grading order */}
+                      {/* Quality Specifications */}
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
                         <div>
-                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Whole Grain (%)</label>
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Moisture (%)</label>
                           <input
                             type="number"
                             step="0.1"
-                            value={spWhole}
-                            onChange={(e) => setSpWhole(e.target.value)}
-                            placeholder="N/A"
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Broken Rice (%)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={spBroken}
-                            onChange={(e) => setSpBroken(e.target.value)}
-                            placeholder="N/A"
+                            value={spMoisture}
+                            onChange={(e) => setSpMoisture(e.target.value)}
+                            placeholder="e.g. 13.5"
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
                           />
                         </div>
@@ -3546,14 +3471,25 @@ export default function OperationsDashboard() {
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
                           />
                         </div>
-                        <div className="col-span-2 sm:col-span-1">
-                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Moisture (%)</label>
+                        <div>
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Whole Grain (%)</label>
                           <input
                             type="number"
                             step="0.1"
-                            value={spMoisture}
-                            onChange={(e) => setSpMoisture(e.target.value)}
-                            placeholder="e.g. 13.5"
+                            value={spWhole}
+                            onChange={(e) => setSpWhole(e.target.value)}
+                            placeholder="N/A"
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
+                          />
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-slate-400 font-bold mb-1.5 text-[10px] uppercase">Broken Rice (%)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={spBroken}
+                            onChange={(e) => setSpBroken(e.target.value)}
+                            placeholder="N/A"
                             className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-emerald-500 placeholder:text-slate-500 font-mono"
                           />
                         </div>
@@ -3886,10 +3822,34 @@ export default function OperationsDashboard() {
                           <label className="block text-slate-400 font-bold uppercase mb-1.5">Account Number</label>
                           <input
                             type="text"
-                            value={payAccountNumber}
-                            onChange={(e) => setPayAccountNumber(e.target.value)}
-                            placeholder="000 123 456"
-                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-mono focus:border-emerald-500"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            autoComplete="off"
+                            disabled={payMethod !== 'Bank Transfer'}
+                            value={payMethod === 'Bank Transfer' ? payAccountNumber : ''}
+                            onKeyDown={(e) => {
+                              if (e.ctrlKey || e.metaKey || e.altKey) return;
+                              if (e.key.length === 1 && !/^[0-9]$/.test(e.key)) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onPaste={(e) => {
+                              e.preventDefault();
+                              const pasted = e.clipboardData.getData('text');
+                              const digitsOnly = pasted.replace(/[^0-9]/g, '');
+                              const input = e.currentTarget;
+                              const start = input.selectionStart ?? payAccountNumber.length;
+                              const end = input.selectionEnd ?? payAccountNumber.length;
+                              const nextVal = (
+                                payAccountNumber.slice(0, start) +
+                                digitsOnly +
+                                payAccountNumber.slice(end)
+                              ).replace(/[^0-9]/g, '');
+                              setPayAccountNumber(nextVal);
+                            }}
+                            onChange={(e) => setPayAccountNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                            placeholder={payMethod === 'Bank Transfer' ? '000123456' : 'Not required for Cash'}
+                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-mono focus:border-emerald-500 disabled:bg-white/5 disabled:text-slate-500 disabled:cursor-not-allowed"
                           />
                         </div>
                       </div>
@@ -5840,8 +5800,6 @@ export default function OperationsDashboard() {
                     ) : (
                       filteredIntakes.map((intake) => {
                         const transport = intake.transport || {};
-                        const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
-                        const staffUsername = intake.receivingStaffName || 'staff';
                         const receivingIdFormatted = formatReceivingIdWithDate(intake);
                         const transportIdFormatted = formatTransportId(transport);
 
@@ -5866,8 +5824,8 @@ export default function OperationsDashboard() {
                               {getRejectionIndicator('WarehouseIntake', intake.id, intake.transportId, intake.status === 'REJECTED' || intake.inventoryStatus === 'REJECTED' ? 'REJECTED' : intake.status)}
                             </td>
                             <td className="py-2.5 px-3 text-slate-400 text-[11px] whitespace-nowrap">
-                              {new Date(intake.createdAt).toLocaleDateString()}{' '}
-                              <span className="text-slate-500">{new Date(intake.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              {formatDateDDMMYYYY(intake.createdAt)}{' '}
+                              <span className="text-slate-500">{formatTimeHHMM(intake.createdAt)}</span>
                             </td>
                             <td className="py-2.5 px-3 font-mono font-bold text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">{transportIdFormatted}</td>
                             <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
@@ -6082,7 +6040,6 @@ export default function OperationsDashboard() {
                       filteredInventoryIntakes.map((intake) => {
                         const transport = intake.transport || {};
                         const arrivedWh = getWarehouseId(intake.arrivedWarehouse || transport.destinationWarehouse || 'W002');
-                        const staffUsername = intake.receivingStaffName || 'staff';
                         const receivingIdFormatted = formatReceivingIdWithDate(intake);
                         const isRecorded = intake.inventoryStatus === 'INVENTORY_RECORDED';
 
@@ -6095,7 +6052,7 @@ export default function OperationsDashboard() {
                               </span>
                               {getRejectionIndicator('WarehouseIntake', intake.id, intake.transportId, intake.inventoryStatus === 'REJECTED' || intake.status === 'REJECTED' ? 'REJECTED' : intake.inventoryStatus)}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">{new Date(intake.createdAt).toLocaleString()}</td>
+                            <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">{formatDateTimeDDMMYYYY(intake.createdAt)}</td>
                             <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
                               {transport.driverName}
                               <div className="font-mono text-sky-400 text-[11px]">{transport.plateNumber}</div>
@@ -6175,8 +6132,6 @@ export default function OperationsDashboard() {
                                     <button
                                       onClick={() => {
                                         setInvConfirmModalIntake(intake);
-                                        setInvLocationInput(intake.inventoryLocation || '');
-                                        setInvNotesInput(intake.inventoryNotes || '');
                                       }}
                                       className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-extrabold text-[10px] shadow-sm shadow-purple-600/30 transition-all"
                                     >
@@ -6352,26 +6307,6 @@ export default function OperationsDashboard() {
                         const netWeight = truckData.warehouseNetWeight || 0;
                         const diffKg = truckData.weightDiffKg !== undefined && truckData.weightDiffKg !== null ? truckData.weightDiffKg : (netWeight - fieldWeight);
                         const absDiffKg = Math.abs(diffKg);
-
-                        let toleranceBadge = (
-                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
-                            <CheckCircle2 className="w-3 h-3" /> Within Tolerance ✓
-                          </span>
-                        );
-
-                        if (absDiffKg > scaleToleranceWarning) {
-                          toleranceBadge = (
-                            <span className="bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
-                              <XCircle className="w-3 h-3" /> Critical Exceeded
-                            </span>
-                          );
-                        } else if (absDiffKg > scaleToleranceAcceptable) {
-                          toleranceBadge = (
-                            <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
-                              <AlertTriangle className="w-3 h-3" /> Warning Exceeded
-                            </span>
-                          );
-                        }
 
                         let statusBadge = (
                           <span className="bg-sky-500/10 text-sky-400 px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 justify-center">
@@ -6822,10 +6757,10 @@ export default function OperationsDashboard() {
                               </button>
                             </td>
                             <td className="p-3 text-slate-400 text-[11px]">
-                              {new Date(u.createdAt).toLocaleDateString()}
+                              {formatDateDDMMYYYY(u.createdAt)}
                             </td>
                             <td className="p-3 text-slate-400 text-[11px]">
-                              {u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never'}
+                              {u.lastLogin ? formatDateTimeDDMMYYYY(u.lastLogin) : 'Never'}
                             </td>
                             <td className="p-3 text-right space-x-1 whitespace-nowrap">
                               <button
@@ -7318,7 +7253,7 @@ export default function OperationsDashboard() {
                     <div key={log.id} className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1">
                       <div className="flex items-center justify-between text-slate-400">
                         <span className="font-bold text-purple-400">[{log.action}] {log.entityType}</span>
-                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        <span>{formatDateTimeDDMMYYYY(log.timestamp)}</span>
                       </div>
                       <div className="text-white">User: <strong>{log.userName}</strong> ({log.userRole})</div>
                       {log.details && <div className="text-slate-400 text-[11px] break-all">{log.details}</div>}

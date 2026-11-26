@@ -4,6 +4,7 @@ import { Printer, X, ShieldCheck } from 'lucide-react';
 import { formatImageSrc } from '@/lib/image-utils';
 import { getReportTranslation } from '@/lib/report-translations';
 import { formatPurchaseId } from '@/lib/purchase-id';
+import { formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface PrintReceiptModalProps {
   isOpen: boolean;
@@ -87,7 +88,7 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
                 </p>
                 <p>
                   <strong className="text-slate-600">Invoice Date &amp; Time:</strong>{' '}
-                  <span className="text-slate-800">{new Date(purchase.createdAt).toLocaleString()}</span>
+                  <span className="text-slate-800">{formatDateTimeDDMMYYYY(purchase.createdAt)}</span>
                 </p>
                 <p>
                   <strong className="text-slate-600">Purchase Staff:</strong>{' '}
@@ -219,7 +220,7 @@ export default function PrintReceiptModal({ isOpen, onClose, purchase, lang = 'e
             </p>
             <p>
               <strong className="text-slate-700">Invoice Date &amp; Time:</strong>{' '}
-              <span className="text-slate-800">{new Date(purchase.createdAt).toLocaleString()}</span>
+              <span className="text-slate-800">{formatDateTimeDDMMYYYY(purchase.createdAt)}</span>
             </p>
             <p>
               <strong className="text-slate-700">Purchase Staff:</strong>{' '}

@@ -7,6 +7,7 @@ import RejectionHistorySection from '@/components/RejectionHistorySection';
 import { formatTransportId } from '@/lib/transport-id';
 import { formatPurchaseId } from '@/lib/purchase-id';
 import { getWarehouseId, formatReceivingIdWithDate } from '@/lib/warehouse-config';
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '@/lib/date-format';
 
 interface WarehouseDetailsModalProps {
   isOpen: boolean;
@@ -82,7 +83,7 @@ export default function WarehouseDetailsModal({
     rows.push([
       receivingIdWithDate,
       transportIdFormatted,
-      new Date(intake.createdAt).toLocaleString(),
+      formatDateDDMMYYYY(intake.createdAt),
       transport.driverName || '',
       transport.plateNumber || '',
       intake.receivingStaffName || 'Warehouse Staff',
@@ -167,7 +168,7 @@ export default function WarehouseDetailsModal({
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Received on {new Date(intake.createdAt).toLocaleString()} by {intake.receivingStaffName || 'Warehouse Staff'}
+                Received on {formatDateTimeDDMMYYYY(intake.createdAt)} by {intake.receivingStaffName || 'Warehouse Staff'}
               </p>
             </div>
           </div>

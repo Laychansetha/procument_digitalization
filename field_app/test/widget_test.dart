@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ibis_rice_field_app/config/theme.dart';
 import 'package:ibis_rice_field_app/database/app_database.dart';
@@ -569,6 +571,106 @@ void main() {
       expect(item['additionalPrice'], 50);
       expect(item['finalPrice'], 1550);
       expect(item['sackWeights'], isNull);
+    });
+
+    test('Bank Account Number validation blocks non-digits and preserves leading zeros', () async {
+      final formatter = FilteringTextInputFormatter.digitsOnly;
+      const oldVal = TextEditingValue.empty;
+      const pastedVal = TextEditingValue(text: '000-123 456,ab#7');
+      final formatted = formatter.formatEditUpdate(oldVal, pastedVal);
+      expect(formatted.text, '0001234567');
+      expect(RegExp(r'^[0-9]+$').hasMatch(formatted.text), isTrue);
+
+      final farmer = FarmerProfile(
+        id: 'farmer_leading_zero',
+        familyCode: 'TB099',
+        farmerName: 'Sokha',
+        village: 'Prey Veng',
+        paymentMethod: 'Bank Transfer',
+        bankName: 'ABA Bank',
+        accountNumber: '000123456',
+        accountHolder: 'Sokha',
+        relationship: 'Self',
+        createdAt: DateTime(2026, 11, 26, 9, 5),
+      );
+
+      await AppDatabase.instance.insertFarmer(farmer);
+      final saved = await AppDatabase.instance.getAllFarmers();
+      expect(saved.length, 1);
+      expect(saved.first.accountNumber, '000123456');
+      expect(saved.first.toPostJson()['accountNumber'], '000123456');
+      expect(DateFormat('dd/MM/yyyy').format(saved.first.createdAt), '26/11/2026');
+      expect(DateFormat('dd/MM/yyyy HH:mm').format(saved.first.createdAt), '26/11/2026 09:05');
+    });
+
+    test('SyncService sends PUT updates for edited already-synced Purchase and Transport records', () async {
+      SharedPreferences.setMockInitialValues({
+        AuthService.keyIsLoggedIn: true,
+        AuthService.keyUserId: 'user_piseth',
+        AuthService.keyUserName: 'piseth',
+        AuthService.keyUserRole: 'FIELD',
+        AuthService.keyAssignedProvinces: 'All',
+      });
+
+      final putPaths = <String>[];
+      final mockClient = MockClient((request) async {
+        if (request.method == 'PUT') {
+          putPaths.add(request.url.path);
+          return http.Response(jsonEncode({'id': request.url.pathSegments.last}), 200);
+        }
+        return http.Response('[]', 200);
+      });
+
+      await AppDatabase.instance.insertPurchase(
+        PurchaseRecord(
+          id: 'TB010_261126_10',
+          serverRecordId: 'TB010_261126_10',
+          familyCode: 'TB010',
+          farmerName: 'Edited Farmer',
+          village: 'Rovieng',
+          variety: 'Phka Rumduol',
+          grade: 'A1',
+          standardPrice: 1650,
+          finalPrice: 1650,
+          sacks: 12,
+          totalWeight: 1050,
+          totalPayment: 1732500,
+          netPayment: 1732500,
+          status: 'PENDING',
+          createdAt: DateTime(2026, 11, 26, 10),
+          isSynced: false,
+        ),
+      );
+
+      await AppDatabase.instance.insertTransport(
+        TransportRecord(
+          id: '3A-8899_261126',
+          serverRecordId: '3A-8899_261126',
+          driverName: 'Updated Driver',
+          plateNumber: '3A-8899',
+          loadingLocation: 'Chhaeb',
+          destinationWarehouse: 'W002',
+          totalSacks: 12,
+          totalFieldWeight: 1050,
+          selectedPurchaseIds: const ['TB010_261126_10'],
+          status: 'EN_ROUTE',
+          createdAt: DateTime(2026, 11, 26, 10),
+          isSynced: false,
+        ),
+      );
+
+      final syncService = SyncService(apiService: ApiService(client: mockClient));
+      final res = await syncService.syncAllOfflineRecords();
+
+      expect(res.errorCount, 0);
+      expect(res.syncedCount, 2);
+      expect(putPaths, contains('/api/purchases/TB010_261126_10'));
+      expect(putPaths, contains('/api/transport/3A-8899_261126'));
+
+      final updatedPurchases = await AppDatabase.instance.getAllPurchases();
+      final updatedTransports = await AppDatabase.instance.getAllTransports();
+      expect(updatedPurchases.first.isSynced, isTrue);
+      expect(updatedTransports.first.isSynced, isTrue);
     });
   });
 }

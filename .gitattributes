@@ -1,0 +1,2 @@
+# Ensure Linux shell scripts always use LF line endings (prevents /bin/bash^M errors on Lightsail)
+*.sh text eol=lf

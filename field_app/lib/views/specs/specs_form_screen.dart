@@ -434,7 +434,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   }
 
   void _showRecordOptionsDialog(SpecsRecord item) {
-    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(item.createdAt);
+    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(item.createdAt);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -611,7 +611,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Row 3: Quality Parameters following Master Grading order (Split into 2 rows for optimal tablet readability)
+          // Row 3: Quality Parameters (Split into 2 rows for optimal tablet readability)
           LayoutBuilder(
             builder: (context, constraints) {
               bool isWide = constraints.maxWidth > 520;
@@ -621,35 +621,35 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: _buildWholeGrainInput()),
+                            Expanded(child: _buildMoistureInput()),
                             const SizedBox(width: 12),
-                            Expanded(child: _buildBrokenRiceInput()),
+                            Expanded(child: _buildImpurityInput()),
+                            const SizedBox(width: 12),
+                            Expanded(child: _buildForeignMatterInput()),
                           ],
                         ),
                         const SizedBox(height: 12),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: _buildImpurityInput()),
+                            Expanded(child: _buildWholeGrainInput()),
                             const SizedBox(width: 12),
-                            Expanded(child: _buildForeignMatterInput()),
-                            const SizedBox(width: 12),
-                            Expanded(child: _buildMoistureInput()),
+                            Expanded(child: _buildBrokenRiceInput()),
                           ],
                         ),
                       ],
                     )
                   : Column(
                       children: [
-                        _buildWholeGrainInput(),
-                        const SizedBox(height: 12),
-                        _buildBrokenRiceInput(),
+                        _buildMoistureInput(),
                         const SizedBox(height: 12),
                         _buildImpurityInput(),
                         const SizedBox(height: 12),
                         _buildForeignMatterInput(),
                         const SizedBox(height: 12),
-                        _buildMoistureInput(),
+                        _buildWholeGrainInput(),
+                        const SizedBox(height: 12),
+                        _buildBrokenRiceInput(),
                       ],
                     );
             },

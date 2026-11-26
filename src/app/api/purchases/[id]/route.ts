@@ -5,16 +5,17 @@ import { db } from '@/lib/db';
 import { isVillageAuthorized } from '@/lib/province-guard';
 import { processAndSaveImage } from '@/lib/image-upload-server';
 import { logAudit } from '@/lib/audit';
+import { getSessionOrHeaderUser } from '@/lib/sync-auth';
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as { id?: string })?.id;
+    const authUser = await getSessionOrHeaderUser(request);
+    const userId = authUser?.id;
 
-    if (!session || !userId) {
+    if (!authUser || !userId) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
@@ -30,11 +31,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Purchase record not found.' }, { status: 404 });
     }
 
-    if (session.user && !(await isVillageAuthorized(existing.village, session.user as any))) {
+    if (!(await isVillageAuthorized(existing.village, authUser))) {
       return NextResponse.json({ error: `Unauthorized. Record belongs to village '${existing.village}' which is outside your assigned province.` }, { status: 403 });
     }
 
-    if (body.village && session.user && !(await isVillageAuthorized(body.village, session.user as any))) {
+    if (body.village && !(await isVillageAuthorized(body.village, authUser))) {
       return NextResponse.json({ error: `Unauthorized. Target village '${body.village}' is outside your assigned province.` }, { status: 403 });
     }
 
@@ -106,7 +107,7 @@ export async function PUT(
         signatureFarmer: savedFarmerSig || signatureFarmer || existing.signatureFarmer,
         signatureStaff: savedStaffSig || signatureStaff || existing.signatureStaff,
         purchasingStaffId: userId,
-        purchasingStaffName: session.user?.name || existing.purchasingStaffName,
+        purchasingStaffName: authUser.name || existing.purchasingStaffName,
         specsRecordId: specsRecordId || existing.specsRecordId,
         status: nextStatus,
       },
@@ -181,16 +182,16 @@ export async function PUT(
       data: {
         status: 'RESOLVED',
         resolvedAt: new Date(),
-        resolvedByName: session.user?.name || session.user?.email || 'Field Staff',
+        resolvedByName: authUser.name || authUser.email || 'Field Staff',
       },
     });
 
     // Audit Log
     await logAudit({
       userId,
-      userEmail: session.user?.email,
-      userName: session.user?.name || 'Field Staff',
-      userRole: (session.user as { role?: string })?.role,
+      userEmail: authUser.email,
+      userName: authUser.name || 'Field Staff',
+      userRole: authUser.role,
       action: 'UPDATE',
       entityType: 'PurchaseRecord',
       entityId: id,

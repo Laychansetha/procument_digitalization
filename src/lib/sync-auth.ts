@@ -7,6 +7,57 @@ export interface ResolvedUser {
   userName: string;
   userRole: 'FIELD' | 'WAREHOUSE' | 'INVENTORY' | 'FINANCE' | 'ADMIN';
   assignedProvinces?: string;
+  email?: string;
+}
+
+async function resolveActiveUserFromHeaders(req: Request): Promise<ResolvedUser | null> {
+  try {
+    const headerUserId = req.headers.get('x-user-id')?.trim();
+    const headerUserEmail = req.headers.get('x-user-email')?.trim();
+    const headerUserName = req.headers.get('x-user-name')?.trim();
+
+    if (headerUserId) {
+      const dbUser = await db.user.findUnique({ where: { id: headerUserId } });
+      if (dbUser && dbUser.status === 'ACTIVE') {
+        return {
+          userId: dbUser.id,
+          userName: dbUser.name,
+          userRole: dbUser.role,
+          assignedProvinces: dbUser.assignedProvinces ?? undefined,
+          email: dbUser.email,
+        };
+      }
+    }
+
+    if (headerUserEmail) {
+      const dbUser = await db.user.findUnique({ where: { email: headerUserEmail.toLowerCase() } });
+      if (dbUser && dbUser.status === 'ACTIVE') {
+        return {
+          userId: dbUser.id,
+          userName: dbUser.name,
+          userRole: dbUser.role,
+          assignedProvinces: dbUser.assignedProvinces ?? undefined,
+          email: dbUser.email,
+        };
+      }
+    }
+
+    if (headerUserName) {
+      const dbUser = await db.user.findFirst({ where: { name: headerUserName, status: 'ACTIVE' } });
+      if (dbUser) {
+        return {
+          userId: dbUser.id,
+          userName: dbUser.name,
+          userRole: dbUser.role,
+          assignedProvinces: dbUser.assignedProvinces ?? undefined,
+          email: dbUser.email,
+        };
+      }
+    }
+  } catch {
+    // Header resolution error ignored
+  }
+  return null;
 }
 
 export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
@@ -17,7 +68,7 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
       const sessUserEmail = session.user.email;
       const sessUserName = session.user.name;
 
-      // Verify the user exists in the database by ID, Email, or Name
+      // Verify the user exists and is active in the database by ID, Email, or Name
       let dbUser = null;
       if (sessUserId) {
         dbUser = await db.user.findUnique({ where: { id: sessUserId } });
@@ -29,63 +80,25 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
         dbUser = await db.user.findFirst({ where: { name: sessUserName } });
       }
 
-      if (dbUser) {
+      if (dbUser && dbUser.status === 'ACTIVE') {
         return {
           userId: dbUser.id,
           userName: dbUser.name,
-          userRole: dbUser.role as any,
+          userRole: dbUser.role,
           assignedProvinces: dbUser.assignedProvinces ?? undefined,
+          email: dbUser.email,
         };
       }
     }
-  } catch (e) {
+  } catch {
     // Session lookup skipped or failed
   }
 
   // Check custom headers passed by Mobile Field App during sync
   if (req) {
-    try {
-      const headerUserId = req.headers.get('x-user-id');
-      const headerUserEmail = req.headers.get('x-user-email');
-      const headerUserName = req.headers.get('x-user-name');
-
-      if (headerUserId) {
-        const dbUser = await db.user.findUnique({ where: { id: headerUserId } });
-        if (dbUser) {
-          return {
-            userId: dbUser.id,
-            userName: dbUser.name,
-            userRole: dbUser.role as any,
-            assignedProvinces: dbUser.assignedProvinces ?? undefined,
-          };
-        }
-      }
-
-      if (headerUserEmail) {
-        const dbUser = await db.user.findUnique({ where: { email: headerUserEmail.toLowerCase().trim() } });
-        if (dbUser) {
-          return {
-            userId: dbUser.id,
-            userName: dbUser.name,
-            userRole: dbUser.role as any,
-            assignedProvinces: dbUser.assignedProvinces ?? undefined,
-          };
-        }
-      }
-
-      if (headerUserName) {
-        const dbUser = await db.user.findFirst({ where: { name: headerUserName.trim() } });
-        if (dbUser) {
-          return {
-            userId: dbUser.id,
-            userName: dbUser.name,
-            userRole: dbUser.role as any,
-            assignedProvinces: dbUser.assignedProvinces ?? undefined,
-          };
-        }
-      }
-    } catch (e) {
-      // Header resolution error ignored
+    const headerUser = await resolveActiveUserFromHeaders(req);
+    if (headerUser) {
+      return headerUser;
     }
   }
 
@@ -105,32 +118,37 @@ export async function getResolvedUser(req?: Request): Promise<ResolvedUser> {
   return {
     userId: fieldUser.id,
     userName: fieldUser.name,
-    userRole: fieldUser.role as any,
+    userRole: fieldUser.role,
     assignedProvinces: fieldUser.assignedProvinces ?? undefined,
+    email: fieldUser.email,
   };
 }
 
 /**
- * Resolves the authenticated user (from NextAuth session or Mobile Field App headers)
- * for site/province scoping on GET/POST requests without falling back to an arbitrary user.
+ * Resolves the authenticated active user (from NextAuth session or Mobile Field App headers)
+ * without falling back to an arbitrary user. Returns null if unauthenticated or inactive.
  */
 export async function getSessionOrHeaderUser(req?: Request) {
   const session = await getServerSession(authOptions);
   if (session?.user) {
-    return session.user as { id?: string; role?: string; assignedProvinces?: string; [key: string]: any };
+    return session.user as {
+      id?: string;
+      name?: string | null;
+      email?: string | null;
+      role?: string;
+      assignedProvinces?: string;
+    };
   }
 
   if (req) {
-    const headerUserId = req.headers.get('x-user-id');
-    const headerUserEmail = req.headers.get('x-user-email');
-    const headerUserName = req.headers.get('x-user-name');
-
-    if (headerUserId || headerUserEmail || headerUserName) {
-      const resolved = await getResolvedUser(req);
+    const headerUser = await resolveActiveUserFromHeaders(req);
+    if (headerUser) {
       return {
-        id: resolved.userId,
-        role: resolved.userRole,
-        assignedProvinces: resolved.assignedProvinces,
+        id: headerUser.userId,
+        name: headerUser.userName,
+        email: headerUser.email ?? null,
+        role: headerUser.userRole,
+        assignedProvinces: headerUser.assignedProvinces,
       };
     }
   }

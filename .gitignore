@@ -15,8 +15,14 @@
 
 # ─── Next.js build output ─────────────────────────────────────────────────────
 /.next/
+/.next_prev/
 /out/
 /build
+
+# ─── Production deploy/rollback state & backups ──────────────────────────────
+/backups/
+.prev_deploy_commit
+.rollback_commit
 
 # ─── TypeScript build info ────────────────────────────────────────────────────
 *.tsbuildinfo
