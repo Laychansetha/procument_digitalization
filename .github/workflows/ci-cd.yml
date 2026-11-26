@@ -129,4 +129,4 @@ jobs:
       - name: 🚀 Execute safe production deploy script on Lightsail
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=15 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "APP_DIR='${{ secrets.VPS_APP_DIR }}' bash '${{ secrets.VPS_APP_DIR }}/scripts/deploy.sh'"
+            "cd '${{ secrets.VPS_APP_DIR }}' && git fetch origin main && git checkout origin/main -- scripts/deploy.sh && chmod +x scripts/deploy.sh && APP_DIR='${{ secrets.VPS_APP_DIR }}' bash '${{ secrets.VPS_APP_DIR }}/scripts/deploy.sh'"

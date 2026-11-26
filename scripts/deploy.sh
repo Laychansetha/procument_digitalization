@@ -122,7 +122,10 @@ if ! command -v pg_dump > /dev/null 2>&1; then
   exit 1
 fi
 
-if pg_dump "$DATABASE_URL" > "$BACKUP_FILE" && [ -s "$BACKUP_FILE" ]; then
+# Strip Prisma-only ?schema=... query parameter (pg_dump rejects 'schema' URI param while keeping sslmode etc.)
+PG_DUMP_URL=$(printf '%s' "$DATABASE_URL" | sed -E 's/([?&])schema=[^&]*(&?)/\1/; s/[?&]$//')
+
+if pg_dump "$PG_DUMP_URL" > "$BACKUP_FILE" && [ -s "$BACKUP_FILE" ]; then
   BACKUP_SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
   success "Verified database backup created: $BACKUP_FILE ($BACKUP_SIZE)"
 else
