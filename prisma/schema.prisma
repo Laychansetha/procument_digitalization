@@ -33,6 +33,9 @@ model User {
   transportRecs   TransportRecord[]
   auditLogs       AuditLog[]
   rejectionLogs   RejectionLog[]
+
+  @@index([name])
+  @@index([role, status])
 }
 
 model RejectionLog {
@@ -52,6 +55,7 @@ model RejectionLog {
   user           User      @relation(fields: [rejectedBy], references: [id])
 
   @@index([entityType, entityId])
+  @@index([entityType, entityId, status])
 }
 
 model Village {
@@ -62,6 +66,9 @@ model Village {
   province  String?  @default("Preah Vihear")
   status    String   @default("ACTIVE") // ACTIVE, INACTIVE
   createdAt DateTime @default(now())
+
+  @@index([province])
+  @@index([status])
 }
 
 model Bank {
@@ -128,6 +135,7 @@ model FarmerProfile {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  @@unique([familyCode, village])
   @@index([familyCode])
   @@index([farmerName])
   @@index([village])
@@ -160,6 +168,7 @@ model SpecsRecord {
   @@index([familyCode])
   @@index([farmerName])
   @@index([village])
+  @@index([familyCode, village, paddyType, selectedGrade])
   @@index([createdBy])
   @@index([createdAt])
 }
@@ -194,10 +203,12 @@ model PurchaseRecord {
   @@index([familyCode])
   @@index([farmerName])
   @@index([village])
+  @@index([familyCode, village])
   @@index([createdBy])
   @@index([specsRecordId])
   @@index([transportRecordId])
   @@index([status])
+  @@index([status, transportRecordId])
   @@index([createdAt])
 }
 
@@ -252,6 +263,8 @@ model TransportRecord {
   intake               WarehouseIntake?
 
   @@index([createdBy])
+  @@index([plateNumber])
+  @@index([destinationWarehouse])
   @@index([status])
   @@index([createdAt])
 }
@@ -298,6 +311,7 @@ model WarehouseIntake {
   status               String    @default("RECEIVED")
   createdAt            DateTime        @default(now())
 
+  @@index([arrivedWarehouse])
   @@index([status])
   @@index([inventoryStatus])
   @@index([createdAt])

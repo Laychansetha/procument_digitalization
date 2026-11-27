@@ -108,7 +108,13 @@ export async function PUT(
     });
 
     return NextResponse.json(updated);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'A Farmer Profile with this Family Code and Village already exists.' },
+        { status: 409 }
+      );
+    }
     console.error('Error updating farmer profile:', error);
     return NextResponse.json({ error: 'Failed to update farmer profile.' }, { status: 500 });
   }

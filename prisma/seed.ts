@@ -231,10 +231,19 @@ async function main() {
   // 7. Seed System Configurations
   await prisma.systemSetting.upsert({
     where: { key: 'SCALE_TOLERANCE_PERCENT' },
-    update: { value: '1.5' },
+    update: {},
     create: {
       key: 'SCALE_TOLERANCE_PERCENT',
       value: '1.5',
+    },
+  });
+
+  await prisma.systemSetting.upsert({
+    where: { key: 'scale_tolerance' },
+    update: {},
+    create: {
+      key: 'scale_tolerance',
+      value: JSON.stringify({ acceptableKg: 200, warningKg: 400, criticalKg: 400 }),
     },
   });
 
