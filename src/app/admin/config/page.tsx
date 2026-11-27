@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { ALL_PRICING_REGIONS, PRICING_REGION_1 } from '@/lib/pricing-region';
 
 export default function AdminConfigPage() {
   const { data: session, status } = useSession();
@@ -33,13 +34,14 @@ export default function AdminConfigPage() {
   const [showSpecModal, setShowSpecModal] = useState(false);
   const [editingSpec, setEditingSpec] = useState<any | null>(null);
   const [specForm, setSpecForm] = useState({
+    region: PRICING_REGION_1 as string,
     variety: 'Phka Rumduol',
     grade: 'A1',
-    basePrice: 1650,
-    maxMoisture: 14.0,
-    maxForeignMatter: 5.0,
-    minWholeGrain: 70.0,
-    maxBrokenRice: 30.0,
+    basePrice: 1750,
+    maxMoisture: 13.5,
+    maxForeignMatter: 6.0,
+    minWholeGrain: 75.0,
+    maxBrokenRice: 25.0,
     status: 'ACTIVE',
   });
 
@@ -157,6 +159,7 @@ export default function AdminConfigPage() {
     if (spec) {
       setEditingSpec(spec);
       setSpecForm({
+        region: spec.region || PRICING_REGION_1,
         variety: spec.variety,
         grade: spec.grade,
         basePrice: spec.basePrice,
@@ -169,13 +172,14 @@ export default function AdminConfigPage() {
     } else {
       setEditingSpec(null);
       setSpecForm({
+        region: PRICING_REGION_1,
         variety: 'Phka Rumduol',
         grade: 'A1',
-        basePrice: 1650,
-        maxMoisture: 14.0,
-        maxForeignMatter: 5.0,
-        minWholeGrain: 70.0,
-        maxBrokenRice: 30.0,
+        basePrice: 1750,
+        maxMoisture: 13.5,
+        maxForeignMatter: 6.0,
+        minWholeGrain: 75.0,
+        maxBrokenRice: 25.0,
         status: 'ACTIVE',
       });
     }
@@ -662,6 +666,7 @@ export default function AdminConfigPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#0F172A', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                          <th style={{ padding: '10px' }}>Pricing Region</th>
                           <th style={{ padding: '10px' }}>Variety</th>
                           <th style={{ padding: '10px' }}>Grade</th>
                           <th style={{ padding: '10px' }}>Base Price (KHR/kg)</th>
@@ -674,6 +679,7 @@ export default function AdminConfigPage() {
                       <tbody>
                         {paddySpecs.map((spec) => (
                           <tr key={spec.id} style={{ borderBottom: '1px solid #334155' }}>
+                            <td style={{ padding: '10px', color: '#38BDF8', fontWeight: 'bold' }}>{spec.region || PRICING_REGION_1}</td>
                             <td style={{ padding: '10px', fontWeight: 'bold', color: '#FFF' }}>{spec.variety}</td>
                             <td style={{ padding: '10px' }}><span style={{ padding: '2px 8px', backgroundColor: '#3B82F620', color: '#60A5FA', borderRadius: '4px', fontWeight: 'bold' }}>{spec.grade}</span></td>
                             <td style={{ padding: '10px', fontWeight: 'bold', color: '#F59E0B' }}>{spec.basePrice?.toLocaleString()} KHR</td>
@@ -906,6 +912,19 @@ export default function AdminConfigPage() {
             <div style={{ backgroundColor: '#1E293B', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '450px', border: '1px solid #334155' }}>
               <h3 style={{ color: '#F59E0B', margin: '0 0 16px 0' }}>{editingSpec ? 'Edit Paddy Price Spec' : 'Add New Paddy Price Spec'}</h3>
               <form onSubmit={handleSaveSpec}>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Pricing Region *</label>
+                  <select
+                    value={specForm.region}
+                    onChange={(e) => setSpecForm({ ...specForm, region: e.target.value })}
+                    style={{ width: '100%', padding: '8px', backgroundColor: '#0F172A', border: '1px solid #334155', color: '#FFF', borderRadius: '6px' }}
+                  >
+                    {ALL_PRICING_REGIONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>Paddy Variety *</label>
                   <input

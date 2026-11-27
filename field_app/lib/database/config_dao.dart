@@ -8,14 +8,18 @@ class ConfigDao {
   static final ConfigDao instance = ConfigDao._init();
   ConfigDao._init();
 
-  static const String _kCachedConfigKey = 'cached_master_config_v1';
+  static const String _kCachedConfigKey = 'cached_master_config_v2_2026';
   static const String _kLastSyncedAtKey = 'cached_config_last_synced_at';
+
+  static const String pricingRegion1 = 'Preah Vihear and Mondolkiri';
+  static const String pricingRegion2 = 'Stung Treng and Ratanakiri';
 
   final ValueNotifier<int> configChangeNotifier = ValueNotifier<int>(0);
 
   double _seedInterestRate = 1.10;
   double _scaleTolerancePercent = 1.5;
   String? _lastSyncedAt;
+  String? _activePricingRegion;
   List<Map<String, dynamic>> _fleet = [];
 
   List<String> _villages = [
@@ -28,28 +32,49 @@ class ConfigDao {
   List<String> _paddyCategories = [
     'Phka Rumduol',
     'Red Jasmine',
-    'Foundation Seed - Phka Rumduol',
     'Foundation Seed - Red Jasmine',
+    'Foundation Seed - Phka Rumduol',
     'Certified Seed',
     'White Rice'
   ];
   List<String> _grades = ['A1', 'A2', 'B1', 'B2', 'A', 'B'];
 
-  List<Map<String, dynamic>> _paddySpecs = [
-    {'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1650.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5},
-    {'variety': 'Phka Rumduol', 'grade': 'A2', 'basePrice': 1550.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
-    {'variety': 'Phka Rumduol', 'grade': 'B1', 'basePrice': 1500.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
-    {'variety': 'Phka Rumduol', 'grade': 'B2', 'basePrice': 1450.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
-    {'variety': 'Red Jasmine', 'grade': 'A1', 'basePrice': 1850.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5},
-    {'variety': 'Red Jasmine', 'grade': 'A2', 'basePrice': 1750.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
-    {'variety': 'Red Jasmine', 'grade': 'B1', 'basePrice': 1700.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
-    {'variety': 'Red Jasmine', 'grade': 'B2', 'basePrice': 1650.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0},
-    {'variety': 'Foundation Seed - Phka Rumduol', 'grade': 'A', 'basePrice': 2050.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0},
-    {'variety': 'Foundation Seed - Red Jasmine', 'grade': 'A', 'basePrice': 2150.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0},
-    {'variety': 'Certified Seed', 'grade': 'A', 'basePrice': 1900.0, 'minWholeGrain': 96.0, 'maxBrokenRice': null, 'impurity': 2.0, 'maxForeignMatter': 2.0, 'maxMoisture': 12.0},
-    {'variety': 'White Rice', 'grade': 'A', 'basePrice': 1320.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 4.0, 'maxMoisture': 13.5},
-    {'variety': 'White Rice', 'grade': 'B', 'basePrice': 1220.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 8.0, 'maxMoisture': 13.5},
-  ];
+  /// Official 2026 regional quality specs & prices (fallback for offline startup before first sync).
+  /// Source of truth: villages_province_grade_warehouse.xlsx -> specs_price_2026.
+  static List<Map<String, dynamic>> _buildDefault2026PaddySpecs() => [
+        // Region 1: Preah Vihear and Mondolkiri
+        {'region': pricingRegion1, 'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1750.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Phka Rumduol', 'grade': 'A2', 'basePrice': 1650.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Phka Rumduol', 'grade': 'B1', 'basePrice': 1600.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Phka Rumduol', 'grade': 'B2', 'basePrice': 1550.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Red Jasmine', 'grade': 'A1', 'basePrice': 1990.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Red Jasmine', 'grade': 'A2', 'basePrice': 1890.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Red Jasmine', 'grade': 'B1', 'basePrice': 1840.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Red Jasmine', 'grade': 'B2', 'basePrice': 1790.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Foundation Seed - Red Jasmine', 'grade': 'A', 'basePrice': 2250.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Foundation Seed - Phka Rumduol', 'grade': 'A', 'basePrice': 2140.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'Certified Seed', 'grade': 'A', 'basePrice': 1950.0, 'minWholeGrain': 96.0, 'maxBrokenRice': null, 'impurity': 2.0, 'maxForeignMatter': 2.0, 'maxMoisture': 12.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'White Rice', 'grade': 'A', 'basePrice': 1500.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 4.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+        {'region': pricingRegion1, 'variety': 'White Rice', 'grade': 'B', 'basePrice': 1400.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 8.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+
+        // Region 2: Stung Treng and Ratanakiri
+        {'region': pricingRegion2, 'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1650.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Phka Rumduol', 'grade': 'A2', 'basePrice': 1550.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Phka Rumduol', 'grade': 'B1', 'basePrice': 1500.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': 2.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Phka Rumduol', 'grade': 'B2', 'basePrice': 1450.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': 4.0, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Red Jasmine', 'grade': 'A1', 'basePrice': 1850.0, 'minWholeGrain': 75.0, 'maxBrokenRice': 25.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Red Jasmine', 'grade': 'A2', 'basePrice': 1750.0, 'minWholeGrain': 70.0, 'maxBrokenRice': 30.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Red Jasmine', 'grade': 'B1', 'basePrice': 1700.0, 'minWholeGrain': 60.0, 'maxBrokenRice': 40.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Red Jasmine', 'grade': 'B2', 'basePrice': 1650.0, 'minWholeGrain': 50.0, 'maxBrokenRice': 50.0, 'impurity': null, 'maxForeignMatter': 6.0, 'maxMoisture': 14.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Foundation Seed - Red Jasmine', 'grade': 'A', 'basePrice': 2250.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Foundation Seed - Phka Rumduol', 'grade': 'A', 'basePrice': 2140.0, 'minWholeGrain': 98.0, 'maxBrokenRice': null, 'impurity': 1.0, 'maxForeignMatter': 1.0, 'maxMoisture': 12.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'Certified Seed', 'grade': 'A', 'basePrice': 1950.0, 'minWholeGrain': 96.0, 'maxBrokenRice': null, 'impurity': 2.0, 'maxForeignMatter': 2.0, 'maxMoisture': 12.0, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'White Rice', 'grade': 'A', 'basePrice': 1400.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 4.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+        {'region': pricingRegion2, 'variety': 'White Rice', 'grade': 'B', 'basePrice': 1300.0, 'minWholeGrain': null, 'maxBrokenRice': null, 'impurity': null, 'maxForeignMatter': 8.0, 'maxMoisture': 13.5, 'status': 'ACTIVE'},
+      ];
+
+  List<Map<String, dynamic>> _allPaddySpecs = _buildDefault2026PaddySpecs();
+  List<Map<String, dynamic>> _paddySpecs = _buildDefault2026PaddySpecs();
 
   List<String> _buyingStations = [
     'Chhaeb Buying Station',
@@ -113,14 +138,50 @@ class ConfigDao {
     }
   }
 
-  final Map<String, double> _basePrices = {
-    'Phka Rumduol': 1650.0,
-    'Red Jasmine': 1850.0,
-    'Foundation Seed - Phka Rumduol': 2050.0,
-    'Foundation Seed - Red Jasmine': 2150.0,
-    'Certified Seed': 1900.0,
-    'White Rice': 1320.0,
-  };
+  static String? normalizePricingRegion(String? region) {
+    if (region == null) return null;
+    final clean = region.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    if (clean.isEmpty) return null;
+    if (clean == 'region 1' ||
+        clean == 'preah vihear and mondolkiri' ||
+        clean == 'preah vihear and mondulkiri' ||
+        clean == 'preah vihear' ||
+        clean == 'mondolkiri' ||
+        clean == 'mondulkiri') {
+      return pricingRegion1;
+    }
+    if (clean == 'region 2' ||
+        clean == 'stung treng and ratanakiri' ||
+        clean == 'stung treng' ||
+        clean == 'ratanakiri' ||
+        clean == 'ratanakkiri') {
+      return pricingRegion2;
+    }
+    return null;
+  }
+
+  static String? getPricingRegionForProvince(String? province) {
+    if (province == null) return null;
+    final lower = province.trim().toLowerCase();
+    if (lower.isEmpty || lower == 'all' || lower == 'na') return null;
+    if (lower == 'preah vihear' || lower == 'mondolkiri' || lower == 'mondulkiri') {
+      return pricingRegion1;
+    }
+    if (lower == 'stung treng' || lower == 'ratanakiri' || lower == 'ratanakkiri') {
+      return pricingRegion2;
+    }
+    return null;
+  }
+
+  static String? getPricingRegionForProvinces(List<String> provinces) {
+    final regions = <String>{};
+    for (final p in provinces) {
+      final r = getPricingRegionForProvince(p);
+      if (r != null) regions.add(r);
+    }
+    if (regions.length == 1) return regions.first;
+    return null;
+  }
 
   static final Map<String, String> _villageProvinceMapping = {
     'Prey Veng': 'Preah Vihear', 'Sambou': 'Preah Vihear', 'Koh Ker': 'Preah Vihear', 'Damnak Kantout': 'Preah Vihear',
@@ -144,8 +205,79 @@ class ConfigDao {
   double get seedInterestRate => _seedInterestRate;
   double get scaleTolerancePercent => _scaleTolerancePercent;
   String? get lastSyncedAt => _lastSyncedAt;
+  String? get activePricingRegion => _activePricingRegion;
   List<Map<String, dynamic>> get fleet => List.unmodifiable(_fleet);
   List<String> get villages => List.unmodifiable(_villages);
+
+  String? getProvinceForVillage(String? village) {
+    if (village == null || village.trim().isEmpty) return null;
+    final clean = village.trim();
+    if (_villageProvinceMapping.containsKey(clean)) {
+      return _villageProvinceMapping[clean];
+    }
+    final lower = clean.toLowerCase();
+    for (final entry in _villageProvinceMapping.entries) {
+      if (entry.key.toLowerCase() == lower) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
+  /// Automatically resolves the pricing region from the user's assigned provinces (primary)
+  /// or selected village's province (for multi-region/All users), never requiring manual selection.
+  String resolvePricingRegion({List<String>? assignedProvinces, String? village}) {
+    if (assignedProvinces != null && assignedProvinces.isNotEmpty) {
+      final userRegion = getPricingRegionForProvinces(assignedProvinces);
+      if (userRegion != null) return userRegion;
+    }
+    final villageProv = getProvinceForVillage(village);
+    final villageRegion = getPricingRegionForProvince(villageProv);
+    if (villageRegion != null) return villageRegion;
+    return _activePricingRegion ?? pricingRegion1;
+  }
+
+  List<Map<String, dynamic>> getSpecsForUser({List<String>? assignedProvinces, String? village}) {
+    final region = resolvePricingRegion(assignedProvinces: assignedProvinces, village: village);
+    final source = _allPaddySpecs.isNotEmpty ? _allPaddySpecs : _paddySpecs;
+    final activeMatched = source.where((s) {
+      if (s['status'] == 'INACTIVE') return false;
+      final specRegion = normalizePricingRegion(s['region']?.toString());
+      return specRegion == region;
+    }).toList();
+
+    if (activeMatched.isNotEmpty) {
+      return List.unmodifiable(activeMatched);
+    }
+
+    final fallback = _paddySpecs.where((s) => s['status'] != 'INACTIVE').toList();
+    return List.unmodifiable(fallback);
+  }
+
+  Map<String, dynamic>? getSpecFor(
+    String variety,
+    String grade, {
+    List<String>? assignedProvinces,
+    String? village,
+  }) {
+    final specs = getSpecsForUser(assignedProvinces: assignedProvinces, village: village);
+    for (final s in specs) {
+      if (s['variety'] == variety && s['grade'] == grade) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  List<String> getPaddyCategoriesForUser({List<String>? assignedProvinces, String? village}) {
+    final specs = getSpecsForUser(assignedProvinces: assignedProvinces, village: village);
+    final categories = <String>{};
+    for (final s in specs) {
+      final v = s['variety']?.toString();
+      if (v != null && v.isNotEmpty) categories.add(v);
+    }
+    return categories.isNotEmpty ? List.unmodifiable(categories.toList()) : List.unmodifiable(_paddyCategories);
+  }
 
   List<String> getVillagesForProvinces(List<String> assignedProvinces) {
     final cleanProvinces = assignedProvinces
@@ -176,33 +308,62 @@ class ConfigDao {
   List<String> get paddyCategories => List.unmodifiable(_paddyCategories);
   List<String> get grades => List.unmodifiable(_grades);
 
-  List<String> getGradesForCategory(String? category) {
+  List<String> getGradesForCategory(
+    String? category, {
+    List<String>? assignedProvinces,
+    String? village,
+  }) {
     if (category == null || category.isEmpty) return List.unmodifiable(_grades);
 
-    // Dynamic lookup from synced paddySpecs master data
-    final matchingSpecs = _paddySpecs.where((s) => s['variety'] == category).toList();
+    // Dynamic lookup from region-scoped master paddySpecs
+    final specs = getSpecsForUser(assignedProvinces: assignedProvinces, village: village);
+    final matchingSpecs = specs.where((s) => s['variety'] == category).toList();
     if (matchingSpecs.isNotEmpty) {
       final specGrades = matchingSpecs.map((s) => s['grade'].toString()).toSet().toList();
       return List.unmodifiable(specGrades);
     }
 
-    // Fallback business rules
-    if (category == 'Phka Rumduol' || category == 'Red Jasmine') {
-      return const ['A1', 'A2', 'B1', 'B2'];
-    } else if (category.contains('Foundation Seed') || category == 'Certified Seed') {
-      return const ['A'];
-    } else if (category == 'White Rice') {
-      return const ['A', 'B'];
-    }
     return List.unmodifiable(_grades);
   }
 
   List<Map<String, dynamic>> get paddySpecs => List.unmodifiable(_paddySpecs);
+  List<Map<String, dynamic>> get allPaddySpecs => List.unmodifiable(_allPaddySpecs);
   List<String> get buyingStations => List.unmodifiable(_buyingStations);
   List<String> get destinationWarehouses => List.unmodifiable(_destinationWarehouses);
 
-  double getBasePrice(String category) {
-    return _basePrices[category] ?? 1650.0;
+  double? getBasePrice(
+    String category, {
+    String? grade,
+    List<String>? assignedProvinces,
+    String? village,
+  }) {
+    final specs = getSpecsForUser(assignedProvinces: assignedProvinces, village: village);
+    for (final s in specs) {
+      if (s['variety'] == category && (grade == null || s['grade'] == grade)) {
+        final p = s['basePrice'];
+        if (p is num) return p.toDouble();
+      }
+    }
+    return null;
+  }
+
+  @visibleForTesting
+  void applyConfigDataForTest(Map<String, dynamic> data) => _applyConfigData(data);
+
+  @visibleForTesting
+  void resetToDefaultsForTest() {
+    _activePricingRegion = null;
+    _allPaddySpecs = _buildDefault2026PaddySpecs();
+    _paddySpecs = _buildDefault2026PaddySpecs();
+    _paddyCategories = [
+      'Phka Rumduol',
+      'Red Jasmine',
+      'Foundation Seed - Red Jasmine',
+      'Foundation Seed - Phka Rumduol',
+      'Certified Seed',
+      'White Rice'
+    ];
+    _grades = ['A1', 'A2', 'B1', 'B2', 'A', 'B'];
   }
 
   /// Initialize configuration from local cache first, then fetch remote server updates if online
@@ -326,18 +487,38 @@ class ConfigDao {
       _fleet = (data['fleet'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
     }
 
-    if (data['paddySpecs'] != null && data['paddySpecs'] is List && (data['paddySpecs'] as List).isNotEmpty) {
-      _paddySpecs = (data['paddySpecs'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+    if (data['pricingRegion'] != null) {
+      _activePricingRegion = normalizePricingRegion(data['pricingRegion']?.toString());
+    }
 
-      // Extract unique paddy categories and prices
+    final rawAllSpecs = data['allPaddySpecs'];
+    final rawSpecs = data['paddySpecs'];
+    if (rawAllSpecs != null && rawAllSpecs is List && rawAllSpecs.isNotEmpty) {
+      _allPaddySpecs = rawAllSpecs.map((e) {
+        final m = Map<String, dynamic>.from(e);
+        m['region'] = normalizePricingRegion(m['region']?.toString()) ?? pricingRegion1;
+        return m;
+      }).toList();
+    }
+
+    if (rawSpecs != null && rawSpecs is List && rawSpecs.isNotEmpty) {
+      _paddySpecs = rawSpecs.map((e) {
+        final m = Map<String, dynamic>.from(e);
+        m['region'] = normalizePricingRegion(m['region']?.toString()) ?? _activePricingRegion ?? pricingRegion1;
+        return m;
+      }).toList();
+
+      if (rawAllSpecs == null || rawAllSpecs is! List || rawAllSpecs.isEmpty) {
+        _allPaddySpecs = List<Map<String, dynamic>>.from(_paddySpecs);
+      }
+
+      // Extract unique paddy categories and grades from active specs
       final categories = <String>{};
       final gradesList = <String>{};
-      for (var spec in _paddySpecs) {
+      for (final spec in _paddySpecs) {
+        if (spec['status'] == 'INACTIVE') continue;
         if (spec['variety'] != null) {
           categories.add(spec['variety'].toString());
-          if (spec['basePrice'] != null) {
-            _basePrices[spec['variety'].toString()] = (spec['basePrice'] as num).toDouble();
-          }
         }
         if (spec['grade'] != null) {
           gradesList.add(spec['grade'].toString());

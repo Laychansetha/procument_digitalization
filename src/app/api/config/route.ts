@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/audit';
 import { normalizeProvinceName } from '@/lib/province-guard';
+import { getPricingRegionForAssignedProvinces } from '@/lib/pricing-region';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -53,11 +54,15 @@ export async function GET(request: Request) {
       }
     }
 
-    // 2. Fetch Paddy Price Specs
-    const paddySpecs = await db.paddyPriceSpec.findMany({
+    // 2. Fetch Regional Paddy Price Specs
+    const allPaddySpecs = await db.paddyPriceSpec.findMany({
       where: { status: 'ACTIVE' },
-      orderBy: [{ variety: 'asc' }, { grade: 'asc' }],
+      orderBy: [{ region: 'asc' }, { variety: 'asc' }, { grade: 'asc' }],
     });
+    const pricingRegion = getPricingRegionForAssignedProvinces(assignedProvincesList.join(','));
+    const paddySpecs = pricingRegion
+      ? allPaddySpecs.filter((s) => s.region === pricingRegion)
+      : allPaddySpecs;
 
     // 3. Fetch Villages
     const rawVillages = await db.village.findMany({
@@ -100,7 +105,9 @@ export async function GET(request: Request) {
         serverTimestamp,
         configVersion,
         settings: settingsMap,
+        pricingRegion,
         paddySpecs,
+        allPaddySpecs,
         rawVillages: filteredVillages,
         allVillages: rawVillages,
         rawBanks,

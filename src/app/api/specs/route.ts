@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getResolvedUser, getSessionOrHeaderUser } from '@/lib/sync-auth';
 import { getAllowedVillagesForSession, isVillageAuthorized } from '@/lib/province-guard';
+import { getPricingRegionForProvince, PRICING_REGION_1 } from '@/lib/pricing-region';
 import { logAudit } from '@/lib/audit';
 
 export async function GET(request: Request) {
@@ -63,7 +64,26 @@ export async function POST(request: Request) {
     if (authUser && !(await isVillageAuthorized(normVillage, authUser))) {
       return NextResponse.json({ error: `Unauthorized. Village '${normVillage}' is outside your assigned province.` }, { status: 403 });
     }
-    const bPrice = parseFloat(basePrice) || 0;
+
+    let bPrice = parseFloat(basePrice) || 0;
+    if (bPrice <= 0) {
+      const villageRecord = normVillage
+        ? await db.village.findUnique({ where: { name: normVillage }, select: { province: true } })
+        : null;
+      const targetRegion = getPricingRegionForProvince(villageRecord?.province) || PRICING_REGION_1;
+      const matchedPriceSpec = await db.paddyPriceSpec.findUnique({
+        where: {
+          region_variety_grade: {
+            region: targetRegion,
+            variety: paddyType.trim(),
+            grade: selectedGrade.trim(),
+          },
+        },
+      });
+      if (matchedPriceSpec) {
+        bPrice = matchedPriceSpec.basePrice;
+      }
+    }
     const fPrice = parseFloat(finalPrice) || bPrice;
 
     // Match by composite key and serverRecordId (preventing duplicates when key fields are edited)

@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation';
 import { formatImageSrc } from '@/lib/image-utils';
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM } from '@/lib/date-format';
 import {
+  ALL_PRICING_REGIONS,
+  PRICING_REGION_1,
+  getPricingRegionForAssignedProvinces,
+  getPricingRegionForProvince,
+} from '@/lib/pricing-region';
+import {
   Search,
   CreditCard,
   Truck,
@@ -346,9 +352,11 @@ export default function OperationsDashboard() {
   const [newBankCode, setNewBankCode] = useState('');
 
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
+  const [newSpecRegion, setNewSpecRegion] = useState<string>(PRICING_REGION_1);
+  const [adminSpecRegionFilter, setAdminSpecRegionFilter] = useState<string>('ALL');
   const [newSpecVariety, setNewSpecVariety] = useState('');
   const [newSpecGrade, setNewSpecGrade] = useState('A1');
-  const [newSpecBasePrice, setNewSpecBasePrice] = useState(1650);
+  const [newSpecBasePrice, setNewSpecBasePrice] = useState(1750);
   const [newSpecMinWholeGrain, setNewSpecMinWholeGrain] = useState<number | string>(70);
   const [newSpecMaxBrokenRice, setNewSpecMaxBrokenRice] = useState<number | string>(30);
   const [newSpecImpurity, setNewSpecImpurity] = useState<number | string>(1);
@@ -733,6 +741,9 @@ export default function OperationsDashboard() {
         if (match.farmerName) setSpFarmerName(match.farmerName);
       }
     }
+    if (spPaddyType && spSelectedGrade) {
+      applyMasterSpecsForGrade(spPaddyType, spSelectedGrade, vName);
+    }
   };
 
   // Delete Purchase Record Handler (2-Step Confirmation & Stage Guard)
@@ -1063,34 +1074,39 @@ export default function OperationsDashboard() {
     }
   };
 
-  const applyMasterSpecsForGrade = (variety: string, grade: string) => {
-    const spec = priceSpecs.find((s: any) => s.variety === variety && s.grade === grade);
+  const userAssignedProvinces = (session?.user as { assignedProvinces?: string } | undefined)?.assignedProvinces;
+  const userPricingRegion = getPricingRegionForAssignedProvinces(userAssignedProvinces);
+
+  const resolveActivePricingRegion = (targetVillage?: string): string => {
+    // 1. Single-region user assignment automatically determines pricing region
+    if (userPricingRegion) return userPricingRegion;
+    // 2. For multi-region/All users (e.g. Admin), resolve from selected village province
+    const vName = (targetVillage ?? spVillage ?? '').trim();
+    if (vName) {
+      const matchedVillage = villages.find(
+        (v: any) => (v.name || '').trim().toLowerCase() === vName.toLowerCase()
+      );
+      const villageRegion = getPricingRegionForProvince(matchedVillage?.province);
+      if (villageRegion) return villageRegion;
+    }
+    return PRICING_REGION_1;
+  };
+
+  const getRegionalPriceSpecs = (targetVillage?: string) => {
+    const region = resolveActivePricingRegion(targetVillage);
+    const matched = priceSpecs.filter((s: any) => s.status !== 'INACTIVE' && s.region === region);
+    return matched.length > 0 ? matched : priceSpecs.filter((s: any) => s.status !== 'INACTIVE');
+  };
+
+  const applyMasterSpecsForGrade = (variety: string, grade: string, targetVillage?: string) => {
+    const regionalSpecs = getRegionalPriceSpecs(targetVillage);
+    const spec = regionalSpecs.find((s: any) => s.variety === variety && s.grade === grade);
     if (spec) {
       setSpWhole(spec.minWholeGrain !== null && spec.minWholeGrain !== undefined ? spec.minWholeGrain : '');
       setSpBroken(spec.maxBrokenRice !== null && spec.maxBrokenRice !== undefined ? spec.maxBrokenRice : '');
       setSpImpurity(spec.impurity !== null && spec.impurity !== undefined ? spec.impurity : '');
-      setSpForeign(spec.maxForeignMatter !== null && spec.maxForeignMatter !== undefined ? spec.maxForeignMatter : 6);
-      setSpMoisture(spec.maxMoisture !== null && spec.maxMoisture !== undefined ? spec.maxMoisture : 13.5);
-    } else {
-      if (variety === 'Phka Rumduol') {
-        if (grade === 'A1') { setSpWhole(75); setSpBroken(25); setSpImpurity(2); setSpForeign(6); setSpMoisture(13.5); }
-        else if (grade === 'A2') { setSpWhole(70); setSpBroken(30); setSpImpurity(4); setSpForeign(6); setSpMoisture(14.0); }
-        else if (grade === 'B1') { setSpWhole(60); setSpBroken(40); setSpImpurity(2); setSpForeign(6); setSpMoisture(14.0); }
-        else if (grade === 'B2') { setSpWhole(50); setSpBroken(50); setSpImpurity(4); setSpForeign(6); setSpMoisture(14.0); }
-      } else if (variety === 'Red Jasmine') {
-        if (grade === 'A1') { setSpWhole(75); setSpBroken(25); setSpImpurity(''); setSpForeign(6); setSpMoisture(13.5); }
-        else if (grade === 'A2') { setSpWhole(70); setSpBroken(30); setSpImpurity(''); setSpForeign(6); setSpMoisture(14.0); }
-        else if (grade === 'B1') { setSpWhole(60); setSpBroken(40); setSpImpurity(''); setSpForeign(6); setSpMoisture(14.0); }
-        else if (grade === 'B2') { setSpWhole(50); setSpBroken(50); setSpImpurity(''); setSpForeign(6); setSpMoisture(14.0); }
-      } else if (variety.includes('Foundation Seed')) {
-        setSpWhole(98); setSpBroken(''); setSpImpurity(1); setSpForeign(1); setSpMoisture(12.0);
-      } else if (variety === 'Certified Seed') {
-        setSpWhole(96); setSpBroken(''); setSpImpurity(2); setSpForeign(2); setSpMoisture(12.0);
-      } else if (variety === 'White Rice') {
-        setSpWhole(''); setSpBroken(''); setSpImpurity('');
-        if (grade === 'B') setSpForeign(8); else setSpForeign(4);
-        setSpMoisture(13.5);
-      }
+      setSpForeign(spec.maxForeignMatter !== null && spec.maxForeignMatter !== undefined ? spec.maxForeignMatter : '');
+      setSpMoisture(spec.maxMoisture !== null && spec.maxMoisture !== undefined ? spec.maxMoisture : '');
     }
   };
 
@@ -1140,8 +1156,22 @@ export default function OperationsDashboard() {
       return;
     }
 
-    const currentSpec = priceSpecs.find((s) => s.variety === spPaddyType && s.grade === spSelectedGrade);
-    const baseP = currentSpec ? currentSpec.basePrice : 1650;
+    const existingSpec = editingSpecsId
+      ? specsList.find((s: any) => s.id === editingSpecsId)
+      : null;
+    const preserveHistoricalPrice =
+      existingSpec &&
+      existingSpec.village === spVillage &&
+      existingSpec.paddyType === spPaddyType &&
+      existingSpec.selectedGrade === spSelectedGrade;
+
+    const regionalSpecs = getRegionalPriceSpecs(spVillage);
+    const currentSpec = regionalSpecs.find((s) => s.variety === spPaddyType && s.grade === spSelectedGrade);
+    if (!preserveHistoricalPrice && !currentSpec) {
+      alert(`No active price specification found for ${spPaddyType} (${spSelectedGrade}) in region "${resolveActivePricingRegion(spVillage)}".`);
+      return;
+    }
+    const baseP = preserveHistoricalPrice ? existingSpec.basePrice : currentSpec.basePrice;
 
     const numMoisture = parseFloat(String(spMoisture)) || 0;
     const numForeign = parseFloat(String(spForeign)) || 0;
@@ -2569,9 +2599,10 @@ export default function OperationsDashboard() {
 
   const resetPriceSpecForm = () => {
     setEditingSpecId(null);
+    setNewSpecRegion(PRICING_REGION_1);
     setNewSpecVariety('');
     setNewSpecGrade('A1');
-    setNewSpecBasePrice(1650);
+    setNewSpecBasePrice(1750);
     setNewSpecMinWholeGrain(70);
     setNewSpecMaxBrokenRice(30);
     setNewSpecImpurity(1);
@@ -2581,12 +2612,13 @@ export default function OperationsDashboard() {
 
   const handleEditPriceSpec = (spec: any) => {
     setEditingSpecId(spec.id);
+    setNewSpecRegion(spec.region || PRICING_REGION_1);
     setNewSpecVariety(spec.variety || '');
     setNewSpecGrade(spec.grade || 'A1');
-    setNewSpecBasePrice(spec.basePrice || 1650);
-    setNewSpecMinWholeGrain(spec.minWholeGrain ?? 70);
-    setNewSpecMaxBrokenRice(spec.maxBrokenRice ?? 30);
-    setNewSpecImpurity(spec.impurity ?? 1);
+    setNewSpecBasePrice(spec.basePrice || 0);
+    setNewSpecMinWholeGrain(spec.minWholeGrain ?? '');
+    setNewSpecMaxBrokenRice(spec.maxBrokenRice ?? '');
+    setNewSpecImpurity(spec.impurity ?? '');
     setNewSpecMaxForeign(spec.maxForeignMatter ?? 5.0);
     setNewSpecMaxMoisture(spec.maxMoisture ?? 14.0);
     window.scrollTo({ top: 400, behavior: 'smooth' });
@@ -2595,13 +2627,14 @@ export default function OperationsDashboard() {
   // ADMIN: Add / Update Paddy Price Spec
   const handleAddPriceSpec = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSpecVariety || !newSpecGrade) {
-      alert('Variety and Grade are required.');
+    if (!newSpecVariety || !newSpecGrade || !newSpecRegion) {
+      alert('Pricing Region, Variety, and Grade are required.');
       return;
     }
 
     const payload = {
       id: editingSpecId || undefined,
+      region: newSpecRegion,
       variety: newSpecVariety,
       grade: newSpecGrade,
       basePrice: newSpecBasePrice,
@@ -2619,7 +2652,7 @@ export default function OperationsDashboard() {
     });
 
     if (res.ok) {
-      setSyncStatus(`✅ Paddy specification for ${newSpecVariety} (${newSpecGrade}) saved!`);
+      setSyncStatus(`✅ Paddy specification for ${newSpecVariety} (${newSpecGrade}) — ${newSpecRegion} saved!`);
       resetPriceSpecForm();
       refreshAllData();
     } else {
@@ -2898,7 +2931,11 @@ export default function OperationsDashboard() {
     );
   }
 
-  const uniqueVarieties = Array.from(new Set(priceSpecs.map((s) => s.variety)));
+  const activeRegionalPriceSpecs = getRegionalPriceSpecs(spVillage);
+  const uniqueVarieties = Array.from(new Set(activeRegionalPriceSpecs.map((s) => s.variety)));
+  const filteredAdminPriceSpecs = adminSpecRegionFilter === 'ALL'
+    ? priceSpecs
+    : priceSpecs.filter((s) => s.region === adminSpecRegionFilter);
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-slate-100 p-4 md:p-6 font-sans">
@@ -3367,7 +3404,7 @@ export default function OperationsDashboard() {
                             onChange={(e) => {
                               const newVariety = e.target.value;
                               setSpPaddyType(newVariety);
-                              const validGrades = priceSpecs.filter((s) => s.variety === newVariety).map((s) => s.grade);
+                              const validGrades = activeRegionalPriceSpecs.filter((s) => s.variety === newVariety).map((s) => s.grade);
                               const nextGrade = validGrades.includes(spSelectedGrade) ? spSelectedGrade : (validGrades[0] || '');
                               setSpSelectedGrade(nextGrade);
                               if (newVariety && nextGrade) {
@@ -3402,10 +3439,10 @@ export default function OperationsDashboard() {
                             <option value="" disabled>
                               {spPaddyType ? 'Select Grade...' : 'Select Category First'}
                             </option>
-                            {priceSpecs
+                            {activeRegionalPriceSpecs
                               .filter((s) => s.variety === spPaddyType)
                               .map((s) => (
-                                <option key={s.grade} value={s.grade}>
+                                <option key={`${s.region}_${s.grade}`} value={s.grade}>
                                   {s.grade} ({s.basePrice?.toLocaleString()} KHR/kg)
                                 </option>
                               ))}
@@ -6972,6 +7009,21 @@ export default function OperationsDashboard() {
 
                   <form onSubmit={handleAddPriceSpec} className="space-y-3 text-xs">
                     <div>
+                      <label className="block text-slate-400 font-bold uppercase mb-1">Pricing Region *</label>
+                      <select
+                        value={newSpecRegion}
+                        onChange={(e) => setNewSpecRegion(e.target.value)}
+                        className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white font-bold"
+                      >
+                        {ALL_PRICING_REGIONS.map((region) => (
+                          <option key={region} value={region}>
+                            {region}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
                       <label className="block text-slate-400 font-bold uppercase mb-1">Paddy Variety Name *</label>
                       <input
                         type="text"
@@ -7086,37 +7138,65 @@ export default function OperationsDashboard() {
                 </div>
 
                 <div className="lg:col-span-2 bg-[#141c2f] border border-white/10 rounded-2xl p-6 space-y-3">
-                  <h3 className="text-sm font-bold text-white flex items-center justify-between border-b border-white/10 pb-3">
-                    <span>Active Season Paddy Specifications & Prices</span>
-                    <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">{priceSpecs.length} Varieties</span>
-                  </h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Active Season Paddy Specifications &amp; Prices</span>
+                      <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
+                        {filteredAdminPriceSpecs.length} Specs
+                      </span>
+                    </h3>
+                    <select
+                      value={adminSpecRegionFilter}
+                      onChange={(e) => setAdminSpecRegionFilter(e.target.value)}
+                      className="bg-[#1e293b] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold"
+                    >
+                      <option value="ALL">All Regions ({priceSpecs.length})</option>
+                      {ALL_PRICING_REGIONS.map((region) => (
+                        <option key={region} value={region}>
+                          {region}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   <div className="overflow-x-auto border border-white/10 rounded-xl">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-white/5 text-slate-400 uppercase font-bold border-b border-white/10">
                         <tr>
+                          <th className="p-2.5">Pricing Region</th>
                           <th className="p-2.5">Paddy Variety</th>
                           <th className="p-2.5">Grade</th>
                           <th className="p-2.5 text-right">Price (KHR/Kg)</th>
-                          <th className="p-2.5 text-center">Whole Grain %</th>
-                          <th className="p-2.5 text-center">Broken Rice %</th>
+                          <th className="p-2.5 text-center">Moisture %</th>
                           <th className="p-2.5 text-center">Impurity %</th>
                           <th className="p-2.5 text-center">Foreign Matter %</th>
-                          <th className="p-2.5 text-center">Moisture %</th>
+                          <th className="p-2.5 text-center">Whole Grain %</th>
+                          <th className="p-2.5 text-center">Broken Rice %</th>
                           <th className="p-2.5 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {priceSpecs.map((s) => (
+                        {filteredAdminPriceSpecs.map((s) => (
                           <tr key={s.id} className="hover:bg-white/5">
+                            <td className="p-2.5 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  s.region === PRICING_REGION_1
+                                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                    : 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+                                }`}
+                              >
+                                {s.region || PRICING_REGION_1}
+                              </span>
+                            </td>
                             <td className="p-2.5 font-bold text-white">{s.variety}</td>
                             <td className="p-2.5 font-extrabold text-purple-400">{s.grade}</td>
                             <td className="p-2.5 text-right font-bold text-amber-400">{s.basePrice.toLocaleString()} KHR</td>
-                            <td className="p-2.5 text-center text-slate-300">{s.minWholeGrain !== null && s.minWholeGrain !== undefined ? `${s.minWholeGrain}%` : '-'}</td>
-                            <td className="p-2.5 text-center text-slate-300">{s.maxBrokenRice !== null && s.maxBrokenRice !== undefined ? `${s.maxBrokenRice}%` : '-'}</td>
+                            <td className="p-2.5 text-center text-slate-300">{s.moistureRange ? `${s.moistureRange}%` : `${s.maxMoisture}%`}</td>
                             <td className="p-2.5 text-center text-slate-300">{s.impurity !== null && s.impurity !== undefined ? `${s.impurity}%` : '-'}</td>
                             <td className="p-2.5 text-center text-slate-300">{s.maxForeignMatter}%</td>
-                            <td className="p-2.5 text-center text-slate-300">{s.maxMoisture}%</td>
+                            <td className="p-2.5 text-center text-slate-300">{s.minWholeGrain !== null && s.minWholeGrain !== undefined ? `${s.minWholeGrain}%` : '-'}</td>
+                            <td className="p-2.5 text-center text-slate-300">{s.maxBrokenRice !== null && s.maxBrokenRice !== undefined ? `${s.maxBrokenRice}%` : '-'}</td>
                             <td className="p-2.5 text-right space-x-1 whitespace-nowrap">
                               <button
                                 onClick={() => handleEditPriceSpec(s)}

@@ -131,8 +131,9 @@ export async function POST(request: Request) {
 
       if (Array.isArray(masterData.priceSpecs)) {
         for (const s of masterData.priceSpecs) {
+          const specRegion = s.region || 'Preah Vihear and Mondolkiri';
           await db.paddyPriceSpec.upsert({
-            where: { variety_grade: { variety: s.variety, grade: s.grade } },
+            where: { region_variety_grade: { region: specRegion, variety: s.variety, grade: s.grade } },
             update: {
               basePrice: s.basePrice,
               maxMoisture: s.maxMoisture,
@@ -144,6 +145,7 @@ export async function POST(request: Request) {
               status: s.status || 'ACTIVE',
             },
             create: {
+              region: specRegion,
               variety: s.variety,
               grade: s.grade,
               basePrice: s.basePrice,

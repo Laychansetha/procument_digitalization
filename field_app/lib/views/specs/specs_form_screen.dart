@@ -31,12 +31,14 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
 
   String? _editingId;
   String? _editingServerRecordId;
+  SpecsRecord? _editingOriginalRecord;
   String? _village;
   String? _paddyType;
   String? _selectedGrade;
   bool _isOrganic = true;
   String _searchQuery = '';
 
+  List<String> _userProvinces = [];
   List<SpecsRecord> _localHistory = [];
 
   @override
@@ -82,19 +84,21 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
 
     if (mounted) {
       setState(() {
+        _userProvinces = userProvinces;
         _localHistory = filtered;
       });
     }
   }
 
-  void _applyMasterSpecsForGrade(String variety, String grade) {
-    final specList = ConfigDao.instance.paddySpecs;
-    final match = specList.firstWhere(
-      (s) => s['variety'] == variety && s['grade'] == grade,
-      orElse: () => <String, dynamic>{},
+  void _applyMasterSpecsForGrade(String variety, String grade, {String? targetVillage}) {
+    final match = ConfigDao.instance.getSpecFor(
+      variety,
+      grade,
+      assignedProvinces: _userProvinces,
+      village: targetVillage ?? _village,
     );
 
-    if (match.isNotEmpty) {
+    if (match != null) {
       _wholeGrainController.text = match['minWholeGrain'] != null
           ? match['minWholeGrain'].toString()
           : (match['wholeGrain'] != null ? match['wholeGrain'].toString() : '');
@@ -104,30 +108,10 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       _impurityController.text = match['impurity'] != null ? match['impurity'].toString() : '';
       _foreignMatterController.text = match['maxForeignMatter'] != null
           ? match['maxForeignMatter'].toString()
-          : (match['foreignMatter'] != null ? match['foreignMatter'].toString() : '6.0');
+          : (match['foreignMatter'] != null ? match['foreignMatter'].toString() : '');
       _moistureController.text = match['maxMoisture'] != null
           ? match['maxMoisture'].toString()
-          : (match['moisture'] != null ? match['moisture'].toString() : '13.5');
-    } else {
-      if (variety == 'Phka Rumduol') {
-        if (grade == 'A1') { _wholeGrainController.text = '75'; _brokenRiceController.text = '25'; _impurityController.text = '2'; _foreignMatterController.text = '6.0'; _moistureController.text = '13.5'; }
-        else if (grade == 'A2') { _wholeGrainController.text = '70'; _brokenRiceController.text = '30'; _impurityController.text = '4'; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
-        else if (grade == 'B1') { _wholeGrainController.text = '60'; _brokenRiceController.text = '40'; _impurityController.text = '2'; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
-        else if (grade == 'B2') { _wholeGrainController.text = '50'; _brokenRiceController.text = '50'; _impurityController.text = '4'; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
-      } else if (variety == 'Red Jasmine') {
-        if (grade == 'A1') { _wholeGrainController.text = '75'; _brokenRiceController.text = '25'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '13.5'; }
-        else if (grade == 'A2') { _wholeGrainController.text = '70'; _brokenRiceController.text = '30'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
-        else if (grade == 'B1') { _wholeGrainController.text = '60'; _brokenRiceController.text = '40'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
-        else if (grade == 'B2') { _wholeGrainController.text = '50'; _brokenRiceController.text = '50'; _impurityController.text = ''; _foreignMatterController.text = '6.0'; _moistureController.text = '14.0'; }
-      } else if (variety.contains('Foundation Seed')) {
-        _wholeGrainController.text = '98'; _brokenRiceController.text = ''; _impurityController.text = '1'; _foreignMatterController.text = '1.0'; _moistureController.text = '12.0';
-      } else if (variety == 'Certified Seed') {
-        _wholeGrainController.text = '96'; _brokenRiceController.text = ''; _impurityController.text = '2'; _foreignMatterController.text = '2.0'; _moistureController.text = '12.0';
-      } else if (variety == 'White Rice') {
-        _wholeGrainController.text = ''; _brokenRiceController.text = ''; _impurityController.text = '';
-        if (grade == 'B') _foreignMatterController.text = '8.0'; else _foreignMatterController.text = '4.0';
-        _moistureController.text = '13.5';
-      }
+          : (match['moisture'] != null ? match['moisture'].toString() : '');
     }
   }
 
@@ -142,6 +126,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     setState(() {
       _editingId = null;
       _editingServerRecordId = null;
+      _editingOriginalRecord = null;
       _village = null;
       _paddyType = null;
       _selectedGrade = null;
@@ -301,20 +286,43 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     final brokenRice = double.tryParse(_brokenRiceController.text);
     final impurity = double.tryParse(_impurityController.text);
 
-    final currentSpecList = ConfigDao.instance.paddySpecs;
-    final match = currentSpecList.firstWhere(
-      (s) => s['variety'] == _paddyType && s['grade'] == _selectedGrade,
-      orElse: () => <String, dynamic>{'basePrice': 1650.0},
+    final normVillage = _village!.trim();
+    final preserveHistoricalPrice = _editingOriginalRecord != null &&
+        _editingOriginalRecord!.village == normVillage &&
+        _editingOriginalRecord!.paddyType == _paddyType &&
+        _editingOriginalRecord!.selectedGrade == _selectedGrade;
+
+    final match = ConfigDao.instance.getSpecFor(
+      _paddyType!,
+      _selectedGrade!,
+      assignedProvinces: _userProvinces,
+      village: normVillage,
     );
-    final basePrice = (match['basePrice'] as num?)?.toDouble() ?? 1650.0;
+
+    if (!preserveHistoricalPrice && (match == null || match['basePrice'] == null)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No active price specification found for $_paddyType ($_selectedGrade). Please sync master configuration.'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+      return;
+    }
+
+    final basePrice = preserveHistoricalPrice
+        ? _editingOriginalRecord!.basePrice
+        : (match!['basePrice'] as num).toDouble();
     const organicBonus = 0.0;
-    final finalPrice = basePrice;
-    final maxM = (match['maxMoisture'] as num?)?.toDouble() ?? 15.5;
-    final maxF = (match['maxForeignMatter'] as num?)?.toDouble() ?? 8.0;
+    final finalPrice = preserveHistoricalPrice
+        ? _editingOriginalRecord!.finalPrice
+        : basePrice;
+    final maxM = (match?['maxMoisture'] as num?)?.toDouble() ?? 15.5;
+    final maxF = (match?['maxForeignMatter'] as num?)?.toDouble() ?? 8.0;
     final isValid = moisture <= maxM && foreignMatter <= maxF;
 
     final normCode = _familyCodeController.text.trim().toUpperCase();
-    final normVillage = _village!.trim();
 
     // Check if an unsynced record with the same (familyCode, village, paddyType, selectedGrade) already exists
     String targetId = _editingId ?? 'offline_${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 4)}';
@@ -380,6 +388,7 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
     setState(() {
       _editingId = item.id;
       _editingServerRecordId = item.serverRecordId;
+      _editingOriginalRecord = item;
       _familyCodeController.text = item.familyCode;
       _farmerNameController.text = item.farmerName;
       _village = item.village;
@@ -890,13 +899,23 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   Widget _buildVillageDropdown() {
     return SearchableVillageSelect(
       value: _village,
-      onChanged: (val) => setState(() => _village = val),
+      onChanged: (val) {
+        setState(() {
+          _village = val;
+          if (_paddyType != null && _selectedGrade != null) {
+            _applyMasterSpecsForGrade(_paddyType!, _selectedGrade!, targetVillage: val);
+          }
+        });
+      },
       validator: (v) => v == null || v.isEmpty ? 'Select Village' : null,
     );
   }
 
   Widget _buildPaddyCategoryDropdown() {
-    final categories = ConfigDao.instance.paddyCategories;
+    final categories = ConfigDao.instance.getPaddyCategoriesForUser(
+      assignedProvinces: _userProvinces,
+      village: _village,
+    );
     final currentCategory = categories.contains(_paddyType) ? _paddyType : null;
 
     return DropdownButtonFormField<String>(
@@ -934,7 +953,11 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
       onChanged: (val) {
         setState(() {
           _paddyType = val;
-          final availableGrades = ConfigDao.instance.getGradesForCategory(val);
+          final availableGrades = ConfigDao.instance.getGradesForCategory(
+            val,
+            assignedProvinces: _userProvinces,
+            village: _village,
+          );
           if (_selectedGrade != null && !availableGrades.contains(_selectedGrade)) {
             _selectedGrade = availableGrades.isNotEmpty ? availableGrades.first : null;
           } else if (_selectedGrade == null && availableGrades.isNotEmpty) {
@@ -949,7 +972,11 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
   }
 
   Widget _buildGradeDropdown() {
-    final availableGrades = ConfigDao.instance.getGradesForCategory(_paddyType);
+    final availableGrades = ConfigDao.instance.getGradesForCategory(
+      _paddyType,
+      assignedProvinces: _userProvinces,
+      village: _village,
+    );
     final currentGradeValue = availableGrades.contains(_selectedGrade) ? _selectedGrade : null;
 
     return DropdownButtonFormField<String>(
@@ -972,16 +999,28 @@ class _SpecsFormScreenState extends State<SpecsFormScreen> {
         overflow: TextOverflow.ellipsis,
       ),
       items: availableGrades
-          .map((g) => DropdownMenuItem(
-                value: g,
-                child: Text(
-                  g,
-                  style: const TextStyle(fontSize: 13),
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ))
+          .map((g) {
+            final spec = _paddyType != null
+                ? ConfigDao.instance.getSpecFor(
+                    _paddyType!,
+                    g,
+                    assignedProvinces: _userProvinces,
+                    village: _village,
+                  )
+                : null;
+            final price = (spec?['basePrice'] as num?)?.toInt();
+            final label = price != null ? '$g (${NumberFormat('#,###').format(price)} KHR/kg)' : g;
+            return DropdownMenuItem(
+              value: g,
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 13),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          })
           .toList(),
       validator: (v) => v == null ? 'Select Grade' : null,
       onChanged: (val) {

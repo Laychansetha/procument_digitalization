@@ -167,38 +167,47 @@ async function main() {
     });
   }
 
-  // 5. Seed Official Paddy Price Specifications & Base Prices from Excel configuration
+  // 5. Seed Official 2026 Regional Paddy Price Specifications (Source: villages_province_grade_warehouse.xlsx -> specs_price_2026)
+  const REGION_1 = 'Preah Vihear and Mondolkiri';
+  const REGION_2 = 'Stung Treng and Ratanakiri';
+
   const defaultPriceSpecs = [
-    // Phka Rumduol
-    { variety: 'Phka Rumduol', grade: 'A1', basePrice: 1650, minWholeGrain: 75, maxBrokenRice: 25, impurity: 2, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
-    { variety: 'Phka Rumduol', grade: 'A2', basePrice: 1550, minWholeGrain: 70, maxBrokenRice: 30, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
-    { variety: 'Phka Rumduol', grade: 'B1', basePrice: 1500, minWholeGrain: 60, maxBrokenRice: 40, impurity: 2, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
-    { variety: 'Phka Rumduol', grade: 'B2', basePrice: 1450, minWholeGrain: 50, maxBrokenRice: 50, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    // Region 1: Preah Vihear and Mondolkiri
+    { region: REGION_1, variety: 'Phka Rumduol', grade: 'A1', basePrice: 1750, minWholeGrain: 75, maxBrokenRice: 25, impurity: 2, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { region: REGION_1, variety: 'Phka Rumduol', grade: 'A2', basePrice: 1650, minWholeGrain: 70, maxBrokenRice: 30, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_1, variety: 'Phka Rumduol', grade: 'B1', basePrice: 1600, minWholeGrain: 60, maxBrokenRice: 40, impurity: 2, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_1, variety: 'Phka Rumduol', grade: 'B2', basePrice: 1550, minWholeGrain: 50, maxBrokenRice: 50, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_1, variety: 'Red Jasmine', grade: 'A1', basePrice: 1990, minWholeGrain: 75, maxBrokenRice: 25, impurity: null, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { region: REGION_1, variety: 'Red Jasmine', grade: 'A2', basePrice: 1890, minWholeGrain: 70, maxBrokenRice: 30, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_1, variety: 'Red Jasmine', grade: 'B1', basePrice: 1840, minWholeGrain: 60, maxBrokenRice: 40, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_1, variety: 'Red Jasmine', grade: 'B2', basePrice: 1790, minWholeGrain: 50, maxBrokenRice: 50, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_1, variety: 'Foundation Seed - Red Jasmine', grade: 'A', basePrice: 2250, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
+    { region: REGION_1, variety: 'Foundation Seed - Phka Rumduol', grade: 'A', basePrice: 2140, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
+    { region: REGION_1, variety: 'Certified Seed', grade: 'A', basePrice: 1950, minWholeGrain: 96, maxBrokenRice: null, impurity: 2, maxForeignMatter: 2, maxMoisture: 12.0, moistureRange: '11 - 13' },
+    { region: REGION_1, variety: 'White Rice', grade: 'A', basePrice: 1500, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 4, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { region: REGION_1, variety: 'White Rice', grade: 'B', basePrice: 1400, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 8, maxMoisture: 13.5, moistureRange: '13 - 14' },
 
-    // Red Jasmine
-    { variety: 'Red Jasmine', grade: 'A1', basePrice: 1850, minWholeGrain: 75, maxBrokenRice: 25, impurity: null, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
-    { variety: 'Red Jasmine', grade: 'A2', basePrice: 1750, minWholeGrain: 70, maxBrokenRice: 30, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
-    { variety: 'Red Jasmine', grade: 'B1', basePrice: 1700, minWholeGrain: 60, maxBrokenRice: 40, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
-    { variety: 'Red Jasmine', grade: 'B2', basePrice: 1650, minWholeGrain: 50, maxBrokenRice: 50, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
-
-    // Foundation Seed - Red Jasmine
-    { variety: 'Foundation Seed - Red Jasmine', grade: 'A', basePrice: 2150, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
-
-    // Foundation Seed - Phka Rumduol
-    { variety: 'Foundation Seed - Phka Rumduol', grade: 'A', basePrice: 2050, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
-
-    // Certified Seed
-    { variety: 'Certified Seed', grade: 'A', basePrice: 1900, minWholeGrain: 96, maxBrokenRice: null, impurity: 2, maxForeignMatter: 2, maxMoisture: 12.0, moistureRange: '11 - 13' },
-
-    // White Rice
-    { variety: 'White Rice', grade: 'A', basePrice: 1320, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 4, maxMoisture: 13.5, moistureRange: '13 - 14' },
-    { variety: 'White Rice', grade: 'B', basePrice: 1220, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 8, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    // Region 2: Stung Treng and Ratanakiri
+    { region: REGION_2, variety: 'Phka Rumduol', grade: 'A1', basePrice: 1650, minWholeGrain: 75, maxBrokenRice: 25, impurity: 2, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { region: REGION_2, variety: 'Phka Rumduol', grade: 'A2', basePrice: 1550, minWholeGrain: 70, maxBrokenRice: 30, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_2, variety: 'Phka Rumduol', grade: 'B1', basePrice: 1500, minWholeGrain: 60, maxBrokenRice: 40, impurity: 2, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_2, variety: 'Phka Rumduol', grade: 'B2', basePrice: 1450, minWholeGrain: 50, maxBrokenRice: 50, impurity: 4, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_2, variety: 'Red Jasmine', grade: 'A1', basePrice: 1850, minWholeGrain: 75, maxBrokenRice: 25, impurity: null, maxForeignMatter: 6, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { region: REGION_2, variety: 'Red Jasmine', grade: 'A2', basePrice: 1750, minWholeGrain: 70, maxBrokenRice: 30, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_2, variety: 'Red Jasmine', grade: 'B1', basePrice: 1700, minWholeGrain: 60, maxBrokenRice: 40, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_2, variety: 'Red Jasmine', grade: 'B2', basePrice: 1650, minWholeGrain: 50, maxBrokenRice: 50, impurity: null, maxForeignMatter: 6, maxMoisture: 14.0, moistureRange: '13 - 15' },
+    { region: REGION_2, variety: 'Foundation Seed - Red Jasmine', grade: 'A', basePrice: 2250, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
+    { region: REGION_2, variety: 'Foundation Seed - Phka Rumduol', grade: 'A', basePrice: 2140, minWholeGrain: 98, maxBrokenRice: null, impurity: 1, maxForeignMatter: 1, maxMoisture: 12.0, moistureRange: '11 - 13' },
+    { region: REGION_2, variety: 'Certified Seed', grade: 'A', basePrice: 1950, minWholeGrain: 96, maxBrokenRice: null, impurity: 2, maxForeignMatter: 2, maxMoisture: 12.0, moistureRange: '11 - 13' },
+    { region: REGION_2, variety: 'White Rice', grade: 'A', basePrice: 1400, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 4, maxMoisture: 13.5, moistureRange: '13 - 14' },
+    { region: REGION_2, variety: 'White Rice', grade: 'B', basePrice: 1300, minWholeGrain: null, maxBrokenRice: null, impurity: null, maxForeignMatter: 8, maxMoisture: 13.5, moistureRange: '13 - 14' },
   ];
 
   for (const spec of defaultPriceSpecs) {
     await prisma.paddyPriceSpec.upsert({
       where: {
-        variety_grade: {
+        region_variety_grade: {
+          region: spec.region,
           variety: spec.variety,
           grade: spec.grade,
         },

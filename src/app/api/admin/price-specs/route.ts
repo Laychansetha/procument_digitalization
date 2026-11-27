@@ -3,11 +3,32 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/audit';
+import { getSessionOrHeaderUser } from '@/lib/sync-auth';
+import {
+  getPricingRegionForAssignedProvinces,
+  getPricingRegionForProvince,
+  normalizePricingRegion,
+} from '@/lib/pricing-region';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const regionParam = searchParams.get('region');
+    const provinceParam = searchParams.get('province');
+    const authUser = await getSessionOrHeaderUser(request);
+
+    let filterRegion: string | null = null;
+    if (authUser?.role === 'FIELD') {
+      filterRegion = getPricingRegionForAssignedProvinces(authUser.assignedProvinces);
+    } else if (regionParam && regionParam.trim()) {
+      filterRegion = normalizePricingRegion(regionParam);
+    } else if (provinceParam && provinceParam.trim()) {
+      filterRegion = getPricingRegionForProvince(provinceParam);
+    }
+
     const specs = await db.paddyPriceSpec.findMany({
-      orderBy: [{ variety: 'asc' }, { grade: 'asc' }],
+      where: filterRegion ? { region: filterRegion, status: 'ACTIVE' } : {},
+      orderBy: [{ region: 'asc' }, { variety: 'asc' }, { grade: 'asc' }],
     });
     return NextResponse.json(specs);
   } catch (error) {
@@ -29,6 +50,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       id,
+      region,
       variety,
       grade,
       basePrice,
@@ -45,6 +67,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Variety, Grade, and Base Price are required.' }, { status: 400 });
     }
 
+    const normalizedRegion = normalizePricingRegion(region);
     const trimmedVariety = variety.trim();
     const trimmedGrade = grade.trim();
 
@@ -54,14 +77,15 @@ export async function POST(request: Request) {
       priceSpec = await db.paddyPriceSpec.update({
         where: { id },
         data: {
+          region: normalizedRegion,
           variety: trimmedVariety,
           grade: trimmedGrade,
           basePrice: parseFloat(basePrice),
           maxMoisture: parseFloat(maxMoisture) || 14.0,
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
-          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
-          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
-          impurity: impurity !== undefined && impurity !== '' ? parseFloat(impurity) : null,
+          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' && minWholeGrain !== null ? parseFloat(minWholeGrain) : null,
+          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' && maxBrokenRice !== null ? parseFloat(maxBrokenRice) : null,
+          impurity: impurity !== undefined && impurity !== '' && impurity !== null ? parseFloat(impurity) : null,
           moistureRange: moistureRange || null,
           status: status || 'ACTIVE',
         },
@@ -69,7 +93,8 @@ export async function POST(request: Request) {
     } else {
       priceSpec = await db.paddyPriceSpec.upsert({
         where: {
-          variety_grade: {
+          region_variety_grade: {
+            region: normalizedRegion,
             variety: trimmedVariety,
             grade: trimmedGrade,
           },
@@ -78,21 +103,22 @@ export async function POST(request: Request) {
           basePrice: parseFloat(basePrice),
           maxMoisture: parseFloat(maxMoisture) || 14.0,
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
-          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
-          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
-          impurity: impurity !== undefined && impurity !== '' ? parseFloat(impurity) : null,
+          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' && minWholeGrain !== null ? parseFloat(minWholeGrain) : null,
+          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' && maxBrokenRice !== null ? parseFloat(maxBrokenRice) : null,
+          impurity: impurity !== undefined && impurity !== '' && impurity !== null ? parseFloat(impurity) : null,
           moistureRange: moistureRange || null,
           status: status || 'ACTIVE',
         },
         create: {
+          region: normalizedRegion,
           variety: trimmedVariety,
           grade: trimmedGrade,
           basePrice: parseFloat(basePrice),
           maxMoisture: parseFloat(maxMoisture) || 14.0,
           maxForeignMatter: parseFloat(maxForeignMatter) || 5.0,
-          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' ? parseFloat(minWholeGrain) : null,
-          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' ? parseFloat(maxBrokenRice) : null,
-          impurity: impurity !== undefined && impurity !== '' ? parseFloat(impurity) : null,
+          minWholeGrain: minWholeGrain !== undefined && minWholeGrain !== '' && minWholeGrain !== null ? parseFloat(minWholeGrain) : null,
+          maxBrokenRice: maxBrokenRice !== undefined && maxBrokenRice !== '' && maxBrokenRice !== null ? parseFloat(maxBrokenRice) : null,
+          impurity: impurity !== undefined && impurity !== '' && impurity !== null ? parseFloat(impurity) : null,
           moistureRange: moistureRange || null,
           status: status || 'ACTIVE',
         },
@@ -106,7 +132,7 @@ export async function POST(request: Request) {
       action: 'CONFIG',
       entityType: 'PaddyPriceSpec',
       entityId: priceSpec.id,
-      details: { variety: trimmedVariety, grade: trimmedGrade, basePrice },
+      details: { region: normalizedRegion, variety: trimmedVariety, grade: trimmedGrade, basePrice },
     });
 
     return NextResponse.json(priceSpec, { status: 201 });

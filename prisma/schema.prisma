@@ -101,6 +101,7 @@ model FleetVehicle {
 
 model PaddyPriceSpec {
   id               String   @id @default(cuid())
+  region           String   @default("Preah Vihear and Mondolkiri") // "Preah Vihear and Mondolkiri" | "Stung Treng and Ratanakiri"
   variety          String
   grade            String
   basePrice        Float    // KHR/kg
@@ -114,7 +115,8 @@ model PaddyPriceSpec {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  @@unique([variety, grade])
+  @@unique([region, variety, grade])
+  @@index([region, status])
 }
 
 model FarmerProfile {

@@ -114,6 +114,74 @@ void main() {
       final certifiedSeedGrades = ConfigDao.instance.getGradesForCategory('Certified Seed');
       expect(certifiedSeedGrades, ['A']);
     });
+
+    test('resolves 2026 regional prices automatically for all four provinces (offline & synced)', () {
+      ConfigDao.instance.resetToDefaultsForTest();
+
+      // Region 1: Preah Vihear & Mondulkiri/Mondolkiri share identical prices
+      for (final province in ['Preah Vihear', 'Mondulkiri', 'Mondolkiri']) {
+        expect(
+          ConfigDao.instance.resolvePricingRegion(assignedProvinces: [province]),
+          ConfigDao.pricingRegion1,
+        );
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: [province])?['basePrice'], 1750.0);
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A2', assignedProvinces: [province])?['basePrice'], 1650.0);
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'B1', assignedProvinces: [province])?['basePrice'], 1600.0);
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'B2', assignedProvinces: [province])?['basePrice'], 1550.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'A1', assignedProvinces: [province])?['basePrice'], 1990.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'A2', assignedProvinces: [province])?['basePrice'], 1890.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'B1', assignedProvinces: [province])?['basePrice'], 1840.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'B2', assignedProvinces: [province])?['basePrice'], 1790.0);
+        expect(ConfigDao.instance.getSpecFor('Foundation Seed - Red Jasmine', 'A', assignedProvinces: [province])?['basePrice'], 2250.0);
+        expect(ConfigDao.instance.getSpecFor('Foundation Seed - Phka Rumduol', 'A', assignedProvinces: [province])?['basePrice'], 2140.0);
+        expect(ConfigDao.instance.getSpecFor('Certified Seed', 'A', assignedProvinces: [province])?['basePrice'], 1950.0);
+        expect(ConfigDao.instance.getSpecFor('White Rice', 'A', assignedProvinces: [province])?['basePrice'], 1500.0);
+        expect(ConfigDao.instance.getSpecFor('White Rice', 'B', assignedProvinces: [province])?['basePrice'], 1400.0);
+      }
+
+      // Region 2: Stung Treng & Ratanakiri share identical prices
+      for (final province in ['Stung Treng', 'Ratanakiri']) {
+        expect(
+          ConfigDao.instance.resolvePricingRegion(assignedProvinces: [province]),
+          ConfigDao.pricingRegion2,
+        );
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: [province])?['basePrice'], 1650.0);
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A2', assignedProvinces: [province])?['basePrice'], 1550.0);
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'B1', assignedProvinces: [province])?['basePrice'], 1500.0);
+        expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'B2', assignedProvinces: [province])?['basePrice'], 1450.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'A1', assignedProvinces: [province])?['basePrice'], 1850.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'A2', assignedProvinces: [province])?['basePrice'], 1750.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'B1', assignedProvinces: [province])?['basePrice'], 1700.0);
+        expect(ConfigDao.instance.getSpecFor('Red Jasmine', 'B2', assignedProvinces: [province])?['basePrice'], 1650.0);
+        expect(ConfigDao.instance.getSpecFor('Foundation Seed - Red Jasmine', 'A', assignedProvinces: [province])?['basePrice'], 2250.0);
+        expect(ConfigDao.instance.getSpecFor('Foundation Seed - Phka Rumduol', 'A', assignedProvinces: [province])?['basePrice'], 2140.0);
+        expect(ConfigDao.instance.getSpecFor('Certified Seed', 'A', assignedProvinces: [province])?['basePrice'], 1950.0);
+        expect(ConfigDao.instance.getSpecFor('White Rice', 'A', assignedProvinces: [province])?['basePrice'], 1400.0);
+        expect(ConfigDao.instance.getSpecFor('White Rice', 'B', assignedProvinces: [province])?['basePrice'], 1300.0);
+      }
+
+      // Admin / All-provinces user resolves automatically by selected village's province
+      expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: ['All'], village: 'Sambou')?['basePrice'], 1750.0);
+      expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: ['All'], village: 'Pu Char')?['basePrice'], 1750.0);
+      expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: ['All'], village: 'Doung')?['basePrice'], 1650.0);
+      expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: ['All'], village: 'I-Tub')?['basePrice'], 1650.0);
+
+      // Synced server update dynamically overrides prices without code changes
+      ConfigDao.instance.applyConfigDataForTest({
+        'pricingRegion': ConfigDao.pricingRegion2,
+        'allPaddySpecs': [
+          {'region': ConfigDao.pricingRegion1, 'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1800.0, 'maxMoisture': 13.5, 'maxForeignMatter': 6.0, 'status': 'ACTIVE'},
+          {'region': ConfigDao.pricingRegion2, 'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1700.0, 'maxMoisture': 13.5, 'maxForeignMatter': 6.0, 'status': 'ACTIVE'},
+        ],
+        'paddySpecs': [
+          {'region': ConfigDao.pricingRegion2, 'variety': 'Phka Rumduol', 'grade': 'A1', 'basePrice': 1700.0, 'maxMoisture': 13.5, 'maxForeignMatter': 6.0, 'status': 'ACTIVE'},
+        ],
+      });
+      expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: ['Preah Vihear'])?['basePrice'], 1800.0);
+      expect(ConfigDao.instance.getSpecFor('Phka Rumduol', 'A1', assignedProvinces: ['Stung Treng'])?['basePrice'], 1700.0);
+
+      ConfigDao.instance.resetToDefaultsForTest();
+    });
   });
 
   group('Model serialization & Web App API payload compatibility', () {
